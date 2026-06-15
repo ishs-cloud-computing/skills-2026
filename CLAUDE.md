@@ -1,0 +1,52 @@
+# CLAUDE.md
+
+2026 전국기능경기대회 클라우드컴퓨팅 직종의 사전 공개 과제(1·2과제)를 Terraform / eksctl / Kubernetes manifest로 관리하는 저장소. 대회 전 약 10세트가 공개되며 이 중에서 출제된다. 세트마다 사용 서비스 조합이 다르므로 구조만 통일하고 내용은 세트별로 채운다.
+
+## 대회 구조
+
+- 1·2과제만 사전 공개되며 이 중에서 출제된다. 3과제는 비공개이므로 다루지 않는다.
+- 1과제: 단일 과제. 보통 단일 리전 종합 인프라.
+- 2과제: 독립 모듈 여러 개로 구성. 모듈 수와 리전은 세트마다 다르다.
+- 각 세트의 구체적인 서비스 구성은 해당 세트의 README나 과제지를 참고한다.
+
+## 디렉토리 구조
+
+```
+wsc2026-cloud/
+├── set-01/
+│   ├── task-1/
+│   │   ├── terraform/   # AWS 리소스
+│   │   ├── eksctl/      # 클러스터/노드그룹 (EKS 과제일 때만)
+│   │   ├── manifests/   # k8s 리소스 (번호 prefix로 apply 순서)
+│   │   └── app-source/  # 컨테이너 소스 (필요할 때만)
+│   └── task-2/
+│       ├── module-1/    # 모듈별로 terraform/ eksctl/ manifests/ app-source/ 중 필요한 것만
+│       ├── module-2/
+│       └── ...          # 모듈 수는 세트마다 다름
+├── set-02/ ~ set-10/    # 동일 구조
+├── shared/
+│   ├── modules/         # 재사용 Terraform 모듈 (vpc, eks 등)
+│   ├── scripts/
+│   └── CONVENTIONS.md   # 명명/브랜치 규칙
+└── .github/
+```
+
+하위 디렉토리(`terraform/`, `eksctl/`, `manifests/`, `app-source/`)는 해당 과제에 필요한 것만 만든다. 모든 과제가 EKS나 컨테이너를 쓰는 것은 아니다.
+
+## 파일 배치 규칙
+
+- `terraform/`: AWS 리소스. 리소스가 많으면 도메인별로 파일 분리.
+- `eksctl/`: EKS 클러스터/노드그룹 YAML. Terraform과 같은 IaC 레이어이므로 `manifests/`가 아니라 `terraform/`과 같은 레벨에 둔다.
+- `manifests/`: 클러스터 생성 후 `kubectl apply`할 리소스. apply가 알파벳 순이므로 의존 순서를 번호 prefix로 강제한다 (`00-namespace.yaml`, `01-configmap.yaml` ...).
+- `app-source/`: ECR에 빌드/푸시할 컨테이너 소스.
+- `shared/modules/`: 세트 전반에서 반복되는 Terraform 모듈. 세트별 차이는 변수로 주입.
+
+## Terraform 변수 규칙
+
+- `variables.tf`에 기본값, 세트별 이름·CIDR·리전 값은 `terraform.tfvars`로 주입.
+- 리소스 이름은 과제지에 명시된 값과 정확히 일치시킨다 (이름 정확 일치 채점 항목이 많음).
+
+## 커밋 / 브랜치
+
+- 커밋 메시지는 평이한 명령형으로 작성하고 `feat:` / `chore:` 같은 prefix는 쓰지 않는다.
+- 세트·과제 단위로 브랜치를 분리한다.
