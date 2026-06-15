@@ -1,0 +1,4 @@
+shared/provided/task-3/user filter=lfs diff=lfs merge=lfs -text
+shared/provided/task-3/product filter=lfs diff=lfs merge=lfs -text
+shared/provided/task-3/stress filter=lfs diff=lfs merge=lfs -text
+set-02/task-2/provided/module4/app filter=lfs diff=lfs merge=lfs -text
