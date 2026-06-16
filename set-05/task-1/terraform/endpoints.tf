@@ -47,8 +47,8 @@ locals {
     "ec2",
     "elasticloadbalancing",
     "autoscaling",
-    "eks",
-    "eks-auth",
+    # "eks",      # 제거: private_dns_enabled=true 시 eks.region.amazonaws.com PHZ 가 VPC 에 생성되어
+    # "eks-auth", #        oidc.eks.* 서브도메인 조회를 NXDOMAIN 으로 처리 → withOIDC / IRSA 전체 파괴
     "kms",
     "ssm",
     "ssmmessages",

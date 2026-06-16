@@ -70,7 +70,7 @@ locals {
     set -euxo pipefail
 
     dnf -y update
-    dnf -y install jq tar gzip iputils bind-utils git
+    dnf -y install jq tar gzip iputils bind-utils git tmux
 
     # awscli v2
     curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
@@ -87,6 +87,40 @@ locals {
 
     # helm (Prometheus/Grafana/LB Controller 설치용)
     curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+    # terraform
+    TERRAFORM_VERSION="1.12.1"
+    curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$${TERRAFORM_VERSION}/terraform_$${TERRAFORM_VERSION}_linux_amd64.zip"
+    unzip -q /tmp/terraform.zip -d /usr/local/bin/
+    rm /tmp/terraform.zip
+
+    # .bashrc 자동완성 (ec2-user)
+    cat >> /home/ec2-user/.bashrc << 'BASHRC'
+
+# --- terraform ---
+complete -C /usr/local/bin/terraform terraform
+alias tf=terraform
+alias tfa='terraform apply'
+alias tfd='terraform destroy'
+alias tfp='terraform plan'
+alias tfi='terraform init'
+alias tfo='terraform output'
+
+# --- kubectl ---
+source <(kubectl completion bash)
+alias k=kubectl
+complete -o default -F __start_kubectl k
+
+# --- eksctl ---
+source <(eksctl completion bash)
+
+# --- helm ---
+source <(helm completion bash)
+
+# --- aws cli ---
+complete -C '/usr/local/bin/aws_completer' aws
+BASHRC
+    chown ec2-user:ec2-user /home/ec2-user/.bashrc
 
     # SSH Password 인증 활성화 + 패스워드 설정
     echo 'ec2-user:${var.ssh_password}' | chpasswd
