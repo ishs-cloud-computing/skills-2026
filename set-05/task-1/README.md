@@ -74,6 +74,9 @@ eksctl create cluster -f cluster.rendered.yaml
 
 ### 4) AWS Load Balancer Controller (addon NodeGroup 에 배치)
 
+Workload Subnet 노드는 인터넷 없이 ECR Pull-Through Cache 경유로만 이미지를 받습니다.
+image.repository 를 Private ECR pull-through URL 로 오버라이드합니다.
+
 ```bash
 helm repo add eks https://aws.github.io/eks-charts && helm repo update
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
@@ -83,7 +86,8 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set serviceAccount.name=aws-load-balancer-controller \
   --set region=ap-northeast-2 \
   --set vpcId="$VPC_ID" \
-  --set nodeSelector.type=addon
+  --set nodeSelector.type=addon \
+  --set image.repository=${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/eks/aws-load-balancer-controller
 ```
 
 ### 5) Kubernetes 리소스
@@ -115,11 +119,15 @@ kubectl apply -f monitoring/pvc.yaml
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
 
+# ECR pull-through cache URL 로 이미지 오버라이드 (Private Cluster 대응)
+envsubst < monitoring/prometheus-ecr-images.yaml > /tmp/prom-ecr.yaml
 helm upgrade --install prometheus prometheus-community/prometheus \
-  -n monitoring -f monitoring/prometheus-values.yaml
+  -n monitoring -f monitoring/prometheus-values.yaml -f /tmp/prom-ecr.yaml
 
 kubectl -n monitoring create configmap wsc-dashboard --from-file=dashboard.json=monitoring/dashboard.json
-helm upgrade --install grafana grafana/grafana -n monitoring -f monitoring/grafana-values.yaml
+envsubst < monitoring/grafana-ecr-images.yaml > /tmp/grafana-ecr.yaml
+helm upgrade --install grafana grafana/grafana -n monitoring \
+  -f monitoring/grafana-values.yaml -f /tmp/grafana-ecr.yaml
 
 kubectl apply -f monitoring/addon-ingress.yaml   # wsc-addon-lb (public)
 ```
@@ -127,7 +135,8 @@ kubectl apply -f monitoring/addon-ingress.yaml   # wsc-addon-lb (public)
 ### 7) 로깅 (Fluent Bit)
 
 ```bash
-kubectl apply -f logging/fluent-bit.yaml
+# $ACCOUNT_ID 를 ECR pull-through cache URL 에 치환하여 적용
+envsubst < logging/fluent-bit.yaml | kubectl apply -f -
 ```
 
 ## 요구사항 ↔ 구현 매핑

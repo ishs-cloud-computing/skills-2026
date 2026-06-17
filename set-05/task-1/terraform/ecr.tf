@@ -35,3 +35,24 @@ resource "aws_ecr_registry_scanning_configuration" "this" {
     }
   }
 }
+
+# ---------------------------------------------------------------------------
+# ECR Pull-Through Cache
+# Workload Subnet 노드는 인터넷이 없어 퍼블릭 레지스트리에 직접 접근 불가.
+# 노드가 Private ECR URL 로 pull 하면 ECR 이 업스트림 레지스트리에서 가져와 캐시.
+# 인증 불필요 레지스트리만 사용 (Docker Hub 제외).
+# ---------------------------------------------------------------------------
+resource "aws_ecr_pull_through_cache_rule" "ecr_public" {
+  ecr_repository_prefix = "ecr-public"
+  upstream_registry_url = "public.ecr.aws"
+}
+
+resource "aws_ecr_pull_through_cache_rule" "quay" {
+  ecr_repository_prefix = "quay"
+  upstream_registry_url = "quay.io"
+}
+
+resource "aws_ecr_pull_through_cache_rule" "k8s" {
+  ecr_repository_prefix = "registry-k8s-io"
+  upstream_registry_url = "registry.k8s.io"
+}
