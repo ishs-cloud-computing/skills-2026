@@ -48,8 +48,9 @@ output "app_target_group_arn" {
 # eksctl iamserviceaccount.attachPolicyARNs 에 사용할 정책 ARN
 output "iam_policy_arns" {
   value = {
-    app       = aws_iam_policy.app.arn
-    fluentbit = aws_iam_policy.fluentbit.arn
-    ebs_csi   = aws_iam_policy.ebs_csi_kms.arn
+    app              = aws_iam_policy.app.arn
+    fluentbit        = aws_iam_policy.fluentbit.arn
+    ebs_csi          = aws_iam_policy.ebs_csi_kms.arn
+    ecr_pull_through = aws_iam_policy.ecr_pull_through.arn
   }
 }

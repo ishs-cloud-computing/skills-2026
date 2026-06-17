@@ -41,9 +41,13 @@ vpc:
 
 # Workload Subnet 은 인터넷이 없으므로 Private Cluster 로 구성.
 # VPC Endpoint 는 Terraform 에서 이미 생성했으므로 eksctl 생성은 건너뛴다.
-#privateCluster:
-#  enabled: true
-#  skipEndpointCreation: true
+# 주의: eks/eks-auth Interface Endpoint 를 private_dns_enabled=true 로 두면
+#        eks.region.amazonaws.com PHZ 가 VPC 에 생성되어
+#        oidc.eks.* 조회를 가로채 NXDOMAIN 반환 → withOIDC / IRSA 파괴.
+#        따라서 해당 두 엔드포인트는 Terraform 에서 생성하지 않는다 (endpoints.tf 참고).
+privateCluster:
+  enabled: true
+  skipEndpointCreation: true
 
 # ----- Secret Resource KMS Envelope Encryption (요구사항 9.1) -----
 secretsEncryption:
@@ -113,6 +117,15 @@ managedNodeGroups:
       Name: wsc-app-node
     ssh:
       enableSsm: true
+    # ECR Pull-Through Cache 에 필요한 추가 액션(BatchImportUpstreamImage, CreateRepository)을
+    # attachPolicyARNs 로 주입. managed node group 은 기본 정책을 명시해야 한다.
+    iam:
+      attachPolicyARNs:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
     overrideBootstrapCommand: &nodeadm_config |
       apiVersion: node.eks.aws/v1alpha1
       kind: NodeConfig
@@ -145,6 +158,13 @@ managedNodeGroups:
       Name: wsc-addon-node
     ssh:
       enableSsm: true
+    iam:
+      attachPolicyARNs:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
     preBootstrapCommands: *common_bootstrap
 
   # ---------- Monitoring NodeGroup: label type=monitoring ----------
@@ -165,6 +185,13 @@ managedNodeGroups:
       Name: wsc-monitoring-node
     ssh:
       enableSsm: true
+    iam:
+      attachPolicyARNs:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
     preBootstrapCommands: *common_bootstrap
 
 # ----- 필수 Addon (EBS CSI Driver 등) -----

@@ -1,0 +1,18 @@
+# ---------------------------------------------------------------------------
+# ECR Pull-Through Cache 이미지 오버라이드 (Private Cluster 대응)
+#
+# 사용법 (grafana-values.yaml 과 함께):
+#   export ACCOUNT_ID=$(cd ../../terraform && terraform output -raw account_id)
+#   envsubst < grafana-ecr-images.yaml > /tmp/grafana-ecr.yaml
+#   helm upgrade --install grafana grafana/grafana \
+#     -n monitoring -f grafana-values.yaml -f /tmp/grafana-ecr.yaml
+# ---------------------------------------------------------------------------
+
+# Grafana main: public.ecr.aws/grafana/grafana
+image:
+  repository: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/grafana/grafana"
+
+# initChownData init container: busybox (Docker Hub official → ecr-public mirror)
+initChownData:
+  image:
+    repository: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/docker/library/busybox"

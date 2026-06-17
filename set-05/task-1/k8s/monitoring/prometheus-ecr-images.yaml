@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# ECR Pull-Through Cache 이미지 오버라이드 (Private Cluster 대응)
+#
+# Workload Subnet 노드는 인터넷이 없으므로 public registry 에 직접 접근 불가.
+# Terraform 이 생성한 pull-through cache rule 을 통해 Private ECR 로 우회한다.
+#   public.ecr.aws/* → ecr-public/*
+#   quay.io/*        → quay/*
+#   registry.k8s.io/* → registry-k8s-io/*
+#
+# 사용법 (prometheus-values.yaml 과 함께):
+#   export ACCOUNT_ID=$(cd ../../terraform && terraform output -raw account_id)
+#   envsubst < prometheus-ecr-images.yaml > /tmp/prom-ecr.yaml
+#   helm upgrade --install prometheus prometheus-community/prometheus \
+#     -n monitoring -f prometheus-values.yaml -f /tmp/prom-ecr.yaml
+# ---------------------------------------------------------------------------
+
+# Prometheus server: quay.io/prometheus/prometheus
+server:
+  image:
+    repository: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/quay/prometheus/prometheus"
+
+# chown init container: busybox (Docker Hub official → ecr-public mirror)
+initChownData:
+  image:
+    repository: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/docker/library/busybox"
+
+# configmap-reload sidecar: jimmidyson/configmap-reload (Docker Hub only, pull-through 미지원)
+# 동적 설정 변경이 없으므로 비활성화한다.
+configmapReload:
+  prometheus:
+    enabled: false
+
+# node-exporter: quay.io/prometheus/node-exporter
+prometheus-node-exporter:
+  image:
+    registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+    repository: "quay/prometheus/node-exporter"
+
+# kube-state-metrics: registry.k8s.io/kube-state-metrics/kube-state-metrics
+kube-state-metrics:
+  image:
+    registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+    repository: "registry-k8s-io/kube-state-metrics/kube-state-metrics"
