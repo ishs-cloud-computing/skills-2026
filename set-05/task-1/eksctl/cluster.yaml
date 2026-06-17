@@ -34,11 +34,6 @@ vpc:
       wsc-workload-c:
         id: "${WORKLOAD_SUBNET_C}"
         az: ap-northeast-2c
-  # Kubernetes API: Public 비활성 / Private 만 활성 (요구사항 9.1)
-  clusterEndpoints:
-    publicAccess: false
-    privateAccess: true
-
 # Workload Subnet 은 인터넷이 없으므로 Private Cluster 로 구성.
 # VPC Endpoint 는 Terraform 에서 이미 생성했으므로 eksctl 생성은 건너뛴다.
 # 주의: eks/eks-auth Interface Endpoint 를 private_dns_enabled=true 로 두면
@@ -111,6 +106,9 @@ managedNodeGroups:
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
     # 앱 Pod 가 노드 IMDS(EC2 IAM)에 접근하지 못하도록 hop limit 1 (요구사항 9.4)
     disableIMDSv1: true
+    instanceMetadata:
+      httpPutResponseHopLimit: 1
+      httpTokens: required
     labels:
       type: app
     tags:

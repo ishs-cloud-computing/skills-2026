@@ -51,7 +51,10 @@ spec:
           # AWS SDK 가 노드 IMDS 로 폴백하지 못하도록 차단 (IRSA 강제)
           env:
             - name: AWS_EC2_METADATA_DISABLED
-              value: "true"
+              valueFrom:
+                configMapKeyRef:
+                  name: wsc-config
+                  key: AWS_EC2_METADATA_DISABLED
           readinessProbe:
             httpGet:
               path: /health

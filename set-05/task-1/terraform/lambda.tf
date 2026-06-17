@@ -71,7 +71,7 @@ resource "aws_security_group" "lambda" {
 resource "aws_lambda_function" "get_table" {
   function_name    = "wsc-get-table-function"
   role             = aws_iam_role.lambda.arn
-  runtime          = "python3.12"
+  runtime          = "python3.14"
   handler          = "index.handler"
   filename         = data.archive_file.lambda.output_path
   source_code_hash = data.archive_file.lambda.output_base64sha256

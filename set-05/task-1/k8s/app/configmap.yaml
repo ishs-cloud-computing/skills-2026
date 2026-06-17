@@ -11,3 +11,4 @@ metadata:
 data:
   AWS_REGION: "ap-northeast-2"
   TABLE_NAME: "wsc-table"
+  AWS_EC2_METADATA_DISABLED: "true"
