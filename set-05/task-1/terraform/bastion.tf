@@ -72,11 +72,6 @@ locals {
     dnf -y update
     dnf -y install jq tar gzip iputils bind-utils git tmux
 
-    # awscli v2
-    curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-    cd /tmp && unzip -q awscliv2.zip && ./aws/install --update
-    rm -rf /tmp/aws /tmp/awscliv2.zip
-
     # kubectl (EKS 1.35 대응)
     curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl"
     chmod +x /usr/local/bin/kubectl
@@ -88,23 +83,8 @@ locals {
     # helm (Prometheus/Grafana/LB Controller 설치용)
     curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-    # terraform
-    TERRAFORM_VERSION="1.12.1"
-    curl -sLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$${TERRAFORM_VERSION}/terraform_$${TERRAFORM_VERSION}_linux_amd64.zip"
-    unzip -q /tmp/terraform.zip -d /usr/local/bin/
-    rm /tmp/terraform.zip
-
     # .bashrc 자동완성 (ec2-user)
     cat >> /home/ec2-user/.bashrc << 'BASHRC'
-
-# --- terraform ---
-complete -C /usr/local/bin/terraform terraform
-alias tf=terraform
-alias tfa='terraform apply'
-alias tfd='terraform destroy'
-alias tfp='terraform plan'
-alias tfi='terraform init'
-alias tfo='terraform output'
 
 # --- kubectl ---
 source <(kubectl completion bash)
