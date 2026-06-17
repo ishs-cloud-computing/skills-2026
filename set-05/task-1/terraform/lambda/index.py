@@ -1,20 +1,30 @@
 import json
 import os
+from decimal import Decimal
 
 import boto3
 
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(os.environ["TABLE_NAME"])
 
+_STATUS_TEXT = {200: "OK", 400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}
+
+
+class _DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super().default(obj)
+
 
 def _response(status, body):
     # ALB(Lambda target) 통합 응답 형식
     return {
         "statusCode": status,
-        "statusDescription": f"{status}",
+        "statusDescription": f"{status} {_STATUS_TEXT.get(status, '')}",
         "isBase64Encoded": False,
         "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body),
+        "body": json.dumps(body, cls=_DecimalEncoder),
     }
 
 

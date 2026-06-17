@@ -18,6 +18,7 @@ metadata:
     # Public Subnet 에 배치
     alb.ingress.kubernetes.io/subnets: wsc-public-a,wsc-public-c
     alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/success-codes: "200,301,302"
 spec:
   ingressClassName: alb
   rules:

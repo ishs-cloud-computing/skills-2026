@@ -8,7 +8,7 @@
 
 resource "aws_ecr_repository" "repo" {
   name                 = "wsc-repo"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
   force_delete         = true
 
   image_scanning_configuration {
@@ -21,19 +21,6 @@ resource "aws_ecr_repository" "repo" {
   }
 
   tags = { Name = "wsc-repo" }
-}
-
-# Enhanced scanning(취약점 상세 분석) 활성화
-resource "aws_ecr_registry_scanning_configuration" "this" {
-  scan_type = "ENHANCED"
-
-  rule {
-    scan_frequency = "CONTINUOUS_SCAN"
-    repository_filter {
-      filter      = "wsc-repo"
-      filter_type = "WILDCARD"
-    }
-  }
 }
 
 # ---------------------------------------------------------------------------
