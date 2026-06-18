@@ -12,3 +12,9 @@ data:
   AWS_REGION: "ap-northeast-2"
   TABLE_NAME: "wsc-table"
   AWS_EC2_METADATA_DISABLED: "true"
+  # IRSA 자격증명에 account-id 가 포함되면 AWS SDK 가 account 기반 엔드포인트
+  # (<account-id>.ddb.<region>.amazonaws.com) 로 DynamoDB 를 호출한다. 이 도메인은
+  # PHZ(dynamodb.<region>.amazonaws.com) 에 매핑되지 않아 퍼블릭 IP 로 해석되고,
+  # 워크로드 서브넷에 인터넷 경로가 없어 i/o timeout 이 발생한다.
+  # disabled 로 두어 표준 엔드포인트(dynamodb.<region>.amazonaws.com)를 강제한다.
+  AWS_ACCOUNT_ID_ENDPOINT_MODE: "disabled"
