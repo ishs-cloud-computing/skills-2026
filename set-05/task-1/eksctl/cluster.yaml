@@ -106,9 +106,6 @@ managedNodeGroups:
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
     # 앱 Pod 가 노드 IMDS(EC2 IAM)에 접근하지 못하도록 hop limit 1 (요구사항 9.4)
     disableIMDSv1: true
-    instanceMetadata:
-      httpPutResponseHopLimit: 1
-      httpTokens: required
     labels:
       type: app
     tags:
