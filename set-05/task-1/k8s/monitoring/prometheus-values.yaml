@@ -41,5 +41,8 @@ kube-state-metrics:
 alertmanager:
   enabled: false
 
-pushgateway:
+# 차트 v20+ 에서 pushgateway 서브차트 alias 가 prometheus-pushgateway 로 변경됨.
+# 구 key(pushgateway)는 무시되어 기본값(enabled)으로 남고 quay.io 이미지를 직접
+# pull 시도 → Private Cluster 에서 timeout. 올바른 key 로 비활성화한다.
+prometheus-pushgateway:
   enabled: false
