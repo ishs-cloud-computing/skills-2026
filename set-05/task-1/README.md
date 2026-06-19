@@ -124,8 +124,20 @@ envsubst < monitoring/prometheus-ecr-images.yaml > /tmp/prom-ecr.yaml
 helm upgrade --install prometheus prometheus-community/prometheus \
   -n monitoring -f monitoring/prometheus-values.yaml -f /tmp/prom-ecr.yaml
 
+# Grafana 이미지는 Docker Hub 전용 → Bastion(인터넷 O)에서 wsc-mirror/grafana 로 미러링.
+# (Docker Hub pull-through 는 자격증명이 필요해 대회 규정상 사용 불가. 익명 pull 만 수행.)
+# 아래 GRAFANA_TAG 는 grafana-ecr-images.yaml 의 image.tag 와 반드시 일치시킨다.
+GRAFANA_TAG=11.6.9
+MIRROR=${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/wsc-mirror/grafana
+aws ecr get-login-password --region ap-northeast-2 \
+  | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+docker pull grafana/grafana:$GRAFANA_TAG
+docker tag  grafana/grafana:$GRAFANA_TAG "$MIRROR:$GRAFANA_TAG"
+docker push "$MIRROR:$GRAFANA_TAG"
+
 kubectl -n monitoring create configmap wsc-dashboard --from-file=dashboard.json=monitoring/dashboard.json
 envsubst < monitoring/grafana-ecr-images.yaml > /tmp/grafana-ecr.yaml
+helm repo update   # "chart version is low" 경고 방지: 최신 차트 사용
 helm upgrade --install grafana grafana/grafana -n monitoring \
   -f monitoring/grafana-values.yaml -f /tmp/grafana-ecr.yaml
 
