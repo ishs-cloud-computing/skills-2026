@@ -8,11 +8,22 @@
 #     -n monitoring -f grafana-values.yaml -f /tmp/grafana-ecr.yaml
 # ---------------------------------------------------------------------------
 
-# Grafana main: public.ecr.aws/grafana/grafana
+# Grafana 차트는 이미지를 "{registry}/{repository}:{tag}" 로 조립한다.
+# registry/repository 를 분리해 오버라이드한다 (prometheus-ecr-images.yaml 과 동일 패턴).
+#
+# Grafana 공식 이미지는 Docker Hub 전용이라 public.ecr.aws/quay 에 미러가 없다.
+# Bastion 에서 익명 pull → wsc-mirror/grafana repo 로 push 한 이미지를 사용한다.
+# tag 는 Bastion 에서 미러링한 값과 정확히 일치시킨다 (아래 GRAFANA_TAG 와 동일).
 image:
-  repository: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/grafana/grafana"
+  registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+  repository: "wsc-mirror/grafana"
+  tag: "11.6.9"
 
 # initChownData init container: busybox (Docker Hub official → ecr-public mirror)
+# 차트 기본 tag(1.31.1)는 public.ecr.aws/docker/library/busybox 미러에 없어(최소 1.32)
+# NotFound 가 난다. 미러에 존재하는 tag 로 고정한다.
 initChownData:
   image:
-    repository: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/docker/library/busybox"
+    registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+    repository: "ecr-public/docker/library/busybox"
+    tag: "1.37.0"
