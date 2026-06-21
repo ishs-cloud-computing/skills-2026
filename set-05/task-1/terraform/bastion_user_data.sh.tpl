@@ -11,6 +11,11 @@ systemctl restart sshd
 dnf -y update
 dnf -y install jq tar gzip iputils bind-utils git tmux
 
+# docker
+dnf -y install docker
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
 # terraform
 yum install -y yum-utils shadow-utils
 yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo

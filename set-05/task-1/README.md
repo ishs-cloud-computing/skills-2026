@@ -50,6 +50,17 @@ aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS
 docker build --platform linux/amd64 -t "$ECR:v1.0.0" .
 docker push "$ECR:v1.0.0"
 docker images "$ECR:v1.0.0"   # 8MB 이하인지 확인 (초과 시 UPX 압축 강화)
+
+# scan_on_push=true 이지만 push 타이밍에 따라 스캔이 누락될 수 있으므로 확인/수동 기동
+aws ecr wait image-scan-complete \
+  --repository-name wsc-repo --image-id imageTag=v1.0.0 || \
+  aws ecr start-image-scan \
+    --repository-name wsc-repo --image-id imageTag=v1.0.0 && \
+  aws ecr wait image-scan-complete \
+    --repository-name wsc-repo --image-id imageTag=v1.0.0
+aws ecr describe-image-scan-findings \
+  --repository-name wsc-repo --image-id imageTag=v1.0.0 \
+  --query 'imageScanStatus.status' --output text   # COMPLETE 이어야 함
 ```
 
 ### 3) EKS 클러스터 (eksctl)
@@ -101,7 +112,7 @@ kubectl apply -f 01-coredns-wsc-local.yaml
 kubectl -n kube-system rollout restart deploy/coredns
 
 # StorageClass (KMS arn 치환)
-sed "s|<EKS_KMS_KEY_ARN>|$EKS_KMS|g" 02-storageclass.yaml | kubectl apply -f -
+sed "s|<EKS_KMS_KEY_ARN>|$EKS_KMS_KEY_ARN|g" 02-storageclass.yaml | kubectl apply -f -
 
 # App (ECR / TargetGroup ARN 치환)
 ECR=$(cd ../terraform && terraform output -raw ecr_repository_url)
