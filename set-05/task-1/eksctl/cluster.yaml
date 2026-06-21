@@ -70,13 +70,13 @@ iam:
       wellKnownPolicies:
         awsLoadBalancerController: true
     # EBS CSI Driver (CMK 암호화 추가 권한 포함)
+    # attachPolicyARNs 는 addon 경로로 생성되는 역할에 적용되지 않으므로
+    # addons 섹션의 attachPolicyARNs 로 지정한다.
     - metadata:
         name: ebs-csi-controller-sa
         namespace: kube-system
       wellKnownPolicies:
         ebsCSIController: true
-      attachPolicyARNs:
-        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ebs-csi-kms-policy"
     # Fluent Bit -> CloudWatch Logs
     - metadata:
         name: fluent-bit
@@ -200,3 +200,6 @@ addons:
   - name: coredns
   - name: kube-proxy
   - name: aws-ebs-csi-driver
+    # addon 경로로 생성되는 IAM 역할에 CMK 권한을 직접 부여
+    attachPolicyARNs:
+      - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ebs-csi-kms-policy"
