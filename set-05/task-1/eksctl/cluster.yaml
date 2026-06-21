@@ -104,8 +104,9 @@ managedNodeGroups:
     volumeType: gp3
     volumeEncrypted: true
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
-    # 앱 Pod 가 노드 IMDS(EC2 IAM)에 접근하지 못하도록 hop limit 1 (요구사항 9.4)
+    # IMDSv1 비활성화 + hop limit=1 → Pod 에서 IMDS 접근 차단 (요구사항 9.4)
     disableIMDSv1: true
+    disablePodIMDS: true
     labels:
       type: app
     tags:
@@ -147,6 +148,8 @@ managedNodeGroups:
     volumeType: gp3
     volumeEncrypted: true
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
+    disableIMDSv1: true
+    disablePodIMDS: true
     labels:
       type: addon
     tags:
@@ -174,6 +177,8 @@ managedNodeGroups:
     volumeType: gp3
     volumeEncrypted: true
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
+    disableIMDSv1: true
+    disablePodIMDS: true
     labels:
       type: monitoring
     tags:
