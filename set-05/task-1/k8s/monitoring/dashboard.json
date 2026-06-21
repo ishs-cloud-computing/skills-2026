@@ -19,7 +19,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "count(count by (label_eks_amazonaws_com_nodegroup) (kube_node_labels))"
+          "expr": "count(kube_node_info)"
         }
       ]
     },
@@ -50,7 +50,7 @@
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "legendFormat": "{{label_eks_amazonaws_com_nodegroup}}",
-          "expr": "avg by (label_eks_amazonaws_com_nodegroup) (\n  (1 - avg by (node) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))\n  * on (node) group_left(label_eks_amazonaws_com_nodegroup) kube_node_labels\n) * 100"
+          "expr": "(1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))) * 100"
         }
       ]
     },
@@ -66,7 +66,7 @@
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "legendFormat": "{{label_eks_amazonaws_com_nodegroup}}",
-          "expr": "avg by (label_eks_amazonaws_com_nodegroup) (\n  (1 - avg by (node) (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))\n  * on (node) group_left(label_eks_amazonaws_com_nodegroup) kube_node_labels\n) * 100"
+          "expr": "(1 - avg by (instance) (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
         }
       ]
     },
