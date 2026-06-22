@@ -41,6 +41,11 @@ output "eks_control_plane_extra_sg_id" {
   value       = aws_security_group.eks_control_plane_extra.id
 }
 
+output "eks_shared_node_sg_id" {
+  description = "eksctl vpc.sharedNodeSecurityGroup 에 지정. app-lb -> Pod(8080) 사전 허용용"
+  value       = aws_security_group.eks_shared_node.id
+}
+
 output "cloudfront_domain" {
   value = aws_cloudfront_distribution.cdn.domain_name
 }

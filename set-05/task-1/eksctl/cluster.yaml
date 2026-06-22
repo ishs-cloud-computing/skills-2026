@@ -9,6 +9,7 @@
 #   export WORKLOAD_SUBNET_A=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-a"]')
 #   export WORKLOAD_SUBNET_C=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-c"]')
 #   export CP_EXTRA_SG_ID=$(terraform output -raw eks_control_plane_extra_sg_id)
+#   export NODE_SHARED_SG_ID=$(terraform output -raw eks_shared_node_sg_id)
 #
 # [2단계] envsubst 로 실제 값을 치환한 뒤 적용하세요.
 #
@@ -31,6 +32,12 @@ vpc:
   # bastion -> private API(443) 인바운드를 이미 허용하고 있어,
   # eksctl create cluster 직후 별도 SG 수정 없이 bastion 에서 kubectl 접근 가능.
   securityGroup: "${CP_EXTRA_SG_ID}"
+  # 모든 노드에 attach 할 공용 SG (terraform 에서 생성).
+  # app-lb SG -> Pod(8080) 인바운드를 이미 허용하고 있어,
+  # 생성 직후 노드 SG 수정 없이 ALB health check / 트래픽이 통과한다.
+  # manageSharedNodeSecurityGroupRules(기본 true) 로 node<->control plane 규칙은
+  # eksctl 이 이 SG 에 자동 추가하므로 클러스터 통신도 정상 동작한다.
+  sharedNodeSecurityGroup: "${NODE_SHARED_SG_ID}"
   subnets:
     private:
       wsc-workload-a:
