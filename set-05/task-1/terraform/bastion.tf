@@ -98,3 +98,34 @@ resource "aws_eip_association" "bastion" {
   instance_id   = aws_instance.bastion.id
   allocation_id = aws_eip.bastion.id
 }
+
+# ---------------------------------------------------------------------------
+# EKS Control Plane 추가 Security Group
+# - eksctl cluster.yaml 의 vpc.securityGroup 으로 지정한다.
+# - EKS 매니지드 cluster SG 는 클러스터 생성 시점에야 만들어져 terraform 으로
+#   미리 규칙을 넣을 수 없다. 대신 이 SG 를 control plane ENI 에 함께 attach 하면
+#   eksctl create cluster 직후 bastion 이 곧바로 private API(443) 에 접근 가능하다.
+#   (생성 후 수동으로 SG 규칙 추가하던 단계를 제거)
+# ---------------------------------------------------------------------------
+resource "aws_security_group" "eks_control_plane_extra" {
+  name        = "wsc-eks-control-plane-extra-sg"
+  description = "Extra control plane SG - allow bastion to reach private API (443)"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = "HTTPS to EKS API from bastion"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "wsc-eks-control-plane-extra-sg" }
+}

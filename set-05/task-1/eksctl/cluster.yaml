@@ -8,6 +8,7 @@
 #   export VPC_ID=$(terraform output -raw vpc_id)
 #   export WORKLOAD_SUBNET_A=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-a"]')
 #   export WORKLOAD_SUBNET_C=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-c"]')
+#   export CP_EXTRA_SG_ID=$(terraform output -raw eks_control_plane_extra_sg_id)
 #
 # [2단계] envsubst 로 실제 값을 치환한 뒤 적용하세요.
 #
@@ -26,6 +27,10 @@ metadata:
 # EKS 는 Workload Subnet 에서만 운용한다 (요구사항 9).
 vpc:
   id: "${VPC_ID}"
+  # control plane ENI 에 추가로 attach 할 SG (terraform 에서 생성).
+  # bastion -> private API(443) 인바운드를 이미 허용하고 있어,
+  # eksctl create cluster 직후 별도 SG 수정 없이 bastion 에서 kubectl 접근 가능.
+  securityGroup: "${CP_EXTRA_SG_ID}"
   subnets:
     private:
       wsc-workload-a:
