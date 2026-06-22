@@ -30,19 +30,3 @@ body:
         - 2과제 module-2: ...
     validations:
       required: false
-
-  - type: textarea
-    id: sub-issues
-    attributes:
-      label: 서브 이슈
-      description: 1과제 / 2과제 모듈별로 서브 이슈를 만들어 링크한다. (GitHub Sub-issues 또는 task list)
-      value: |
-        ### 1과제
-        - [ ] task-1 #
-
-        ### 2과제 (모듈 수는 세트마다 다름)
-        - [ ] task-2 module-1 #
-        - [ ] task-2 module-2 #
-        - [ ] task-2 module-3 #
-    validations:
-      required: true
