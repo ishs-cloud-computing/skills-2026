@@ -61,6 +61,17 @@ resource "aws_security_group" "eks_shared_node" {
     security_groups = [aws_security_group.app_lb.id]
   }
 
+  # 채점(6-4): bastion 에서 노드로 SSH 접속 후 인터넷 차단을 확인한다.
+  # 부트스트랩에서 패스워드 로그인(Skill53##)을 켜더라도 노드 SG 가 22 를 막으면
+  # ssh 접속 자체가 timeout 되므로 bastion -> 노드 22 인바운드를 허용한다.
+  ingress {
+    description     = "SSH from bastion (grading 6-4 node internet test)"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
