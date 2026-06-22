@@ -34,6 +34,10 @@ datasources:
     datasources:
       - name: Prometheus
         type: prometheus
+        # dashboard.json 의 패널들이 datasource 를 uid="prometheus" 로 참조한다.
+        # uid 를 명시하지 않으면 Grafana 가 랜덤 uid 를 생성해 대시보드가 가리키는
+        # datasource 를 찾지 못하고 모든 패널이 "No Data" 가 된다. uid 를 고정한다.
+        uid: prometheus
         access: proxy
         url: http://prometheus-server.monitoring.svc.wsc.local/prometheus
         isDefault: true
