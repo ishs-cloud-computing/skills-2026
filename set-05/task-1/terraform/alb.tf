@@ -54,7 +54,7 @@ resource "aws_security_group" "eks_shared_node" {
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description     = "App ALB -> Pod target / health check (8080)"
+    description     = "App ALB to Pod target and health check (8080)"
     from_port       = 8080
     to_port         = 8080
     protocol        = "tcp"
