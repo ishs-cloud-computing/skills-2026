@@ -212,6 +212,10 @@ addons:
   - name: coredns
   - name: kube-proxy
   - name: aws-ebs-csi-driver
-    # addon 경로로 생성되는 IAM 역할에 CMK 권한을 직접 부여
+    # addon 경로로 생성되는 IAM 역할에는 attachPolicyARNs 로 지정한 정책만 붙고
+    # 표준 AmazonEBSCSIDriverPolicy 는 자동 추가되지 않는다. 따라서 표준 정책과
+    # CMK 권한 정책을 모두 명시해야 한다. (표준 정책 누락 시 ec2:DescribeAvailabilityZones
+    # dry-run 헬스체크부터 403 → ebs-plugin CrashLoop → 애드온 CREATING 타임아웃)
     attachPolicyARNs:
+      - "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
       - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ebs-csi-kms-policy"
