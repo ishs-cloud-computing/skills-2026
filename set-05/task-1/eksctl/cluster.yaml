@@ -16,6 +16,42 @@
 #   envsubst < cluster-example.yaml > cluster.yaml
 #   eksctl create cluster -f cluster.yaml
 # ===========================================================================
+#
+# ===========================================================================
+# [생성 순서 & 복구 가이드]
+# `eksctl create cluster -f cluster.yaml` 는 아래 순서로 진행된다. 각 단계가
+# 깨졌을 때 "부분 복구" 로 끝나는지 "클러스터 전체 재생성" 이 필요한지 표기한다.
+# (★결론: 전체 재생성이 필요한 경우는 1번의 일부뿐. 나머지는 전부 부분 복구 가능★)
+#
+#   1) Control Plane 생성
+#      (VPC/subnet 선택, endpoint public/private, secretsEncryption, logging, version)
+#       - endpoint public/private 잘못 떴을 때 → 재생성 불필요. update 로 교정:
+#           aws eks update-cluster-config --name wsc-eks-cluster \
+#             --resources-vpc-config endpointPublicAccess=false,endpointPrivateAccess=true
+#         ※ privateCluster.enabled=true 면 처음부터 public=false 로 생성된다.
+#           이번처럼 생성이 addon 단계에서 깨져 재시도되면 control plane 이 먼저
+#           만들어진 상태로 남아 public=true 로 떠 있을 수 있으니 위 명령으로 반드시 확인/교정.
+#       - clusterLogging 누락 → aws eks update-cluster-config --logging ...   (재생성 불필요)
+#       - secretsEncryption(KMS) 누락 → aws eks associate-encryption-config ... (재생성 불필요, 단 한 번 켜면 변경/해제 불가)
+#       - ★VPC/subnet/cluster name/region 이 잘못됨 → 전체 재생성 필요(불변)★
+#       - ★version 을 낮춰야 함 → 전체 재생성 필요(업그레이드만 가능)★
+#   2) OIDC Provider (withOIDC)
+#       - 누락/실패 → eksctl utils associate-iam-oidc-provider --cluster wsc-eks-cluster --approve  (재생성 불필요)
+#   3) Addons (vpc-cni, coredns, kube-proxy, aws-ebs-csi-driver)
+#       - 특정 addon 만 CREATE_FAILED (예: ebs-csi 가 IAM 정책 부족으로 실패) →
+#         정책 보정 후 해당 addon 만 삭제/재생성 (재생성 불필요):
+#           aws eks delete-addon --cluster-name wsc-eks-cluster --addon-name aws-ebs-csi-driver
+#           eksctl create addon -f cluster.yaml
+#   4) IAM ServiceAccounts (iamserviceaccount, OIDC 의존)
+#       - 누락/실패 → eksctl create iamserviceaccount -f cluster.yaml --approve  (재생성 불필요)
+#   5) Managed NodeGroups (wsc-app-ng / wsc-addon-ng / wsc-monitoring-ng)
+#       - 특정 NG 만 실패 → 그 NG 만 삭제 후 재생성 (재생성 불필요):
+#           eksctl delete nodegroup --cluster wsc-eks-cluster --name <ng> --drain=false
+#           eksctl create nodegroup -f cluster.yaml --include=<ng>
+#
+# 즉, 생성이 중간에 깨지면 먼저 (1)의 endpoint/logging/암호화 상태부터 점검하고,
+# 끊긴 지점 이후 단계(addon/SA/NG)만 위 명령으로 이어서 복구하면 된다.
+# ===========================================================================
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
