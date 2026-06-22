@@ -22,7 +22,7 @@ k8s/
   ├─ monitoring/          # Prometheus/Grafana helm values, dashboard, addon-ingress
   └─ logging/             # Fluent Bit DaemonSet
 app/
-  └─ Dockerfile           # 제공된 Go binary "book" 경량 이미지(<8MB, curl 포함)
+  └─ Dockerfile           # alpine base + curl-static 복사 → curl 포함 + ECR Basic 스캔 통과
 ```
 
 ## 배포 순서
@@ -47,7 +47,7 @@ terraform output            # 아래 단계에서 사용할 값 확인
 cd app
 ECR=$(cd ../terraform && terraform output -raw ecr_repository_url)
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin "${ECR%/*}"
-docker buildx build --platform linux/amd64 --provenance=false -t "$ECR:v1.0.0" --push .
+docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile -t "$ECR:v1.0.0" --push .
 docker images "$ECR:v1.0.0"   # 8MB 이하인지 확인 (초과 시 UPX 압축 강화)
 
 # scan_on_push=true 이지만 push 타이밍에 따라 스캔이 누락될 수 있으므로 확인/수동 기동
@@ -179,7 +179,7 @@ envsubst < logging/fluent-bit.yaml | kubectl apply -f -
 | 4 | VPC, Workload RTB 규칙 없음, Endpoint | `vpc.tf`(workload RTB 라우트 미생성) + `endpoints.tf`(Interface Endpoint only) |
 | 5 | Bastion (SSH password, EIP, Admin) | `bastion.tf` |
 | 6 | S3 wsc-static-<ACCOUNT_ID> SSE-KMS, /static | `s3.tf` |
-| 7 | ECR wsc-repo, KMS+스캔, <8MB, curl | `ecr.tf` + `app/Dockerfile` |
+| 7 | ECR wsc-repo, KMS+스캔, <8MB, curl | `ecr.tf` + `app/Dockerfile`(alpine base + curl-static 복사) |
 | 8 | DynamoDB wsc-table CMK | `dynamodb.tf` |
 | 9 | EKS 1.35, private-only, KMS secret, CW 로그, 3 NodeGroup | `eksctl/cluster.yaml` |
 | 9.2 | 노드명/`wsc.local` 도메인, SSH, curl/ping, EBS KMS | `cluster.yaml` preBootstrap + `01-coredns-wsc-local.yaml` |
