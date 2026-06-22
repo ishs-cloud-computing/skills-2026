@@ -73,6 +73,7 @@ export EKS_KMS_KEY_ARN=$(cd ../terraform && terraform output -raw eks_kms_key_ar
 export VPC_ID=$(cd ../terraform && terraform output -raw vpc_id)
 export WORKLOAD_SUBNET_A=$(cd ../terraform && terraform output -json workload_subnet_ids | jq -r '."wsc-workload-a"')
 export WORKLOAD_SUBNET_C=$(cd ../terraform && terraform output -json workload_subnet_ids | jq -r '."wsc-workload-c"')
+export CP_EXTRA_SG_ID=$(cd ../terraform && terraform output -raw eks_control_plane_extra_sg_id)
 
 envsubst < cluster.yaml > cluster.rendered.yaml
 
@@ -81,6 +82,11 @@ eksctl create cluster -f cluster.rendered.yaml
 
 > IRSA 정책(`wsc-app-policy`, `wsc-fluentbit-policy`, `wsc-ebs-csi-kms-policy`)은
 > Terraform 이 먼저 생성하므로 2)→3) 순서를 지킵니다.
+
+> **Bastion → Private API 사전 허용**: `cluster.yaml` 의 `vpc.securityGroup` 에
+> Terraform 이 만든 `wsc-eks-control-plane-extra-sg`(bastion SG → 443 허용)를 지정합니다.
+> eksctl 이 클러스터 생성 시점에 control plane ENI 에 이 SG 를 함께 attach 하므로,
+> 생성 직후 cluster SG 에 수동으로 규칙을 추가하지 않아도 Bastion 에서 바로 `kubectl` 이 동작합니다.
 
 ### 4) AWS Load Balancer Controller (addon NodeGroup 에 배치)
 

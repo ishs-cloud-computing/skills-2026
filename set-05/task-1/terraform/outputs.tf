@@ -36,6 +36,11 @@ output "bastion_public_ip" {
   value = aws_eip.bastion.public_ip
 }
 
+output "eks_control_plane_extra_sg_id" {
+  description = "eksctl vpc.securityGroup 에 지정. bastion -> private API(443) 사전 허용용"
+  value       = aws_security_group.eks_control_plane_extra.id
+}
+
 output "cloudfront_domain" {
   value = aws_cloudfront_distribution.cdn.domain_name
 }
