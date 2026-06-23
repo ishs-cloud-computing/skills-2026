@@ -87,13 +87,18 @@ eksctl create cluster -f cluster.rendered.yaml
 > IRSA 정책(`wsc-app-policy`, `wsc-fluentbit-policy`, `wsc-ebs-csi-kms-policy`)은
 > Terraform 이 먼저 생성하므로 2)→3) 순서를 지킵니다.
 
-> **SG 사전 attach (생성 직후 수동 작업 제거)**: `cluster.yaml` 의 `vpc` 에서 Terraform 이
-> 만든 두 SG 를 미리 지정합니다. control plane ENI 와 노드 ENI 는 서로 다른 attach 대상이라
-> 충돌하지 않습니다.
+> **SG 사전 attach (생성 직후 수동 작업 제거)**: Terraform 이 만든 SG 를 `cluster.yaml` 에
+> 미리 지정합니다. control plane ENI 와 노드 ENI 는 서로 다른 attach 대상이라 충돌하지 않습니다.
 > - `vpc.securityGroup` = `wsc-eks-control-plane-extra-sg` (bastion SG → API 443):
 >   생성 직후 cluster SG 수정 없이 Bastion 에서 바로 `kubectl` 동작.
-> - `vpc.sharedNodeSecurityGroup` = `wsc-eks-shared-node-sg` (app-lb SG → Pod 8080):
->   생성 직후 노드 SG 수정 없이 `wsc-app-lb` health check / 트래픽 통과.
+> - 노드용 공용 SG `wsc-eks-shared-node-sg` (app-lb SG → Pod 8080, bastion SG → node 22):
+>   **`vpc.sharedNodeSecurityGroup` 만으로는 부족합니다.** 이 필드는 self-managed
+>   nodegroup 의 노드 ENI 에만 attach 되고, managed nodegroup 에는 적용되지 않습니다
+>   (eksctl `NodeGroupSGs.WithShared` = *"Not supported for managed nodegroups"*; managed
+>   노드에는 EKS 가 만든 cluster SG 만 attach 됨). 이 클러스터는 전부 `managedNodeGroups`
+>   이므로, 각 nodegroup 의 `securityGroups.attachIDs` 로 이 SG 를 **직접 attach** 해야
+>   8080 health check / 트래픽과 bastion SSH(채점 6-4) 가 통과합니다. `sharedNodeSecurityGroup`
+>   필드는 shared SG ↔ cluster SG 통신 규칙 자동 생성을 위해 유지합니다.
 >   (`wsc-addon-lb` 는 AWS LB Controller 가 자체 SG/backend 규칙을 관리)
 
 ### 4) AWS Load Balancer Controller (addon NodeGroup 에 배치)

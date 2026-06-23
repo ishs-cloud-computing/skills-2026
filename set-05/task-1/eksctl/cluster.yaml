@@ -68,11 +68,17 @@ vpc:
   # bastion -> private API(443) 인바운드를 이미 허용하고 있어,
   # eksctl create cluster 직후 별도 SG 수정 없이 bastion 에서 kubectl 접근 가능.
   securityGroup: "${CP_EXTRA_SG_ID}"
-  # 모든 노드에 attach 할 공용 SG (terraform 에서 생성).
-  # app-lb SG -> Pod(8080) 인바운드를 이미 허용하고 있어,
-  # 생성 직후 노드 SG 수정 없이 ALB health check / 트래픽이 통과한다.
-  # manageSharedNodeSecurityGroupRules(기본 true) 로 node<->control plane 규칙은
-  # eksctl 이 이 SG 에 자동 추가하므로 클러스터 통신도 정상 동작한다.
+  # 공용 노드 SG (terraform 에서 생성). app-lb SG -> Pod(8080), bastion -> node(22)
+  # 인바운드를 미리 허용해 둔 SG 이다.
+  # ★주의★ vpc.sharedNodeSecurityGroup 은 self-managed(unmanaged) nodegroup 의 노드
+  #   ENI 에만 attach 된다. 이 클러스터는 전부 managedNodeGroups 라서 이 필드만으로는
+  #   노드에 SG 가 붙지 않는다 (eksctl: NodeGroupSGs.WithShared = "Not supported for
+  #   managed nodegroups"). managed 노드에는 EKS 가 만든 cluster SG 만 붙으므로,
+  #   위 8080/22 인바운드 규칙이 노드에 적용되지 않아 ALB health check / bastion SSH 가
+  #   실패한다.
+  # → 따라서 각 managedNodeGroup 에 securityGroups.attachIDs 로 동일 SG 를 직접 attach 한다.
+  #   여기서는 manageSharedNodeSecurityGroupRules(기본 true) 로 shared SG <-> cluster SG
+  #   통신 규칙만 eksctl 이 자동 생성하도록 필드는 유지한다.
   sharedNodeSecurityGroup: "${NODE_SHARED_SG_ID}"
   subnets:
     private:
@@ -159,6 +165,11 @@ managedNodeGroups:
       type: app
     tags:
       Name: wsc-app-node
+    # managed nodegroup 은 sharedNodeSecurityGroup 이 자동 attach 되지 않으므로
+    # 공용 SG(app-lb -> Pod 8080, bastion -> node 22)를 직접 attach 한다.
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
     ssh:
       enableSsm: true
     # ECR Pull-Through Cache 에 필요한 추가 액션(BatchImportUpstreamImage, CreateRepository)을
@@ -202,6 +213,10 @@ managedNodeGroups:
       type: addon
     tags:
       Name: wsc-addon-node
+    # managed nodegroup 은 sharedNodeSecurityGroup 이 자동 attach 되지 않으므로 직접 attach.
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
     ssh:
       enableSsm: true
     iam:
@@ -231,6 +246,10 @@ managedNodeGroups:
       type: monitoring
     tags:
       Name: wsc-monitoring-node
+    # managed nodegroup 은 sharedNodeSecurityGroup 이 자동 attach 되지 않으므로 직접 attach.
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
     ssh:
       enableSsm: true
     iam:
