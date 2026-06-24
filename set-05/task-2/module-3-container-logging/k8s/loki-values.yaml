@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# Helm values: grafana/loki (과제지 5. Loki 구성)
+# - Deploy Mode: SingleBinary, Storage: filesystem (PVC 10Gi), Port 3100
+# - Helm Release Name: loki, namespace: wsc-logging
+# - 외부 NLB 노출은 loki-lb-service.yaml(별도 LoadBalancer Service)로 구성
+#
+# 설치:
+#   helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
+#   helm upgrade --install loki grafana/loki -n wsc-logging -f loki-values.yaml
+# ---------------------------------------------------------------------------
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    retention_period: 168h
+    allow_structured_metadata: true
+
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: gp3
+
+# SingleBinary 모드이므로 분산 컴포넌트/게이트웨이/캐시는 모두 비활성화
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+gateway:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  serviceMonitor:
+    enabled: false

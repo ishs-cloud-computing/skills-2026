@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# Karpenter EC2NodeClass / NodePool (과제지 Scaling 구성)
+# - Pod 증가로 NodeGroup 자원이 부족하면 Karpenter 가 노드를 자동 확장
+# - 유휴 노드는 자동 제거 (consolidationPolicy: WhenEmptyOrUnderutilized)
+# - NodePool Limit: CPU 100 / Memory 200Gi
+# - 노드 타입은 NodeGroup 과 동일하게 t3.medium 로 제한, label dedicated=scaling
+# subnet: karpenter.sh/discovery 태그(terraform private 서브넷)로 디스커버리
+# securityGroup: 클러스터 SG(aws:eks:cluster-name 태그)로 디스커버리
+# role: terraform 가 만든 KarpenterNodeRole-wsc-scaling-cluster
+# ---------------------------------------------------------------------------
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: wsc-scaling
+spec:
+  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: "KarpenterNodeRole-wsc-scaling-cluster"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "wsc-scaling-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        aws:eks:cluster-name: "wsc-scaling-cluster"
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: wsc-scaling
+spec:
+  template:
+    metadata:
+      labels:
+        dedicated: scaling
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: wsc-scaling
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t3.medium"]
+      expireAfter: 720h
+  limits:
+    cpu: "100"
+    memory: 200Gi
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s

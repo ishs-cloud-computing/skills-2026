@@ -1,0 +1,31 @@
+# ---------------------------------------------------------------------------
+# KEDA ScaledObject (과제지 Scaling 구성)
+# - SQS 메시지 수 기준으로 wsc-scaling-deploy 의 Pod 를 스케일링
+# - 메시지가 없을 경우 최소 2개 유지 (minReplicaCount: 2)
+# - 30초 주기로 큐 확인 (pollingInterval: 30)
+# - 메시지 5개당 Pod 1개 증가 (queueLength: 5)
+# - IRSA: keda-operator SA 의 역할을 사용 (identityOwner: operator)
+#
+# <SQS_URL> 은 apply 시 terraform output(sqs_queue_url) 으로 치환한다.
+#   SQS_URL=$(terraform output -raw sqs_queue_url)
+#   sed "s|<SQS_URL>|$SQS_URL|g" 20-keda-scaledobject.yaml | kubectl apply -f -
+# ---------------------------------------------------------------------------
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: wsc-scaling-scaledobject
+  namespace: wsc-scaling
+spec:
+  scaleTargetRef:
+    name: wsc-scaling-deploy
+  minReplicaCount: 2
+  maxReplicaCount: 100
+  pollingInterval: 30
+  cooldownPeriod: 30
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: "<SQS_URL>"
+        queueLength: "5"
+        awsRegion: "ap-northeast-2"
+        identityOwner: operator

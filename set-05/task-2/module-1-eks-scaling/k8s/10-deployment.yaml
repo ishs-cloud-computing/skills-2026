@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# Deployment (과제지 EKS Object 구성)
+# - busybox:latest + sleep 명령
+# - labels dedicated=scaling, CPU 250m/500m, Mem 256Mi/512Mi
+# - nodeSelector dedicated=scaling 으로 ManagedNodeGroup / Karpenter 노드에 배치
+#   (KEDA 가 replica 를 늘리면 자원 부족 시 Karpenter 가 노드를 확장)
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wsc-scaling-deploy
+  namespace: wsc-scaling
+  labels:
+    dedicated: scaling
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wsc-scaling-deploy
+  template:
+    metadata:
+      labels:
+        app: wsc-scaling-deploy
+        dedicated: scaling
+    spec:
+      nodeSelector:
+        dedicated: scaling
+      containers:
+        - name: wsc-scaling-cnt
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
