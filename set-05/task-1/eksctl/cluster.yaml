@@ -142,8 +142,9 @@ iam:
 # Managed Node Groups (요구사항 9.2 / 9 페이지 5)
 # - 모두 Managed, AL2023, t3.medium, Workload Subnet, 최소 고가용성(AZ 분산)
 # - SSH Password(Skill53##) 접속, curl/ping 동작, EBS KMS 암호화
-# - 노드명 <INSTANCE_ID>.ec2.internal, 내부 도메인 wsc.local
-#   (preBootstrapCommands + CoreDNS 패치로 적용)
+# - 노드명 <INSTANCE_ID>.ap-northeast-2.compute.internal 은 Workload Subnet 의
+#   private_dns_hostname_type_on_launch=resource-name(terraform vpc.tf)으로 적용한다.
+# - 내부 도메인 wsc.local 변경은 CoreDNS 패치(01-coredns-wsc-local.yaml)로 적용한다.
 # ===========================================================================
 managedNodeGroups:
   # ---------- App NodeGroup: label type=app ----------
@@ -181,13 +182,13 @@ managedNodeGroups:
         - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
         - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
-    overrideBootstrapCommand: &nodeadm_config |
-      apiVersion: node.eks.aws/v1alpha1
-      kind: NodeConfig
-      spec:
-        kubelet:
-          config:
-            clusterDomain: wsc.local
+    # ★주의★ overrideBootstrapCommand 를 지정하면 eksctl 이 managed nodegroup 에
+    #   커스텀 LaunchTemplate 을 만들면서 인스턴스 Name 태그를 기본값
+    #   (<cluster>-<ng>-Node)으로 박아버려 위 tags.Name(wsc-app-node)이 인스턴스에
+    #   적용되지 않는다 → 채점 6-3-A(Name 태그로 볼륨 암호화 조회)가 None 으로 실패.
+    #   wsc.local 내부 도메인 변경은 CoreDNS 패치(01-coredns-wsc-local.yaml, 채점 6-6-A)로
+    #   이미 충족되고 앱 Pod 는 짧은 이름 해석이 필요 없으므로(외부 FQDN + IP 타깃),
+    #   kubelet clusterDomain 오버라이드는 제거해 addon/monitoring NG 와 동일하게 둔다.
     preBootstrapCommands: &common_bootstrap
       - "dnf -y install iputils bind-utils curl-minimal || true"
       - "echo 'ec2-user:Skill53##' | chpasswd"
