@@ -10,13 +10,20 @@
 #   helm repo add grafana https://grafana.github.io/helm-charts
 #   kubectl -n monitoring create configmap wsc-dashboard \
 #       --from-file=dashboard.json=dashboard.json
-#   helm upgrade --install grafana grafana/grafana -n monitoring -f grafana-values.yaml
+#   helm upgrade --install grafana grafana/grafana --version 8.15.0 \
+#       -n monitoring -f grafana-values.yaml -f /tmp/grafana-ecr.yaml
+# 차트 8.15.0(appVersion 11.6.x) 으로 고정. Grafana 이미지는 grafana-ecr-images.yaml
+# 에서 11.6.9 로 별도 고정한다(latest 금지).
 # ---------------------------------------------------------------------------
 adminUser: admin
 adminPassword: "Skill53##"
 
 nodeSelector:
   type: monitoring
+
+# helm test 전용 bats 이미지(docker.io)는 private cluster 에서 pull 불가하므로 비활성화.
+testFramework:
+  enabled: false
 
 persistence:
   enabled: true
@@ -34,6 +41,10 @@ datasources:
     datasources:
       - name: Prometheus
         type: prometheus
+        # dashboard.json 의 패널들이 datasource 를 uid="prometheus" 로 참조한다.
+        # uid 를 명시하지 않으면 Grafana 가 랜덤 uid 를 생성해 대시보드가 가리키는
+        # datasource 를 찾지 못하고 모든 패널이 "No Data" 가 된다. uid 를 고정한다.
+        uid: prometheus
         access: proxy
         url: http://prometheus-server.monitoring.svc.wsc.local/prometheus
         isDefault: true

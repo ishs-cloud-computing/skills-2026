@@ -1,11 +1,6 @@
-# ---------------------------------------------------------------------------
-# TargetGroupBinding (AWS Load Balancer Controller CRD)
-# Terraform 으로 생성한 wsc-app-lb 의 IP TargetGroup(wsc-app-tg) 에
-# wsc-svc 의 Pod IP 를 동적으로 등록한다.
-# CloudFront -> (VPC Origin) -> wsc-app-lb -> 이 TargetGroup -> 앱 Pod
-#
-# <APP_TARGET_GROUP_ARN> 을 terraform output app_target_group_arn 으로 치환
-# ---------------------------------------------------------------------------
+# TargetGroupBinding (ALB Controller CRD): wsc-app-tg(IP TG) 에 wsc-svc Pod IP 등록.
+# CloudFront -> VPC Origin -> wsc-app-lb -> TG -> 앱 Pod.
+# <APP_TARGET_GROUP_ARN> 은 terraform output app_target_group_arn 으로 치환.
 apiVersion: elbv2.k8s.aws/v1beta1
 kind: TargetGroupBinding
 metadata:
