@@ -47,12 +47,17 @@ envsubst < cluster.yaml > cluster.rendered.yaml
 eksctl create cluster -f cluster.rendered.yaml
 
 # 4) KEDA 설치 (eksctl 가 만든 keda-operator SA 재사용)
+# 차트 2.20.x 는 flat serviceAccount.create/name 이 deprecated(무시됨) → 컴포넌트별 키 사용.
+# SQS 권한(IRSA)이 필요한 건 operator 뿐이므로 그것만 기존 SA 로 고정(create=false 로 소유권 충돌도 회피),
+# metricServer/webhooks 는 Helm 이 자체 SA 를 만든다.
 helm repo add kedacore https://kedacore.github.io/charts && helm repo update
 helm upgrade --install keda kedacore/keda -n keda --version 2.20.1 \
-  --set serviceAccount.create=false --set serviceAccount.name=keda-operator
+  --set serviceAccount.operator.create=false \
+  --set serviceAccount.operator.name=keda-operator
 
 # 5) Karpenter 설치 (eksctl 가 만든 karpenter SA 재사용)
 # k8s 매니페스트가 karpenter.sh/v1 CRD 를 쓰므로 차트는 반드시 1.x 로 고정한다.
+# 차트 1.13.0 은 flat serviceAccount.create/name 을 그대로 쓰므로 create=false 가 정상 적용된다.
 helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter -n karpenter --version 1.13.0 \
   --set serviceAccount.create=false --set serviceAccount.name=karpenter \
   --set settings.clusterName=wsc-scaling-cluster \
@@ -91,9 +96,4 @@ bash ~/module-1/mark/mark1.sh
 - KEDA 트리거는 `queueLength: 5` → 메시지 100건이면 desired ≈ 20 (채점지 1-6: Pod 19~20개).
 - Karpenter NodePool 노드 타입을 t3.medium 로 제한해 Pod 20개 → 노드 약 4개(기본 2 + 신규 2)로 수렴.
 - `identityOwner: operator` 로 KEDA가 keda-operator IRSA 역할의 SQS 권한을 사용한다.
-- Karpenter 노드가 클러스터에 조인하려면 노드 역할 인증이 필요하다. EKS Access Entry 모드에서 eksctl 가 자동 처리하지 못하면 다음을 1회 실행한다:
-  ```bash
-  eksctl create accessentry --cluster wsc-scaling-cluster --region ap-northeast-2 \
-    --principal-arn arn:aws:iam::$ACCOUNT_ID:role/KarpenterNodeRole-wsc-scaling-cluster \
-    --type EC2_LINUX
-  ```
+- Karpenter 노드(KarpenterNodeRole)의 클러스터 조인용 EKS access entry 는 `cluster.yaml` 의 `accessConfig.accessEntries` 에 내장되어 클러스터 생성 시 자동 처리된다. 별도 수동 단계 불필요.
