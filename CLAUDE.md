@@ -21,7 +21,9 @@ skills-2026/
 │   │   ├─ k8s/   # k8s 리소스 (번호 prefix로 apply 순서)
 │   │   ├── app/  # 컨테이너 소스 (필요할 때만)
 │   │   ├── task.pdf  # 과제지 pdf
+│   │   ├── task.md  # 과제지
 │   │   ├── mark.pdf  # 채점지 pdf
+│   │   ├── mark.md  # 채점지 pdf
 │   │   └── mark.sh   # 채점 스크립트
 │   └── task-2/
 │       ├── module-1/    # 모듈별로 terraform/ eksctl/ manifests/ app-source/ 중 필요한 것만
@@ -48,6 +50,21 @@ skills-2026/
 
 - `variables.tf`에 기본값, 세트별 이름·CIDR·리전 값은 `terraform.tfvars`로 주입.
 - 리소스 이름은 과제지에 명시된 값과 정확히 일치시킨다 (이름 정확 일치 채점 항목이 많음).
+
+## 작업 순서
+
+1. 과제 관련 manifest일 경우 task.md, mark.md, mark.sh 파일을 확인 후 진행한다.
+2. 사용하는 소프트웨어의 버전을 고정하고, 작성 시점 기준 최신 안정 버전인지 확인한다. (latest 금지)
+3. manifest 수정 시 꼭 관련 툴을 활용해 수정된 자료가 동작하는지 확인하고 채점 기준과 맞는지 확인한다.
+
+## 마무리 작업
+
+마무리 작업은 한 과제의 구현이 완의된 시점에 진행하는 검토 과정이다.
+
+1. 과제 관련 manifest일 경우 task.md, mark.md, mark.sh 파일을 확인 후 진행한다.
+2. 더 나은 방법이 존재하는지 검토
+3. 관련 툴을 활용해 자료가 동작하는지 확인하고 채점 기준과 맞는지 확인한다.
+
 
 ## 커밋 / 브랜치
 
