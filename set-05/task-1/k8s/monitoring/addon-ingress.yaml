@@ -1,10 +1,5 @@
-# ---------------------------------------------------------------------------
-# Addon Load Balancer (요구사항 12.2)
-# - wsc-addon-lb : L7 / internet-facing (Public Subnet), 외부 접근 가능
-# - 80 /grafana    -> grafana
-# - 80 /prometheus -> prometheus-server
-# AWS Load Balancer Controller 가 이 Ingress 로 ALB 를 생성한다.
-# ---------------------------------------------------------------------------
+# Addon Load Balancer (요구사항 12.2): wsc-addon-lb, L7 internet-facing.
+# 80 /grafana -> grafana, 80 /prometheus -> prometheus-server. ALB Controller 가 생성.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -18,6 +13,7 @@ metadata:
     # Public Subnet 에 배치
     alb.ingress.kubernetes.io/subnets: wsc-public-a,wsc-public-c
     alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/success-codes: "200,301,302"
 spec:
   ingressClassName: alb
   rules:

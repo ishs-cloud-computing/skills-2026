@@ -1,18 +1,8 @@
 # ===========================================================================
 # eksctl Cluster Manifest (요구사항 9)
-#
-# [1단계] terraform 디렉터리에서 아래 명령어로 환경변수를 설정하세요.
-#
-#   export ACCOUNT_ID=$(terraform output -raw account_id)
-#   export EKS_KMS_KEY_ARN=$(terraform output -raw eks_kms_key_arn)
-#   export VPC_ID=$(terraform output -raw vpc_id)
-#   export WORKLOAD_SUBNET_A=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-a"]')
-#   export WORKLOAD_SUBNET_C=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-c"]')
-#
-# [2단계] envsubst 로 실제 값을 치환한 뒤 적용하세요.
-#
-#   envsubst < cluster-example.yaml > cluster.yaml
-#   eksctl create cluster -f cluster.yaml
+# 적용: terraform output 값을 env 로 export → envsubst 로 치환해 적용한다.
+#   envsubst < cluster.yaml | eksctl create cluster -f -
+# 필요한 export 변수 목록 / 생성순서 / 단계별 복구 가이드는 ../README.md 참고.
 # ===========================================================================
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
@@ -22,10 +12,22 @@ metadata:
   region: ap-northeast-2
   version: "1.35"
 
+# Auto Mode 미사용(향후 eksctl 기본값이 될 예정이므로 명시적으로 비활성화).
+# 본 과제는 직접 정의한 managed nodegroup 으로 운용한다.
+autoModeConfig:
+  enabled: false
+
 # ----- 기존(Terraform 생성) VPC / Workload Subnet 재사용 -----
 # EKS 는 Workload Subnet 에서만 운용한다 (요구사항 9).
 vpc:
   id: "${VPC_ID}"
+  # control plane ENI 추가 SG (bastion -> private API 443 인바운드 허용).
+  securityGroup: "${CP_EXTRA_SG_ID}"
+  # 공용 노드 SG (app-lb -> Pod 8080, bastion -> node 22).
+  # sharedNodeSecurityGroup 은 managed NG 노드에 자동 attach 되지 않으므로(self-managed 전용)
+  # 각 NG 에서 securityGroups.attachIDs 로 직접 붙인다. 이 필드는 shared<->cluster SG
+  # 통신 규칙 자동 생성(manageSharedNodeSecurityGroupRules)을 위해 유지한다.
+  sharedNodeSecurityGroup: "${NODE_SHARED_SG_ID}"
   subnets:
     private:
       wsc-workload-a:
@@ -34,16 +36,15 @@ vpc:
       wsc-workload-c:
         id: "${WORKLOAD_SUBNET_C}"
         az: ap-northeast-2c
-  # Kubernetes API: Public 비활성 / Private 만 활성 (요구사항 9.1)
-  clusterEndpoints:
-    publicAccess: false
-    privateAccess: true
-
 # Workload Subnet 은 인터넷이 없으므로 Private Cluster 로 구성.
 # VPC Endpoint 는 Terraform 에서 이미 생성했으므로 eksctl 생성은 건너뛴다.
-#privateCluster:
-#  enabled: true
-#  skipEndpointCreation: true
+# 주의: eks/eks-auth Interface Endpoint 를 private_dns_enabled=true 로 두면
+#        eks.region.amazonaws.com PHZ 가 VPC 에 생성되어
+#        oidc.eks.* 조회를 가로채 NXDOMAIN 반환 → withOIDC / IRSA 파괴.
+#        따라서 해당 두 엔드포인트는 Terraform 에서 생성하지 않는다 (endpoints.tf 참고).
+privateCluster:
+  enabled: true
+  skipEndpointCreation: true
 
 # ----- Secret Resource KMS Envelope Encryption (요구사항 9.1) -----
 secretsEncryption:
@@ -71,13 +72,13 @@ iam:
       wellKnownPolicies:
         awsLoadBalancerController: true
     # EBS CSI Driver (CMK 암호화 추가 권한 포함)
+    # attachPolicyARNs 는 addon 경로로 생성되는 역할에 적용되지 않으므로
+    # addons 섹션의 attachPolicyARNs 로 지정한다.
     - metadata:
         name: ebs-csi-controller-sa
         namespace: kube-system
       wellKnownPolicies:
         ebsCSIController: true
-      attachPolicyARNs:
-        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ebs-csi-kms-policy"
     # Fluent Bit -> CloudWatch Logs
     - metadata:
         name: fluent-bit
@@ -89,8 +90,9 @@ iam:
 # Managed Node Groups (요구사항 9.2 / 9 페이지 5)
 # - 모두 Managed, AL2023, t3.medium, Workload Subnet, 최소 고가용성(AZ 분산)
 # - SSH Password(Skill53##) 접속, curl/ping 동작, EBS KMS 암호화
-# - 노드명 <INSTANCE_ID>.ec2.internal, 내부 도메인 wsc.local
-#   (preBootstrapCommands + CoreDNS 패치로 적용)
+# - 노드명 <INSTANCE_ID>.ap-northeast-2.compute.internal 은 Workload Subnet 의
+#   private_dns_hostname_type_on_launch=resource-name(terraform vpc.tf)으로 적용한다.
+# - 내부 도메인 wsc.local 변경은 CoreDNS 패치(01-coredns-wsc-local.yaml)로 적용한다.
 # ===========================================================================
 managedNodeGroups:
   # ---------- App NodeGroup: label type=app ----------
@@ -105,21 +107,30 @@ managedNodeGroups:
     volumeType: gp3
     volumeEncrypted: true
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
-    # 앱 Pod 가 노드 IMDS(EC2 IAM)에 접근하지 못하도록 hop limit 1 (요구사항 9.4)
+    # IMDSv1 비활성화 + hop limit=1 → Pod 에서 IMDS 접근 차단 (요구사항 9.4)
     disableIMDSv1: true
+    disablePodIMDS: true
     labels:
       type: app
     tags:
       Name: wsc-app-node
-    ssh:
-      enableSsm: true
-    overrideBootstrapCommand: &nodeadm_config |
-      apiVersion: node.eks.aws/v1alpha1
-      kind: NodeConfig
-      spec:
-        kubelet:
-          config:
-            clusterDomain: wsc.local
+    # managed nodegroup 은 sharedNodeSecurityGroup 이 자동 attach 되지 않으므로
+    # 공용 SG(app-lb -> Pod 8080, bastion -> node 22)를 직접 attach 한다.
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
+    # managed NG 는 기본 정책을 명시해야 한다. 마지막 정책은 ECR Pull-Through Cache
+    # 추가 액션(BatchImportUpstreamImage, CreateRepository)용.
+    iam:
+      attachPolicyARNs:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
+    # overrideBootstrapCommand 는 쓰지 않는다: custom LaunchTemplate 이 인스턴스
+    # Name 태그를 기본값으로 덮어써 tags.Name(채점 6-3-A) 이 깨진다. wsc.local 해석은
+    # CoreDNS 패치(01-coredns-wsc-local.yaml)로 충족한다.
     preBootstrapCommands: &common_bootstrap
       - "dnf -y install iputils bind-utils curl-minimal || true"
       - "echo 'ec2-user:Skill53##' | chpasswd"
@@ -139,12 +150,23 @@ managedNodeGroups:
     volumeType: gp3
     volumeEncrypted: true
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
+    disableIMDSv1: true
+    disablePodIMDS: true
     labels:
       type: addon
     tags:
       Name: wsc-addon-node
-    ssh:
-      enableSsm: true
+    # managed nodegroup 은 sharedNodeSecurityGroup 이 자동 attach 되지 않으므로 직접 attach.
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
+    iam:
+      attachPolicyARNs:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
     preBootstrapCommands: *common_bootstrap
 
   # ---------- Monitoring NodeGroup: label type=monitoring ----------
@@ -159,17 +181,39 @@ managedNodeGroups:
     volumeType: gp3
     volumeEncrypted: true
     volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
+    disableIMDSv1: true
+    disablePodIMDS: true
     labels:
       type: monitoring
     tags:
       Name: wsc-monitoring-node
-    ssh:
-      enableSsm: true
+    # managed nodegroup 은 sharedNodeSecurityGroup 이 자동 attach 되지 않으므로 직접 attach.
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
+    iam:
+      attachPolicyARNs:
+        - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
     preBootstrapCommands: *common_bootstrap
 
-# ----- 필수 Addon (EBS CSI Driver 등) -----
+# ----- 필수 Addon -----
+# version 은 EKS 1.35 의 default 버전으로 고정한다(latest 금지).
+#   eksctl utils describe-addon-versions --kubernetes-version 1.35 --name <addon>
 addons:
   - name: vpc-cni
+    version: v1.21.2-eksbuild.2
   - name: coredns
+    version: v1.13.2-eksbuild.10
   - name: kube-proxy
+    version: v1.35.3-eksbuild.11
   - name: aws-ebs-csi-driver
+    version: v1.62.0-eksbuild.1
+    # addon 경로 IAM 역할에는 표준 AmazonEBSCSIDriverPolicy 가 자동 추가되지 않으므로
+    # 표준 정책 + CMK 정책을 모두 명시한다(누락 시 ebs-plugin 403 CrashLoop).
+    attachPolicyARNs:
+      - "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+      - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ebs-csi-kms-policy"

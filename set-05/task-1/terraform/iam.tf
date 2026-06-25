@@ -59,6 +59,20 @@ resource "aws_iam_policy" "fluentbit" {
   })
 }
 
+# ECR Pull-Through Cache: 노드 IAM Role 이 캐시 리포지터리를 생성·import 할 수 있도록
+# AmazonEC2ContainerRegistryReadOnly 에는 이 두 액션이 없으므로 별도 정책으로 추가한다.
+resource "aws_iam_policy" "ecr_pull_through" {
+  name = "wsc-ecr-pull-through-policy"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ecr:BatchImportUpstreamImage", "ecr:CreateRepository"]
+      Resource = "arn:aws:ecr:${var.region}:${local.account_id}:repository/*"
+    }]
+  })
+}
+
 # EBS CSI Driver 가 CMK 로 볼륨을 암호화할 수 있도록 추가 권한 (요구사항 9.6)
 resource "aws_iam_policy" "ebs_csi_kms" {
   name = "wsc-ebs-csi-kms-policy"

@@ -11,3 +11,10 @@ metadata:
 data:
   AWS_REGION: "ap-northeast-2"
   TABLE_NAME: "wsc-table"
+  AWS_EC2_METADATA_DISABLED: "true"
+  # DynamoDB 를 표준 리전 엔드포인트로만 호출하도록 강제한다. IRSA account-id 기반
+  # 엔드포인트(<account-id>.ddb.<region>...)는 PHZ 에 매핑되지 않아 퍼블릭 IP 로
+  # 해석되고, 인터넷 없는 workload 서브넷에서 POST /v1/book 이 timeout(ALB 504)된다.
+  # account 모드 disable + 엔드포인트 URL 고정으로 account 기반 분기를 우회한다.
+  AWS_ACCOUNT_ID_ENDPOINT_MODE: "disabled"
+  AWS_ENDPOINT_URL_DYNAMODB: "https://dynamodb.ap-northeast-2.amazonaws.com"

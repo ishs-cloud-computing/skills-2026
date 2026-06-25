@@ -1,0 +1,28 @@
+# ECR Pull-Through Cache 이미지 오버라이드 (private cluster: 노드는 인터넷 불가).
+#   quay.io→quay/*, registry.k8s.io→registry-k8s-io/* 로 우회.
+# tag 는 차트 29.13.0 기본 버전으로 고정한다(latest 금지).
+#   helm template prometheus-community/prometheus --version 29.13.0 로 확인.
+server:
+  image:
+    repository: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/quay/prometheus/prometheus"
+    tag: "v3.12.0"
+
+# configmap-reload sidecar 는 Docker Hub 전용(pull-through 미지원)이고
+# 동적 설정 변경이 없으므로 비활성화한다.
+configmapReload:
+  prometheus:
+    enabled: false
+
+# node-exporter: quay.io/prometheus/node-exporter
+prometheus-node-exporter:
+  image:
+    registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+    repository: "quay/prometheus/node-exporter"
+    tag: "v1.11.1"
+
+# kube-state-metrics: registry.k8s.io/kube-state-metrics/kube-state-metrics
+kube-state-metrics:
+  image:
+    registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+    repository: "registry-k8s-io/kube-state-metrics/kube-state-metrics"
+    tag: "v2.19.1"
