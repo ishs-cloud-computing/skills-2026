@@ -87,6 +87,19 @@ eksctl create cluster -f cluster.rendered.yaml
 > IRSA 정책(`wsc-app-policy`, `wsc-fluentbit-policy`, `wsc-ebs-csi-kms-policy`)은
 > Terraform 이 먼저 생성하므로 2)→3) 순서를 지킵니다.
 
+> **IRSA 사용 (Pod Identity 미사용) 근거**: 요구사항 9.4 는 "Pod 가 EC2 IAM 대신
+> ServiceAccount 권한 사용" 만 요구하며 IRSA/Pod Identity 중 무엇이든 충족합니다.
+> 이 클러스터는 **private cluster** 이고 `endpoints.tf` 에서 `eks`/`eks-auth` 인터페이스
+> 엔드포인트를 의도적으로 생성하지 않습니다(private DNS PHZ 가 `oidc.eks.*` 조회를 가로채
+> IRSA 파괴). Pod Identity 는 Pod Identity Agent 가 `eks-auth.<region>.amazonaws.com` 를
+> 호출해야 동작하므로 이 토폴로지에서는 부적합합니다. 따라서 **IRSA 가 최적**입니다.
+
+> **생성 중단 시 복구 (전체 재생성 불필요, 대부분 부분 복구)**:
+> - Control Plane: endpoint/logging/암호화 누락 → `aws eks update-cluster-config` / `associate-encryption-config` 로 교정. VPC·subnet·name·region·version 다운만 전체 재생성.
+> - OIDC: `eksctl utils associate-iam-oidc-provider --cluster wsc-eks-cluster --approve`
+> - Addon 실패: 해당 addon 만 `aws eks delete-addon …` 후 `eksctl create addon -f cluster.rendered.yaml`
+> - IAM SA / NodeGroup 실패: `eksctl create iamserviceaccount -f …` / `eksctl create nodegroup -f … --include=<ng>`
+
 > **SG 사전 attach (생성 직후 수동 작업 제거)**: Terraform 이 만든 SG 를 `cluster.yaml` 에
 > 미리 지정합니다. control plane ENI 와 노드 ENI 는 서로 다른 attach 대상이라 충돌하지 않습니다.
 > - `vpc.securityGroup` = `wsc-eks-control-plane-extra-sg` (bastion SG → API 443):
@@ -106,9 +119,12 @@ eksctl create cluster -f cluster.rendered.yaml
 Workload Subnet 노드는 인터넷 없이 ECR Pull-Through Cache 경유로만 이미지를 받습니다.
 image.repository 를 Private ECR pull-through URL 로 오버라이드합니다.
 
+차트 `--version` 과 image tag 를 모두 고정합니다(latest 금지).
+
 ```bash
 helm repo add eks https://aws.github.io/eks-charts && helm repo update
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --version 3.4.0 \
   -n kube-system \
   --set clusterName=wsc-eks-cluster \
   --set serviceAccount.create=false \
@@ -116,7 +132,8 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set region=ap-northeast-2 \
   --set vpcId="$VPC_ID" \
   --set nodeSelector.type=addon \
-  --set image.repository=${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/eks/aws-load-balancer-controller
+  --set image.repository=${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/eks/aws-load-balancer-controller \
+  --set image.tag=v3.4.0
 ```
 
 ### 5) Kubernetes 리소스
@@ -149,8 +166,9 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
 
 # ECR pull-through cache URL 로 이미지 오버라이드 (Private Cluster 대응)
+# 차트 버전 핀(29.13.0): scrapeConfigs 구조(v27+)에 맞춰 values 를 작성했으므로 고정한다.
 envsubst < monitoring/prometheus-ecr-images.yaml > /tmp/prom-ecr.yaml
-helm upgrade --install prometheus prometheus-community/prometheus \
+helm upgrade --install prometheus prometheus-community/prometheus --version 29.13.0 \
   -n monitoring -f monitoring/prometheus-values.yaml -f /tmp/prom-ecr.yaml
 
 # Grafana 이미지는 Docker Hub 전용 → Bastion(인터넷 O)에서 wsc-mirror/grafana 로 미러링.
@@ -166,8 +184,8 @@ docker push "$MIRROR:$GRAFANA_TAG"
 
 kubectl -n monitoring create configmap wsc-dashboard --from-file=dashboard.json=monitoring/dashboard.json
 envsubst < monitoring/grafana-ecr-images.yaml > /tmp/grafana-ecr.yaml
-helm repo update   # "chart version is low" 경고 방지: 최신 차트 사용
-helm upgrade --install grafana grafana/grafana -n monitoring \
+# 차트 8.15.0(appVersion 11.6.x) 으로 고정. 이미지는 위에서 11.6.9 로 미러링한 값을 사용.
+helm upgrade --install grafana grafana/grafana --version 8.15.0 -n monitoring \
   -f monitoring/grafana-values.yaml -f /tmp/grafana-ecr.yaml
 
 kubectl apply -f monitoring/addon-ingress.yaml   # wsc-addon-lb (public)
@@ -217,111 +235,8 @@ curl -s -X POST "https://$CF/v1/book" -d '{"client_id":"C002","username":"Bob","
 curl -si "https://$CF/health"                      # 403 Restrict access to api
 ```
 
-## 채점 전 런타임 수정 체크리스트
-
-배포 후 mark.sh 실행 전에 아래 항목을 반드시 확인/수정합니다.
-
-### ECR 이미지 스캔 (5-2-B)
-
-`scan_on_push=true` 이지만 push 타이밍에 따라 스캔이 누락될 수 있습니다.
-
-```bash
-aws ecr describe-image-scan-findings \
-  --repository-name wsc-repo --image-id imageTag=v1.0.0 \
-  --query 'imageScanStatus.status' --output text
-# COMPLETE 가 아니면 수동 기동
-aws ecr start-image-scan --repository-name wsc-repo --image-id imageTag=v1.0.0
-aws ecr wait image-scan-complete --repository-name wsc-repo --image-id imageTag=v1.0.0
-```
-
-### wsc-app-ng 인스턴스 Name 태그 (6-3-A)
-
-mark.sh 는 `Name=wsc-app-node` 태그로 인스턴스를 조회합니다. `overrideBootstrapCommand`
-사용으로 태그 전파가 누락될 수 있으므로 직접 확인합니다.
-
-```bash
-# 실제 Name 태그 확인
-aws ec2 describe-instances \
-  --filters "Name=tag:eks:nodegroup-name,Values=wsc-app-ng" \
-            "Name=instance-state-name,Values=running" \
-  --query "Reservations[].Instances[].[InstanceId, Tags[?Key=='Name'].Value|[0]]" \
-  --output text
-
-# wsc-app-node 가 아닌 경우 — 태그 추가
-INSTANCE_IDS=$(aws ec2 describe-instances \
-  --filters "Name=tag:eks:nodegroup-name,Values=wsc-app-ng" \
-            "Name=instance-state-name,Values=running" \
-  --query "Reservations[].Instances[].InstanceId" --output text)
-for ID in $INSTANCE_IDS; do
-  aws ec2 create-tags --resources $ID --tags Key=Name,Value=wsc-app-node
-done
-```
-
-### IMDS hop limit (6-5-A)
-
-`disablePodIMDS: true` 가 eksctl 에서 적용되지 않는 경우 직접 설정합니다.
-
-```bash
-INSTANCE_IDS=$(aws ec2 describe-instances \
-  --filters "Name=tag:eks:cluster-name,Values=wsc-eks-cluster" \
-            "Name=instance-state-name,Values=running" \
-  --query "Reservations[].Instances[].InstanceId" --output text)
-for ID in $INSTANCE_IDS; do
-  aws ec2 modify-instance-metadata-options \
-    --instance-id $ID --http-put-response-hop-limit 1 --http-endpoint enabled
-done
-# pod 에서 timeout 확인
-kubectl exec deploy/wsc-deploy -n wsc -- \
-  curl -X PUT http://169.254.169.254/latest/api/token \
-  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" --max-time 10 2>&1
-```
-
-### Released PV 정리 (6-7-D)
-
-PVC 재생성 시 Released PV 가 남아 mark.sh 출력에 나타납니다.
-
-```bash
-kubectl get pv --no-headers | awk '$2=="Released" {print $1}' | xargs kubectl delete pv
-```
-
-### Prometheus 실패 타겟 확인 (11-1-A)
-
-Private 클러스터에서 `kubernetes-apiservers` 등의 job 이 실패해 `min(up)=0` 이 될 수 있습니다.
-
-```bash
-ADDON_LB_DNS=$(aws elbv2 describe-load-balancers --names wsc-addon-lb \
-  --query "LoadBalancers[].DNSName" --output text)
-curl -s http://$ADDON_LB_DNS/prometheus/api/v1/targets | \
-  jq '.data.activeTargets[] | select(.health=="down") | {job: .labels.job, error: .lastError}'
-```
-
-실패 job 확인 후 `prometheus-server` ConfigMap 에서 해당 scrape job 을 제거하거나
-`prometheus-values.yaml` 의 `serverFiles.prometheus.yml.scrape_configs` 로 오버라이드:
-
-```bash
-# ConfigMap 수정 후 reload
-kubectl rollout restart deployment prometheus-server -n monitoring
-```
-
-### Grafana 대시보드 업데이트 (11-2-A/C/D)
-
-`monitoring/dashboard.json` 수정 후 반영:
-
-```bash
-kubectl -n monitoring delete configmap wsc-dashboard
-kubectl -n monitoring create configmap wsc-dashboard \
-  --from-file=dashboard.json=monitoring/dashboard.json
-kubectl -n monitoring rollout restart deployment grafana
-kubectl -n monitoring rollout status deployment grafana
-```
-
----
-
 ## 주의 / 검증 필요 포인트
 
-- **노드명 `<INSTANCE_ID>.ec2.internal` 과 `wsc.local` 도메인**: `cluster.yaml` 의
-  `preBootstrapCommands` + CoreDNS 패치 + kubelet `--cluster-domain=wsc.local` 조합으로
-  적용합니다. AL2023(nodeadm) 환경에 따라 kubelet 인자 주입 방식 조정이 필요할 수 있습니다.
 - **CloudFront → 내부 ALB**: CloudFront **VPC Origin** 기능을 사용합니다(`aws_cloudfront_vpc_origin`).
   ALB SG 는 CloudFront origin-facing 관리형 prefix list 만 허용합니다.
 - **이미지 8MB**: Go 바이너리 크기에 따라 UPX 압축 강도 조정이 필요할 수 있습니다.
