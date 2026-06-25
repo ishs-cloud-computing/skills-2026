@@ -5,9 +5,9 @@
 # - /prometheus 경로(route-prefix)로 서비스
 # - PVC: wsc-prometheus-pvc (wsc-sc, CMK 암호화)
 #
-# 설치:
+# 설치 (차트 29.13.0 핀 — scrapeConfigs 구조 v27+ 전제):
 #   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-#   helm upgrade --install prometheus prometheus-community/prometheus \
+#   helm upgrade --install prometheus prometheus-community/prometheus --version 29.13.0 \
 #     -n monitoring -f prometheus-values.yaml
 # Service 이름은 prometheus-server (datasource: http://prometheus-server.monitoring.svc.wsc.local/prometheus)
 # ---------------------------------------------------------------------------
@@ -41,5 +41,17 @@ kube-state-metrics:
 alertmanager:
   enabled: false
 
-pushgateway:
+# 차트 v20+ 에서 pushgateway 서브차트 alias 가 prometheus-pushgateway 로 변경됨.
+# 구 key(pushgateway)는 무시되어 기본값(enabled)으로 남고 quay.io 이미지를 직접
+# pull 시도 → Private Cluster 에서 timeout. 올바른 key 로 비활성화한다.
+prometheus-pushgateway:
   enabled: false
+
+# self-scrape metrics_path 교정 (채점 11-1-A: min(up)==1).
+# route-prefix(/prometheus) 때문에 내부 /metrics 가 /prometheus/metrics 로 이동 →
+# 기본 self-scrape job 은 localhost:9090/metrics 404 → up=0. v27+ 는 scrapeConfigs
+# 맵 머지로 해당 job 의 metrics_path 만 패치한다(serverFiles 전체 치환 시 job 중복
+# "multiple scrape configs" 로 CrashLoop).
+scrapeConfigs:
+  prometheus:
+    metrics_path: /prometheus/metrics

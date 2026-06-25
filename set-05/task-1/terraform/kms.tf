@@ -76,11 +76,52 @@ resource "aws_kms_alias" "dynamodb" {
   target_key_id = aws_kms_key.dynamodb.key_id
 }
 
+# Managed Node Group 이 EBS 볼륨을 암호화할 때
+# Auto Scaling 서비스 연결 역할이 키를 사용할 수 있어야 한다.
+# 이 정책이 없으면 ASG 가 인스턴스를 기동하지 못한다.
+data "aws_iam_policy_document" "kms_eks" {
+  source_policy_documents = [data.aws_iam_policy_document.kms_default.json]
+
+  statement {
+    sid    = "AllowAutoScalingServiceRole"
+    effect = "Allow"
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey",
+    ]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${local.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"]
+    }
+  }
+
+  statement {
+    sid       = "AllowAutoScalingGrants"
+    effect    = "Allow"
+    actions   = ["kms:CreateGrant"]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${local.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"]
+    }
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+}
+
 # EKS Secret Envelope Encryption + EBS 볼륨 암호화에 공용으로 사용
 resource "aws_kms_key" "eks" {
   description             = "wsc EKS secrets & EBS volume CMK"
   enable_key_rotation     = true
   deletion_window_in_days = 7
+  policy                  = data.aws_iam_policy_document.kms_eks.json
 }
 resource "aws_kms_alias" "eks" {
   name          = "alias/wsc-eks"

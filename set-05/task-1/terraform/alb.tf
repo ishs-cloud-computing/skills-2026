@@ -39,6 +39,49 @@ resource "aws_security_group" "app_lb" {
   tags = { Name = "wsc-app-lb-sg" }
 }
 
+# ---------------------------------------------------------------------------
+# EKS Shared Node Security Group
+# - eksctl cluster.yaml 의 vpc.sharedNodeSecurityGroup 으로 지정한다.
+# - app-lb 는 Terraform 이 생성하므로 AWS LB Controller 가 frontend SG 를 모른다.
+#   따라서 ALB -> Pod(8080) health check / 트래픽이 노드 SG 에서 차단되어
+#   타겟이 전부 unhealthy 가 된다(생성 후 수동으로 노드 SG 규칙을 넣던 단계).
+#   이 SG 를 모든 노드에 미리 attach 해 app-lb SG -> 8080 을 사전 허용한다.
+#   (addon-lb 는 LB Controller 가 자체 SG/backend 규칙을 관리하므로 여기서 제외)
+# ---------------------------------------------------------------------------
+resource "aws_security_group" "eks_shared_node" {
+  name        = "wsc-eks-shared-node-sg"
+  description = "Shared node SG - allow app-lb to reach Pod targets (8080)"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description     = "App ALB to Pod target and health check (8080)"
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app_lb.id]
+  }
+
+  # 채점(6-4): bastion 에서 노드로 SSH 접속 후 인터넷 차단을 확인한다.
+  # 부트스트랩에서 패스워드 로그인(Skill53##)을 켜더라도 노드 SG 가 22 를 막으면
+  # ssh 접속 자체가 timeout 되므로 bastion -> 노드 22 인바운드를 허용한다.
+  ingress {
+    description     = "SSH from bastion (grading 6-4 node internet test)"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "wsc-eks-shared-node-sg" }
+}
+
 resource "aws_lb" "app" {
   name               = "wsc-app-lb"
   internal           = true
