@@ -1,12 +1,12 @@
 # ---------------------------------------------------------------------------
-# Helm values: grafana/loki (과제지 5. Loki 구성)
+# Helm values: grafana-community/loki (과제지 5. Loki 구성)
 # - Deploy Mode: SingleBinary, Storage: filesystem (PVC 10Gi), Port 3100
 # - Helm Release Name: loki, namespace: wsc-logging
 # - 외부 NLB 노출은 loki-lb-service.yaml(별도 LoadBalancer Service)로 구성
 #
 # 설치:
-#   helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
-#   helm upgrade --install loki grafana/loki -n wsc-logging -f loki-values.yaml
+#   helm repo add grafana-community https://grafana-community.github.io/helm-charts && helm repo update
+#   helm upgrade --install loki grafana-community/loki -n wsc-logging --version 18.1.1 -f loki-values.yaml
 # ---------------------------------------------------------------------------
 loki:
   auth_enabled: false

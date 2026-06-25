@@ -2,10 +2,10 @@ terraform {
   required_version = ">= 1.6.0"
 
   required_providers {
-    # Lambda Runtime python3.14 를 인식하는 최신 provider 필요 (5.60 enum 에는 없음)
+    # Lambda Runtime python3.14 를 인식하는 provider 필요 (aws 6.x)
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.80"
+      version = "~> 6.0"
     }
   }
 }

@@ -47,14 +47,17 @@ cd ../eksctl && envsubst < cluster.yaml > cluster.rendered.yaml && eksctl create
 # 3) Loki + Grafana (helm)
 cd ../k8s
 kubectl apply -f 00-namespace.yaml -f 01-storageclass.yaml
-helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
-helm upgrade --install loki grafana/loki -n wsc-logging -f loki-values.yaml
+# OSS Loki 차트는 2026-03-16부로 grafana-community 저장소로 이전됨(grafana/loki 는 GEL 전용).
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo add grafana-community https://grafana-community.github.io/helm-charts
+helm repo update
+helm upgrade --install loki grafana-community/loki -n wsc-logging --version 18.1.1 -f loki-values.yaml
 kubectl apply -f loki-lb-service.yaml
 
 NM=<비번호>
 sed "s/__NM__/$NM/g" grafana-values.yaml > grafana-values.rendered.yaml
 kubectl -n wsc-logging create configmap wsc-dashboard --from-file=dashboard.json=dashboard.json
-helm upgrade --install grafana grafana/grafana -n wsc-logging -f grafana-values.rendered.yaml
+helm upgrade --install grafana grafana/grafana -n wsc-logging --version 10.5.15 -f grafana-values.rendered.yaml
 
 # 4) Fluent Bit → Loki 엔드포인트 연결 (Loki NLB 생성 후)
 LOKI_LB=$(kubectl get svc -n wsc-logging loki-lb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
