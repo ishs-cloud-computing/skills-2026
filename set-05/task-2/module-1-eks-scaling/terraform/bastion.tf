@@ -61,30 +61,46 @@ resource "aws_eip" "bastion" {
 }
 
 locals {
-  bastion_user_data = <<-EOF
-    #!/bin/bash
-    set -euxo pipefail
+  bastion_user_data = <<EOF
+#!/bin/bash
+# set -e 는 일부러 빼둔다: 뒤쪽 툴 다운로드가 하나 실패해도 cloud-final 이 죽으면
+# 안 되고(=SSH 설정이 안 돼서 로그인 불가), 전체가 끝까지 실행되어야 한다.
+set -uxo pipefail
 
-    dnf -y update
-    dnf -y install jq tar gzip iputils bind-utils git tmux
+# ===== 1) SSH 비밀번호 인증 (맨 앞: 네트워크 불필요, 항상 성공) =====
+# 뒤 단계가 깨져도 비밀번호 로그인은 반드시 보장되도록 최우선 처리한다.
+set +x   # 비밀번호가 콘솔 로그(/var/log/cloud-init-output)에 평문으로 찍히지 않게 xtrace off
+echo 'ec2-user:${var.ssh_password}' | chpasswd
+set -x
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+mkdir -p /etc/ssh/sshd_config.d
+# cloud-init drop-in(50-cloud-init.conf)보다 먼저 매칭되도록 00- 사용 (sshd 는 옵션별 first-match 우선)
+printf 'PasswordAuthentication yes\n' > /etc/ssh/sshd_config.d/00-wsc-pwauth.conf
+systemctl restart sshd
 
-    # awscli v2
-    curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-    cd /tmp && unzip -q awscliv2.zip && ./aws/install --update
-    rm -rf /tmp/aws /tmp/awscliv2.zip
+# ===== 2) 툴 설치 (실패해도 || true 로 cloud-final 을 죽이지 않음) =====
+dnf -y update || true
+dnf -y install jq unzip tar gzip iputils bind-utils git tmux || true
 
-    # kubectl (EKS 1.35 대응)
-    curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl"
-    chmod +x /usr/local/bin/kubectl
+# awscli v2
+if curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip; then
+  (cd /tmp && unzip -q awscliv2.zip && ./aws/install --update)
+  rm -rf /tmp/aws /tmp/awscliv2.zip
+fi
 
-    # eksctl
-    curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
-    mv /tmp/eksctl /usr/local/bin/
+# kubectl (EKS 1.35 대응)
+curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl" && chmod +x /usr/local/bin/kubectl
 
-    # helm (KEDA / Karpenter 설치용)
-    curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+# eksctl
+curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && mv -f /tmp/eksctl /usr/local/bin/ || true
 
-    cat >> /home/ec2-user/.bashrc << 'BASHRC'
+# helm (KEDA / Karpenter 설치용)
+curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash || true
+
+# terraform 는 bastion 에 설치하지 않는다: apply 는 본컴에서만 하고, bastion 은
+# 본컴이 만든 outputs.json 을 jq 로 읽어 쓰므로 provider(876MB) 도 불필요하다.
+
+cat >> /home/ec2-user/.bashrc << 'BASHRC'
 source <(kubectl completion bash)
 alias k=kubectl
 complete -o default -F __start_kubectl k
@@ -92,18 +108,13 @@ source <(eksctl completion bash)
 source <(helm completion bash)
 complete -C '/usr/local/bin/aws_completer' aws
 BASHRC
-    chown ec2-user:ec2-user /home/ec2-user/.bashrc
+chown ec2-user:ec2-user /home/ec2-user/.bashrc
 
-    # SSH Password 인증 활성화 + 패스워드 설정
-    echo 'ec2-user:${var.ssh_password}' | chpasswd
-    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-    mkdir -p /etc/ssh/sshd_config.d
-    echo 'PasswordAuthentication yes' > /etc/ssh/sshd_config.d/60-wsc.conf
-    systemctl restart sshd
+# kubeconfig 자동 구성 (클러스터 생성 전이면 실패 → || true)
+su - ec2-user -c "aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.region}" || true
 
-    # kubeconfig 자동 구성 (클러스터 생성 이후 재실행 필요 시 수동)
-    su - ec2-user -c "aws eks update-kubeconfig --name ${var.cluster_name} --region ${var.region}" || true
-  EOF
+exit 0
+EOF
 }
 
 resource "aws_instance" "bastion" {
