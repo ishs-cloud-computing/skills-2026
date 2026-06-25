@@ -2,6 +2,7 @@
 .terraform.lock.hcl
 *.tfstate
 *.tfstate.*
+outputs.json
 **/terraform/build/
 crash.log
 crash.*.log

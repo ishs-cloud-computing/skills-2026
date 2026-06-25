@@ -21,25 +21,37 @@ module-1-eks-scaling/
 ## 배포 순서
 
 ```bash
+# ===== 본컴(local) =====
 # 1) Terraform — VPC / Bastion / SQS / IAM
 cd terraform
 terraform init && terraform apply -auto-approve
+terraform output -json > outputs.json          # bastion 전송용 (수 KB)
 
-# 2) eksctl 환경변수 + 클러스터 생성
-export ACCOUNT_ID=$(terraform output -raw account_id)
-export VPC_ID=$(terraform output -raw vpc_id)
-export PRIV_SUBNET_A=$(terraform output -json private_subnet_ids | jq -r '.["wsc-scaling-sn-priv-a"]')
-export PRIV_SUBNET_C=$(terraform output -json private_subnet_ids | jq -r '.["wsc-scaling-sn-priv-c"]')
-cd ../eksctl
+# 2) bastion 으로 필요한 것만 전송 (terraform/ 는 보내지 않음 → 876MB provider 미전송)
+BASTION=ec2-user@$(terraform output -raw bastion_public_ip)
+rsync -az ../eksctl ../k8s ../../mark outputs.json "$BASTION:~/module-1/"
+
+# ===== 이하 bastion 에서 실행 =====
+cd ~/module-1
+
+# 3) eksctl 환경변수 + 클러스터 생성 (값은 outputs.json 에서 jq 로 읽음)
+export ACCOUNT_ID=$(jq -r '.account_id.value' outputs.json)
+export VPC_ID=$(jq -r '.vpc_id.value' outputs.json)
+export PRIV_SUBNET_A=$(jq -r '.private_subnet_ids.value["wsc-scaling-sn-priv-a"]' outputs.json)
+export PRIV_SUBNET_C=$(jq -r '.private_subnet_ids.value["wsc-scaling-sn-priv-c"]' outputs.json)
+# 재접속 대비 .bashrc 영구화 (CLAUDE.md 작업규칙 4)
+printf 'export ACCOUNT_ID=%s\nexport VPC_ID=%s\nexport PRIV_SUBNET_A=%s\nexport PRIV_SUBNET_C=%s\n' \
+  "$ACCOUNT_ID" "$VPC_ID" "$PRIV_SUBNET_A" "$PRIV_SUBNET_C" >> ~/.bashrc
+cd eksctl
 envsubst < cluster.yaml > cluster.rendered.yaml
 eksctl create cluster -f cluster.rendered.yaml
 
-# 3) KEDA 설치 (eksctl 가 만든 keda-operator SA 재사용)
+# 4) KEDA 설치 (eksctl 가 만든 keda-operator SA 재사용)
 helm repo add kedacore https://kedacore.github.io/charts && helm repo update
 helm upgrade --install keda kedacore/keda -n keda --version 2.20.1 \
   --set serviceAccount.create=false --set serviceAccount.name=keda-operator
 
-# 4) Karpenter 설치 (eksctl 가 만든 karpenter SA 재사용)
+# 5) Karpenter 설치 (eksctl 가 만든 karpenter SA 재사용)
 # k8s 매니페스트가 karpenter.sh/v1 CRD 를 쓰므로 차트는 반드시 1.x 로 고정한다.
 helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter -n karpenter --version 1.13.0 \
   --set serviceAccount.create=false --set serviceAccount.name=karpenter \
@@ -47,17 +59,16 @@ helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter -n kar
   --set settings.interruptionQueue="" \
   --set controller.resources.requests.cpu=0.5 --set controller.resources.requests.memory=512Mi
 
-# 5) k8s 오브젝트 (SQS_URL 치환 후 apply)
-cd ../terraform
-SQS_URL=$(terraform output -raw sqs_queue_url)
-cd ../k8s
+# 6) k8s 오브젝트 (SQS_URL 치환 후 apply)
+SQS_URL=$(jq -r '.sqs_queue_url.value' ~/module-1/outputs.json)
+cd ~/module-1/k8s
 kubectl apply -f 00-namespace.yaml
 kubectl apply -f 10-deployment.yaml
 sed "s|<SQS_URL>|$SQS_URL|g" 20-keda-scaledobject.yaml | kubectl apply -f -
 kubectl apply -f 30-karpenter-nodepool.yaml
 
-# 6) 셀프 채점 (Bastion) — 공식 채점 스크립트 (task-2/mark/)
-bash ../../mark/mark1.sh
+# 7) 셀프 채점 (Bastion) — 공식 채점 스크립트 (task-2/mark/)
+bash ~/module-1/mark/mark1.sh
 ```
 
 > Karpenter 컨트롤러는 자기 자신이 스케줄될 노드가 필요하므로 ManagedNodeGroup(min 2) 위에서 동작한다.

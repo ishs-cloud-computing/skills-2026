@@ -23,7 +23,7 @@ skills-2026/
 │   │   ├── task.pdf  # 과제지 pdf
 │   │   ├── task.md  # 과제지
 │   │   ├── mark.pdf  # 채점지 pdf
-│   │   ├── mark.md  # 채점지 pdf
+│   │   ├── mark.md  # 채점지
 │   │   └── mark.sh   # 채점 스크립트
 │   └── task-2/
 │       ├── module-1/    # 모듈별로 terraform/ eksctl/ manifests/ app-source/ 중 필요한 것만
@@ -67,6 +67,7 @@ skills-2026/
    - 예외: `eksctl`, `helm` 등 클러스터 관리 도구는 버전을 고정하지 않고 최신 안정 버전을 사용한다.
 3. manifest 수정 시 꼭 관련 툴을 활용해 수정된 자료가 동작하는지 확인하고 채점 기준과 맞는지 확인한다.
 4. bastion에서 사용하는 환경변수의 경우 연결이 끊겨도 바로 접속해 사용할 수 있도록 .bashrc 또는 .profile에 추가해 사용한다.
+5. manifest의 주석은 관련 근거 또는 설계 의도만 작성한다.
 
 ### 버전 고정 예외
 
