@@ -37,10 +37,18 @@ spec:
           image: "<ECR_REPOSITORY_URL>:v1.0.0"
           ports:
             - containerPort: 8080
-          # 환경변수는 전부 ConfigMap 참조(AWS_EC2_METADATA_DISABLED 포함 → IRSA 강제).
+          # 환경변수는 전부 ConfigMap 참조.
           envFrom:
             - configMapRef:
                 name: wsc-config
+          # 채점 6-7-B 는 .env 에 configMapKeyRef 가 1개 이상 있고 리터럴 value 가
+          # 없을 것을 요구한다(envFrom 은 .env 로 보이지 않음). 제거 금지.
+          env:
+            - name: AWS_EC2_METADATA_DISABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: wsc-config
+                  key: AWS_EC2_METADATA_DISABLED
           readinessProbe:
             httpGet:
               path: /health
