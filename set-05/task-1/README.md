@@ -40,13 +40,42 @@ terraform output            # 아래 단계에서 사용할 값 확인
 주요 output: `account_id`, `vpc_id`, `workload_subnet_ids`, `eks_kms_key_arn`,
 `ecr_repository_url`, `app_target_group_arn`, `cloudfront_domain`, `bastion_public_ip`.
 
+**Bastion 작업 변수 영구화 (`~/.wsc-env`)** — 이후 모든 단계가 이 변수들을 재사용한다.
+한 번만 캡처해 파일로 박아두고 `.bashrc` 가 자동 source 하므로, **SSH 가 끊겨 재접속해도
+즉시 작업을 이어갈 수 있다**(매번 `terraform output` 다시 실행 불필요). terraform state 가
+있는 bastion 의 `terraform/` 디렉터리에서 실행한다(위 블록 직후, cwd = `terraform`):
+
+```bash
+# unquoted heredoc → $(...) 가 지금 평가되어 값이 정적으로 박힌다(이후 terraform 불필요).
+cat > ~/.wsc-env <<EOF
+export AWS_DEFAULT_REGION=ap-northeast-2
+export ACCOUNT_ID=$(terraform output -raw account_id)
+export VPC_ID=$(terraform output -raw vpc_id)
+export EKS_KMS_KEY_ARN=$(terraform output -raw eks_kms_key_arn)
+export WORKLOAD_SUBNET_A=$(terraform output -json workload_subnet_ids | jq -r '."wsc-workload-a"')
+export WORKLOAD_SUBNET_C=$(terraform output -json workload_subnet_ids | jq -r '."wsc-workload-c"')
+export CP_EXTRA_SG_ID=$(terraform output -raw eks_control_plane_extra_sg_id)
+export NODE_SHARED_SG_ID=$(terraform output -raw eks_shared_node_sg_id)
+export ECR=$(terraform output -raw ecr_repository_url)
+export TG=$(terraform output -raw app_target_group_arn)
+export CF=$(terraform output -raw cloudfront_domain)
+EOF
+
+# 로그인/재접속 시 자동 로드(중복 없이 1회만 추가) + 현재 셸에도 즉시 적용
+grep -qxF 'source ~/.wsc-env' ~/.bashrc || echo 'source ~/.wsc-env' >> ~/.bashrc
+source ~/.wsc-env
+```
+
+> 값이 바뀌면(terraform 재적용 등) 위 블록만 다시 실행하면 `~/.wsc-env` 가 갱신된다.
+> AL2023 의 `~/.bash_profile` 은 `~/.bashrc` 를 source 하므로 로그인 셸에서도 자동 적용된다.
+
 ### 2) 컨테이너 이미지 빌드 & ECR push (Bastion 에서)
 
 ```bash
 # 제공된 Go binary 를 app/book 로 배치
 # (빌드 시 공식 curl 소스를 받아 정적 컴파일하므로 bastion 인터넷 필요, 첫 빌드 ~1분)
+# $ECR 등은 1) 에서 ~/.wsc-env 로 영구화됨.
 cd app
-ECR=$(cd ../terraform && terraform output -raw ecr_repository_url)
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin "${ECR%/*}"
 docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile -t "$ECR:v1.0.0" --push .
 # ECR(압축) 기준 ≈7.5MB. uncompressed 표시값이 아니라 ECR 콘솔/매니페스트 압축 크기로 확인
@@ -67,18 +96,10 @@ aws ecr describe-image-scan-findings \
 
 ### 3) EKS 클러스터 (eksctl)
 
-`cluster.yaml` 의 placeholder 를 terraform output 으로 치환 후 생성:
+`cluster.yaml` 의 placeholder 를 `~/.wsc-env`(1단계에서 영구화) 변수로 치환 후 생성:
 
 ```bash
 cd eksctl
-export ACCOUNT_ID=$(cd ../terraform && terraform output -raw account_id)
-export EKS_KMS_KEY_ARN=$(cd ../terraform && terraform output -raw eks_kms_key_arn)
-export VPC_ID=$(cd ../terraform && terraform output -raw vpc_id)
-export WORKLOAD_SUBNET_A=$(cd ../terraform && terraform output -json workload_subnet_ids | jq -r '."wsc-workload-a"')
-export WORKLOAD_SUBNET_C=$(cd ../terraform && terraform output -json workload_subnet_ids | jq -r '."wsc-workload-c"')
-export CP_EXTRA_SG_ID=$(cd ../terraform && terraform output -raw eks_control_plane_extra_sg_id)
-export NODE_SHARED_SG_ID=$(cd ../terraform && terraform output -raw eks_shared_node_sg_id)
-
 envsubst < cluster.yaml > cluster.rendered.yaml
 
 eksctl create cluster -f cluster.rendered.yaml
@@ -149,9 +170,7 @@ kubectl -n kube-system rollout restart deploy/coredns
 # StorageClass (KMS arn 치환)
 sed "s|<EKS_KMS_KEY_ARN>|$EKS_KMS_KEY_ARN|g" 02-storageclass.yaml | kubectl apply -f -
 
-# App (ECR / TargetGroup ARN 치환)
-ECR=$(cd ../terraform && terraform output -raw ecr_repository_url)
-TG=$(cd ../terraform && terraform output -raw app_target_group_arn)
+# App (ECR / TargetGroup ARN 치환 — $ECR/$TG 는 ~/.wsc-env 에서 로드됨)
 kubectl apply -f app/configmap.yaml
 sed "s|<ECR_REPOSITORY_URL>|$ECR|g" app/deployment.yaml | kubectl apply -f -
 kubectl apply -f app/service.yaml -f app/pdb.yaml
@@ -229,7 +248,7 @@ aws dynamodb put-item --table-name wsc-table --region ap-northeast-2 --item '{
   "email":{"S":"kim@example.com"},"concert_name":{"S":"Seoul2025"},
   "booking_id":{"S":"6WVB5S9G"}}'
 
-CF=$(cd terraform && terraform output -raw cloudfront_domain)
+# $CF 는 1) 에서 ~/.wsc-env 로 영구화됨 (없으면: CF=$(cd terraform && terraform output -raw cloudfront_domain))
 curl -s "https://$CF/v1/book?client_id=C001"      # Lambda → 200
 curl -s -X POST "https://$CF/v1/book" -d '{"client_id":"C002","username":"Bob","email":"b@e.com","concert_name":"Busan2025"}'  # 앱 → booking_id
 curl -si "https://$CF/health"                      # 403 Restrict access to api
