@@ -1,12 +1,13 @@
-name: 세트 트래킹
-description: 세트별 진행 상황 추적 이슈 (세트당 1개)
+name: 세트 트래킹 (부모)
+description: 세트별 진행 상황 추적 부모 이슈 (세트당 1개). 실제 작업은 서브 이슈로 분리한다.
 title: "[set-XX] "
 labels: ["set-tracking"]
 body:
   - type: markdown
     attributes:
       value: |
-        세트 하나당 이슈 하나로 진행 상황을 추적한다.
+        세트 하나당 부모 이슈 하나. 실제 작업은 1과제 / 2과제 모듈별 **서브 이슈**로 나눠 만들고
+        여기서는 개요와 서브 이슈 링크만 관리한다.
         기간 트랙은 본문에 적지 말고 Project 필드 / 이 이슈가 속한 Milestone(=세트)로 관리한다.
 
   - type: input
@@ -29,23 +30,3 @@ body:
         - 2과제 module-2: ...
     validations:
       required: false
-
-  - type: textarea
-    id: checklist
-    attributes:
-      label: 진행 체크리스트
-      description: 모듈 수·리전은 세트마다 다르므로 실제 구성에 맞게 자유롭게 추가/삭제한다. (제출 후 체크박스는 그대로 체크 가능)
-      value: |
-        ## 1과제
-        - [ ] terraform
-        - [ ] eksctl
-        - [ ] k8s
-        - [ ] app
-        - [ ] mark.sh
-
-        ## 2과제
-        - [ ] module-1
-        - [ ] module-2
-        - [ ] module-3
-    validations:
-      required: true

@@ -1,0 +1,19 @@
+# ECR 이미지 오버라이드 (private cluster 대응). grafana-values.yaml 과 함께 적용:
+#   envsubst < grafana-ecr-images.yaml > /tmp/grafana-ecr.yaml
+#   helm upgrade --install grafana grafana/grafana --version 8.15.0 \
+#       -n monitoring -f grafana-values.yaml -f /tmp/grafana-ecr.yaml
+
+# Grafana 공식 이미지는 Docker Hub 전용이라 quay/public.ecr.aws 미러가 없다.
+# Bastion 에서 익명 pull 해 wsc-mirror/grafana 로 push 한 이미지를 tag 정확 일치로 사용.
+image:
+  registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+  repository: "wsc-mirror/grafana"
+  tag: "11.6.9"
+
+# initChownData busybox: 차트 기본 tag(1.31.1)는 ecr-public busybox 미러에 없어(최소 1.32)
+# NotFound 가 나므로 미러에 존재하는 tag 로 고정한다.
+initChownData:
+  image:
+    registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+    repository: "ecr-public/docker/library/busybox"
+    tag: "1.37.0"
