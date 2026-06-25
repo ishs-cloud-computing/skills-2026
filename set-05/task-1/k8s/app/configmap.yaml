@@ -12,16 +12,9 @@ data:
   AWS_REGION: "ap-northeast-2"
   TABLE_NAME: "wsc-table"
   AWS_EC2_METADATA_DISABLED: "true"
-  # IRSA 자격증명에 account-id 가 포함되면 AWS SDK 가 account 기반 엔드포인트
-  # (<account-id>.ddb.<region>.amazonaws.com) 로 DynamoDB 를 호출한다. 이 도메인은
-  # PHZ(dynamodb.<region>.amazonaws.com) 에 매핑되지 않아 퍼블릭 IP 로 해석되고,
-  # 워크로드 서브넷에 인터넷 경로가 없어 i/o timeout 이 발생한다.
-  # disabled 로 두어 표준 엔드포인트(dynamodb.<region>.amazonaws.com)를 강제한다.
+  # DynamoDB 를 표준 리전 엔드포인트로만 호출하도록 강제한다. IRSA account-id 기반
+  # 엔드포인트(<account-id>.ddb.<region>...)는 PHZ 에 매핑되지 않아 퍼블릭 IP 로
+  # 해석되고, 인터넷 없는 workload 서브넷에서 POST /v1/book 이 timeout(ALB 504)된다.
+  # account 모드 disable + 엔드포인트 URL 고정으로 account 기반 분기를 우회한다.
   AWS_ACCOUNT_ID_ENDPOINT_MODE: "disabled"
-  # ↑ 만으로는 SDK 버전/구현에 따라 account 기반 엔드포인트가 그대로 쓰여
-  # POST /v1/book 이 DynamoDB 호출에서 hang → ALB 504 가 되는 사례가 있었다.
-  # (GET 은 private 서브넷 + NAT 의 Lambda 라 영향 없음. POST 만 workload Pod →
-  #  인터넷 없는 서브넷이라 미매핑 도메인이 퍼블릭 IP 로 해석되며 timeout)
-  # 엔드포인트 URL 을 명시적으로 고정해 표준 리전 엔드포인트(=PHZ apex + 인터페이스
-  # 엔드포인트 인증서가 커버) 만 쓰도록 강제한다. account 기반 분기 자체를 우회한다.
   AWS_ENDPOINT_URL_DYNAMODB: "https://dynamodb.ap-northeast-2.amazonaws.com"
