@@ -23,6 +23,22 @@ metadata:
   tags:
     karpenter.sh/discovery: wsc-scaling-cluster
 
+# Auto Mode 명시적 비활성화: 향후 eksctl 릴리스는 autoModeConfig 미지정 시
+# Auto Mode를 기본 활성화하여 managedNodeGroups / 기본 addon(vpc-cni·coredns·kube-proxy)을
+# 생성하지 않는다. 본 과제는 관리형 노드그룹 + Karpenter/KEDA 설계이므로 고정한다.
+autoModeConfig:
+  enabled: false
+
+# Karpenter 노드 역할 access entry 내장: Karpenter 가 띄우는 노드는 Terraform 이 만든
+# KarpenterNodeRole 로 부팅되는데, eksctl 은 자신이 만들지 않은 이 역할에 access entry 를
+# 자동 생성하지 않는다. 누락 시 신규 노드가 인증 실패로 클러스터에 조인하지 못한다(채점 1-6).
+# type EC2_LINUX 는 노드 부트스트랩 권한만 부여하므로 추가 정책/그룹 불필요.
+accessConfig:
+  authenticationMode: API_AND_CONFIG_MAP
+  accessEntries:
+    - principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/KarpenterNodeRole-wsc-scaling-cluster"
+      type: EC2_LINUX
+
 # ----- 기존(Terraform 생성) VPC / Private Subnet 재사용 -----
 vpc:
   id: "${VPC_ID}"
@@ -34,8 +50,14 @@ vpc:
       wsc-scaling-sn-priv-c:
         id: "${PRIV_SUBNET_C}"
         az: ap-northeast-2c
+  # private-only 엔드포인트: 인터넷 노출 없이 노드는 VPC 내부에서 API 통신.
+  # public+private 동시 활성화 시 VPC 내부 DNS가 private IP로 해석되는데
+  # public 서브넷의 bastion은 cluster SG에 미허용 → eksctl/kubectl timeout.
+  # bastion(public 서브넷 A)을 extraCIDRs로 cluster SG ingress 443에 명시 허용한다.
+  extraCIDRs:
+    - 10.11.0.0/24
   clusterEndpoints:
-    publicAccess: true
+    publicAccess: false
     privateAccess: true
 
 # ----- OIDC + IRSA ServiceAccount -----
@@ -75,8 +97,7 @@ managedNodeGroups:
       dedicated: scaling
     tags:
       Name: wsc-scaling-node
-    ssh:
-      enableSsm: true
+    # SSM은 관리형 노드그룹에서 기본 활성화되므로 ssh.enableSsm는 지정하지 않는다(deprecated).
     preBootstrapCommands:
       - "dnf -y install iputils bind-utils curl-minimal || true"
       - "echo 'ec2-user:Skill53##' | chpasswd"

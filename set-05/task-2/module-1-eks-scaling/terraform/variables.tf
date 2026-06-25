@@ -10,12 +10,6 @@ variable "cluster_name" {
   default     = "wsc-scaling-cluster"
 }
 
-variable "cluster_version" {
-  description = "EKS 버전"
-  type        = string
-  default     = "1.35"
-}
-
 variable "vpc_cidr" {
   description = "wsc-scaling-vpc CIDR"
   type        = string
