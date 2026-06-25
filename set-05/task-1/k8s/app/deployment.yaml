@@ -1,13 +1,6 @@
-# ---------------------------------------------------------------------------
-# App Deployment (요구사항 9.3 / 9.4 / 3 / Reference02)
-# - Deployment Name: wsc-deploy, Container Name: wsc-cnt
-# - Label: app=wsc-deploy
-# - App NodeGroup(type=app) 에서만 운용
-# - 고가용성: replicas 2 + AZ topologySpread + PDB(pdb.yaml)
-# - IRSA(wsc-sa) 사용, EC2 노드 IAM 미사용 → AWS SDK 가 IMDS 대신 SA 토큰 사용
-# - 환경변수는 ConfigMap(wsc-config) 참조 (직접 명시 금지)
-# - <ECR_REPOSITORY_URL> 을 terraform output ecr_repository_url 로 치환
-# ---------------------------------------------------------------------------
+# App Deployment (요구사항 9.3/9.4, Reference02): wsc-deploy / wsc-cnt, label app=wsc-deploy.
+# App NG(type=app) 전용, replicas 2 + AZ topologySpread + PDB, IRSA(wsc-sa)·IMDS 차단,
+# 환경변수는 ConfigMap(wsc-config) 참조. <ECR_REPOSITORY_URL> 은 terraform output 으로 치환.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -44,17 +37,10 @@ spec:
           image: "<ECR_REPOSITORY_URL>:v1.0.0"
           ports:
             - containerPort: 8080
-          # 환경변수는 전부 ConfigMap 참조
+          # 환경변수는 전부 ConfigMap 참조(AWS_EC2_METADATA_DISABLED 포함 → IRSA 강제).
           envFrom:
             - configMapRef:
                 name: wsc-config
-          # AWS SDK 가 노드 IMDS 로 폴백하지 못하도록 차단 (IRSA 강제)
-          env:
-            - name: AWS_EC2_METADATA_DISABLED
-              valueFrom:
-                configMapKeyRef:
-                  name: wsc-config
-                  key: AWS_EC2_METADATA_DISABLED
           readinessProbe:
             httpGet:
               path: /health
