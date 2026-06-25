@@ -1,0 +1,13 @@
+# Loki filesystem PVC(10Gi) 용 StorageClass.
+# EKS 1.35 는 in-tree EBS 가 없으므로 ebs.csi.aws.com 기반 SC 를 기본으로 둔다.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: gp3
+  encrypted: "true"

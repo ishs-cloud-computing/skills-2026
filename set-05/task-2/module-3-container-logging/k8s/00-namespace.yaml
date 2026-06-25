@@ -1,0 +1,5 @@
+# 모든 로깅 스택(Loki, Grafana)은 wsc-logging Namespace 에서 동작한다 (과제지 5. EKS 구성).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wsc-logging
