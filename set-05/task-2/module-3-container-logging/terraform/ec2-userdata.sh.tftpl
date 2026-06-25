@@ -1,0 +1,35 @@
+#!/bin/bash
+set -euxo pipefail
+
+# ----- Docker -----
+dnf -y install docker
+systemctl enable --now docker
+
+# ----- App 소스 배치 (제공 배포파일) -----
+mkdir -p /home/ec2-user/app
+base64 -d > /home/ec2-user/app/app.py <<'B64APP'
+${app_py_b64}
+B64APP
+base64 -d > /home/ec2-user/app/requirements.txt <<'B64REQ'
+${requirements_b64}
+B64REQ
+base64 -d > /home/ec2-user/app/Dockerfile <<'B64DF'
+${dockerfile_b64}
+B64DF
+chown -R ec2-user:ec2-user /home/ec2-user/app
+
+# ----- 이미지 빌드 + 컨테이너 실행 (json-file 드라이버, 항상 재시작) -----
+# 제공 Dockerfile 은 TZ 미설정 -> 호스트를 Asia/Seoul 로 맞추고 zoneinfo/TZ 를 컨테이너에 주입
+timedatectl set-timezone Asia/Seoul || true
+cd /home/ec2-user/app
+docker build -t wsc-log-app:latest .
+docker run -d --name wsc-log-app --restart always \
+  -e TZ=Asia/Seoul -v /usr/share/zoneinfo:/usr/share/zoneinfo:ro \
+  -p 5000:5000 wsc-log-app:latest
+
+# ----- Fluent Bit (EC2 호스트 직접 설치, systemd) -----
+curl -sSL https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh | sh
+base64 -d > /etc/fluent-bit/fluent-bit.conf <<'B64FB'
+${fluentbit_b64}
+B64FB
+systemctl enable --now fluent-bit

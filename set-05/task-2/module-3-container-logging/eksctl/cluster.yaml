@@ -1,0 +1,64 @@
+# ===========================================================================
+# eksctl Cluster Manifest — Container Logging (과제지 5)
+#
+# [1단계] terraform 디렉터리에서 환경변수를 설정하세요.
+#
+#   export VPC_ID=$(terraform output -raw vpc_id)
+#   export PRIV_SUBNET_A=$(terraform output -json private_subnet_ids | jq -r '.["wsc-logging-sn-priv-a"]')
+#   export PRIV_SUBNET_C=$(terraform output -json private_subnet_ids | jq -r '.["wsc-logging-sn-priv-c"]')
+#   export PUB_SUBNET_A=$(terraform output -json public_subnet_ids | jq -r '.["wsc-logging-sn-pub-a"]')
+#   export PUB_SUBNET_C=$(terraform output -json public_subnet_ids | jq -r '.["wsc-logging-sn-pub-c"]')
+#
+# [2단계] envsubst 로 치환 후 생성하세요.
+#   envsubst < cluster.yaml > cluster.rendered.yaml
+#   eksctl create cluster -f cluster.rendered.yaml
+# ===========================================================================
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: wsc-logging-cluster
+  region: ap-northeast-1
+  version: "1.35"
+
+# 기존(Terraform 생성) VPC 재사용.
+# public 서브넷은 internet-facing NLB(Loki/Grafana) 생성에 사용된다.
+vpc:
+  id: "${VPC_ID}"
+  subnets:
+    private:
+      wsc-logging-sn-priv-a: { id: "${PRIV_SUBNET_A}", az: ap-northeast-1a }
+      wsc-logging-sn-priv-c: { id: "${PRIV_SUBNET_C}", az: ap-northeast-1c }
+    public:
+      wsc-logging-sn-pub-a: { id: "${PUB_SUBNET_A}", az: ap-northeast-1a }
+      wsc-logging-sn-pub-c: { id: "${PUB_SUBNET_C}", az: ap-northeast-1c }
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+iam:
+  withOIDC: true
+
+# ----- Managed Node Group (과제지 5. EKS 구성) -----
+# Node 최소 2개, t3.medium / AL2023, private subnet
+managedNodeGroups:
+  - name: wsc-logging-ng
+    amiFamily: AmazonLinux2023
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 4
+    desiredCapacity: 2
+    privateNetworking: true
+    volumeSize: 30
+    volumeType: gp3
+    volumeEncrypted: true
+    tags:
+      Name: wsc-logging-node
+    ssh:
+      enableSsm: true
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver

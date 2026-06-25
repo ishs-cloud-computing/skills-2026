@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------
+# Helm values: grafana/grafana (과제지 5. Grafana 구성)
+# - Admin: wsc2026-admin-{비번호} / admin{비번호}!  (배포 시 __NM__ 치환)
+# - Loki DataSource(uid: loki) 등록, NLB 노출(LoadBalancer), Dashboard 사이드카
+# - Helm Release Name: grafana, namespace: wsc-logging
+#
+# 설치 (비번호 치환):
+#   sed "s/__NM__/<비번호>/g" grafana-values.yaml > grafana-values.rendered.yaml
+#   kubectl -n wsc-logging create configmap wsc-dashboard --from-file=dashboard.json=dashboard.json
+#   helm upgrade --install grafana grafana/grafana -n wsc-logging --version 10.5.15 -f grafana-values.rendered.yaml
+# ---------------------------------------------------------------------------
+adminUser: "wsc2026-admin-__NM__"
+adminPassword: "admin__NM__!"
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 3000
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki.wsc-logging.svc.cluster.local:3100
+        isDefault: true
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: wsc
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/wsc
+
+dashboardsConfigMaps:
+  wsc: wsc-dashboard
