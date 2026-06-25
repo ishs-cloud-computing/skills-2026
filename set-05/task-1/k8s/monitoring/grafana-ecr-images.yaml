@@ -1,27 +1,17 @@
-# ---------------------------------------------------------------------------
-# ECR Pull-Through Cache 이미지 오버라이드 (Private Cluster 대응)
-#
-# 사용법 (grafana-values.yaml 과 함께):
-#   export ACCOUNT_ID=$(cd ../../terraform && terraform output -raw account_id)
+# ECR 이미지 오버라이드 (private cluster 대응). grafana-values.yaml 과 함께 적용:
 #   envsubst < grafana-ecr-images.yaml > /tmp/grafana-ecr.yaml
-#   helm upgrade --install grafana grafana/grafana \
-#     -n monitoring -f grafana-values.yaml -f /tmp/grafana-ecr.yaml
-# ---------------------------------------------------------------------------
+#   helm upgrade --install grafana grafana/grafana --version 8.15.0 \
+#       -n monitoring -f grafana-values.yaml -f /tmp/grafana-ecr.yaml
 
-# Grafana 차트는 이미지를 "{registry}/{repository}:{tag}" 로 조립한다.
-# registry/repository 를 분리해 오버라이드한다 (prometheus-ecr-images.yaml 과 동일 패턴).
-#
-# Grafana 공식 이미지는 Docker Hub 전용이라 public.ecr.aws/quay 에 미러가 없다.
-# Bastion 에서 익명 pull → wsc-mirror/grafana repo 로 push 한 이미지를 사용한다.
-# tag 는 Bastion 에서 미러링한 값과 정확히 일치시킨다 (아래 GRAFANA_TAG 와 동일).
+# Grafana 공식 이미지는 Docker Hub 전용이라 quay/public.ecr.aws 미러가 없다.
+# Bastion 에서 익명 pull 해 wsc-mirror/grafana 로 push 한 이미지를 tag 정확 일치로 사용.
 image:
   registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
   repository: "wsc-mirror/grafana"
   tag: "11.6.9"
 
-# initChownData init container: busybox (Docker Hub official → ecr-public mirror)
-# 차트 기본 tag(1.31.1)는 public.ecr.aws/docker/library/busybox 미러에 없어(최소 1.32)
-# NotFound 가 난다. 미러에 존재하는 tag 로 고정한다.
+# initChownData busybox: 차트 기본 tag(1.31.1)는 ecr-public busybox 미러에 없어(최소 1.32)
+# NotFound 가 나므로 미러에 존재하는 tag 로 고정한다.
 initChownData:
   image:
     registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
