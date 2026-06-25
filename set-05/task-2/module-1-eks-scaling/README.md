@@ -36,11 +36,12 @@ eksctl create cluster -f cluster.rendered.yaml
 
 # 3) KEDA 설치 (eksctl 가 만든 keda-operator SA 재사용)
 helm repo add kedacore https://kedacore.github.io/charts && helm repo update
-helm upgrade --install keda kedacore/keda -n keda \
+helm upgrade --install keda kedacore/keda -n keda --version 2.20.1 \
   --set serviceAccount.create=false --set serviceAccount.name=keda-operator
 
 # 4) Karpenter 설치 (eksctl 가 만든 karpenter SA 재사용)
-helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter -n karpenter \
+# k8s 매니페스트가 karpenter.sh/v1 CRD 를 쓰므로 차트는 반드시 1.x 로 고정한다.
+helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter -n karpenter --version 1.13.0 \
   --set serviceAccount.create=false --set serviceAccount.name=karpenter \
   --set settings.clusterName=wsc-scaling-cluster \
   --set settings.interruptionQueue="" \
