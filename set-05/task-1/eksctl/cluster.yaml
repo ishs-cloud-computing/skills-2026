@@ -1,56 +1,8 @@
 # ===========================================================================
 # eksctl Cluster Manifest (요구사항 9)
-#
-# [1단계] terraform 디렉터리에서 아래 명령어로 환경변수를 설정하세요.
-#
-#   export ACCOUNT_ID=$(terraform output -raw account_id)
-#   export EKS_KMS_KEY_ARN=$(terraform output -raw eks_kms_key_arn)
-#   export VPC_ID=$(terraform output -raw vpc_id)
-#   export WORKLOAD_SUBNET_A=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-a"]')
-#   export WORKLOAD_SUBNET_C=$(terraform output -json workload_subnet_ids | jq -r '.["wsc-workload-c"]')
-#   export CP_EXTRA_SG_ID=$(terraform output -raw eks_control_plane_extra_sg_id)
-#   export NODE_SHARED_SG_ID=$(terraform output -raw eks_shared_node_sg_id)
-#
-# [2단계] envsubst 로 실제 값을 치환한 뒤 적용하세요.
-#
-#   envsubst < cluster-example.yaml > cluster.yaml
-#   eksctl create cluster -f cluster.yaml
-# ===========================================================================
-#
-# ===========================================================================
-# [생성 순서 & 복구 가이드]
-# `eksctl create cluster -f cluster.yaml` 는 아래 순서로 진행된다. 각 단계가
-# 깨졌을 때 "부분 복구" 로 끝나는지 "클러스터 전체 재생성" 이 필요한지 표기한다.
-# (★결론: 전체 재생성이 필요한 경우는 1번의 일부뿐. 나머지는 전부 부분 복구 가능★)
-#
-#   1) Control Plane 생성
-#      (VPC/subnet 선택, endpoint public/private, secretsEncryption, logging, version)
-#       - endpoint public/private 잘못 떴을 때 → 재생성 불필요. update 로 교정:
-#           aws eks update-cluster-config --name wsc-eks-cluster \
-#             --resources-vpc-config endpointPublicAccess=false,endpointPrivateAccess=true
-#         ※ privateCluster.enabled=true 면 처음부터 public=false 로 생성된다.
-#           이번처럼 생성이 addon 단계에서 깨져 재시도되면 control plane 이 먼저
-#           만들어진 상태로 남아 public=true 로 떠 있을 수 있으니 위 명령으로 반드시 확인/교정.
-#       - clusterLogging 누락 → aws eks update-cluster-config --logging ...   (재생성 불필요)
-#       - secretsEncryption(KMS) 누락 → aws eks associate-encryption-config ... (재생성 불필요, 단 한 번 켜면 변경/해제 불가)
-#       - ★VPC/subnet/cluster name/region 이 잘못됨 → 전체 재생성 필요(불변)★
-#       - ★version 을 낮춰야 함 → 전체 재생성 필요(업그레이드만 가능)★
-#   2) OIDC Provider (withOIDC)
-#       - 누락/실패 → eksctl utils associate-iam-oidc-provider --cluster wsc-eks-cluster --approve  (재생성 불필요)
-#   3) Addons (vpc-cni, coredns, kube-proxy, aws-ebs-csi-driver)
-#       - 특정 addon 만 CREATE_FAILED (예: ebs-csi 가 IAM 정책 부족으로 실패) →
-#         정책 보정 후 해당 addon 만 삭제/재생성 (재생성 불필요):
-#           aws eks delete-addon --cluster-name wsc-eks-cluster --addon-name aws-ebs-csi-driver
-#           eksctl create addon -f cluster.yaml
-#   4) IAM ServiceAccounts (iamserviceaccount, OIDC 의존)
-#       - 누락/실패 → eksctl create iamserviceaccount -f cluster.yaml --approve  (재생성 불필요)
-#   5) Managed NodeGroups (wsc-app-ng / wsc-addon-ng / wsc-monitoring-ng)
-#       - 특정 NG 만 실패 → 그 NG 만 삭제 후 재생성 (재생성 불필요):
-#           eksctl delete nodegroup --cluster wsc-eks-cluster --name <ng> --drain=false
-#           eksctl create nodegroup -f cluster.yaml --include=<ng>
-#
-# 즉, 생성이 중간에 깨지면 먼저 (1)의 endpoint/logging/암호화 상태부터 점검하고,
-# 끊긴 지점 이후 단계(addon/SA/NG)만 위 명령으로 이어서 복구하면 된다.
+# 적용: terraform output 값을 env 로 export → envsubst 로 치환해 적용한다.
+#   envsubst < cluster.yaml | eksctl create cluster -f -
+# 필요한 export 변수 목록 / 생성순서 / 단계별 복구 가이드는 ../README.md 참고.
 # ===========================================================================
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
@@ -60,25 +12,21 @@ metadata:
   region: ap-northeast-2
   version: "1.35"
 
+# Auto Mode 미사용(향후 eksctl 기본값이 될 예정이므로 명시적으로 비활성화).
+# 본 과제는 직접 정의한 managed nodegroup 으로 운용한다.
+autoModeConfig:
+  enabled: false
+
 # ----- 기존(Terraform 생성) VPC / Workload Subnet 재사용 -----
 # EKS 는 Workload Subnet 에서만 운용한다 (요구사항 9).
 vpc:
   id: "${VPC_ID}"
-  # control plane ENI 에 추가로 attach 할 SG (terraform 에서 생성).
-  # bastion -> private API(443) 인바운드를 이미 허용하고 있어,
-  # eksctl create cluster 직후 별도 SG 수정 없이 bastion 에서 kubectl 접근 가능.
+  # control plane ENI 추가 SG (bastion -> private API 443 인바운드 허용).
   securityGroup: "${CP_EXTRA_SG_ID}"
-  # 공용 노드 SG (terraform 에서 생성). app-lb SG -> Pod(8080), bastion -> node(22)
-  # 인바운드를 미리 허용해 둔 SG 이다.
-  # ★주의★ vpc.sharedNodeSecurityGroup 은 self-managed(unmanaged) nodegroup 의 노드
-  #   ENI 에만 attach 된다. 이 클러스터는 전부 managedNodeGroups 라서 이 필드만으로는
-  #   노드에 SG 가 붙지 않는다 (eksctl: NodeGroupSGs.WithShared = "Not supported for
-  #   managed nodegroups"). managed 노드에는 EKS 가 만든 cluster SG 만 붙으므로,
-  #   위 8080/22 인바운드 규칙이 노드에 적용되지 않아 ALB health check / bastion SSH 가
-  #   실패한다.
-  # → 따라서 각 managedNodeGroup 에 securityGroups.attachIDs 로 동일 SG 를 직접 attach 한다.
-  #   여기서는 manageSharedNodeSecurityGroupRules(기본 true) 로 shared SG <-> cluster SG
-  #   통신 규칙만 eksctl 이 자동 생성하도록 필드는 유지한다.
+  # 공용 노드 SG (app-lb -> Pod 8080, bastion -> node 22).
+  # sharedNodeSecurityGroup 은 managed NG 노드에 자동 attach 되지 않으므로(self-managed 전용)
+  # 각 NG 에서 securityGroups.attachIDs 로 직접 붙인다. 이 필드는 shared<->cluster SG
+  # 통신 규칙 자동 생성(manageSharedNodeSecurityGroupRules)을 위해 유지한다.
   sharedNodeSecurityGroup: "${NODE_SHARED_SG_ID}"
   subnets:
     private:
@@ -171,10 +119,8 @@ managedNodeGroups:
     securityGroups:
       attachIDs:
         - "${NODE_SHARED_SG_ID}"
-    ssh:
-      enableSsm: true
-    # ECR Pull-Through Cache 에 필요한 추가 액션(BatchImportUpstreamImage, CreateRepository)을
-    # attachPolicyARNs 로 주입. managed node group 은 기본 정책을 명시해야 한다.
+    # managed NG 는 기본 정책을 명시해야 한다. 마지막 정책은 ECR Pull-Through Cache
+    # 추가 액션(BatchImportUpstreamImage, CreateRepository)용.
     iam:
       attachPolicyARNs:
         - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -182,13 +128,9 @@ managedNodeGroups:
         - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
         - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
-    # ★주의★ overrideBootstrapCommand 를 지정하면 eksctl 이 managed nodegroup 에
-    #   커스텀 LaunchTemplate 을 만들면서 인스턴스 Name 태그를 기본값
-    #   (<cluster>-<ng>-Node)으로 박아버려 위 tags.Name(wsc-app-node)이 인스턴스에
-    #   적용되지 않는다 → 채점 6-3-A(Name 태그로 볼륨 암호화 조회)가 None 으로 실패.
-    #   wsc.local 내부 도메인 변경은 CoreDNS 패치(01-coredns-wsc-local.yaml, 채점 6-6-A)로
-    #   이미 충족되고 앱 Pod 는 짧은 이름 해석이 필요 없으므로(외부 FQDN + IP 타깃),
-    #   kubelet clusterDomain 오버라이드는 제거해 addon/monitoring NG 와 동일하게 둔다.
+    # overrideBootstrapCommand 는 쓰지 않는다: custom LaunchTemplate 이 인스턴스
+    # Name 태그를 기본값으로 덮어써 tags.Name(채점 6-3-A) 이 깨진다. wsc.local 해석은
+    # CoreDNS 패치(01-coredns-wsc-local.yaml)로 충족한다.
     preBootstrapCommands: &common_bootstrap
       - "dnf -y install iputils bind-utils curl-minimal || true"
       - "echo 'ec2-user:Skill53##' | chpasswd"
@@ -218,8 +160,6 @@ managedNodeGroups:
     securityGroups:
       attachIDs:
         - "${NODE_SHARED_SG_ID}"
-    ssh:
-      enableSsm: true
     iam:
       attachPolicyARNs:
         - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -251,8 +191,6 @@ managedNodeGroups:
     securityGroups:
       attachIDs:
         - "${NODE_SHARED_SG_ID}"
-    ssh:
-      enableSsm: true
     iam:
       attachPolicyARNs:
         - "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -262,16 +200,20 @@ managedNodeGroups:
         - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ecr-pull-through-policy"
     preBootstrapCommands: *common_bootstrap
 
-# ----- 필수 Addon (EBS CSI Driver 등) -----
+# ----- 필수 Addon -----
+# version 은 EKS 1.35 의 default 버전으로 고정한다(latest 금지).
+#   eksctl utils describe-addon-versions --kubernetes-version 1.35 --name <addon>
 addons:
   - name: vpc-cni
+    version: v1.21.2-eksbuild.2
   - name: coredns
+    version: v1.13.2-eksbuild.10
   - name: kube-proxy
+    version: v1.35.3-eksbuild.11
   - name: aws-ebs-csi-driver
-    # addon 경로로 생성되는 IAM 역할에는 attachPolicyARNs 로 지정한 정책만 붙고
-    # 표준 AmazonEBSCSIDriverPolicy 는 자동 추가되지 않는다. 따라서 표준 정책과
-    # CMK 권한 정책을 모두 명시해야 한다. (표준 정책 누락 시 ec2:DescribeAvailabilityZones
-    # dry-run 헬스체크부터 403 → ebs-plugin CrashLoop → 애드온 CREATING 타임아웃)
+    version: v1.62.0-eksbuild.1
+    # addon 경로 IAM 역할에는 표준 AmazonEBSCSIDriverPolicy 가 자동 추가되지 않으므로
+    # 표준 정책 + CMK 정책을 모두 명시한다(누락 시 ebs-plugin 403 CrashLoop).
     attachPolicyARNs:
       - "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
       - "arn:aws:iam::${ACCOUNT_ID}:policy/wsc-ebs-csi-kms-policy"
