@@ -1,0 +1,12 @@
+# Private Cluster(인터넷 없음) 대응: Grafana 이미지를 사설 ECR 미러/pull-through 로 오버라이드.
+# ${ACCOUNT_ID} 는 적용 시 envsubst 로 치환. tag 는 미러링한 값과 일치시킨다(latest 금지).
+image:
+  registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+  repository: "gj2026-mirror/grafana"
+  tag: "11.6.9"
+
+initChownData:
+  image:
+    registry: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com"
+    repository: "ecr-public/docker/library/busybox"
+    tag: "1.37.0"

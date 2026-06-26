@@ -1,0 +1,14 @@
+# Grafana Pod IP 를 Terraform 이 만든 gj2026-grafana-tg 에 등록.
+# CloudFront /grafana* → 내부 ALB → 이 TargetGroup → Grafana Pod(3000).
+# grafana Service(port 3000)를 참조. <GRAFANA_TARGET_GROUP_ARN> 은 적용 시 치환.
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: grafana-tgb
+  namespace: monitoring
+spec:
+  serviceRef:
+    name: grafana
+    port: 3000
+  targetGroupARN: "<GRAFANA_TARGET_GROUP_ARN>"
+  targetType: ip

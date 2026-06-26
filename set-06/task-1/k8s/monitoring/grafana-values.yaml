@@ -1,0 +1,64 @@
+# Grafana Helm values (요구사항 14)
+# - admin / Skills53# , namespace monitoring, ALB /grafana 경로(sub-path) 서빙
+# - CloudWatch 데이터소스(IRSA: grafana SA)로 Lambda client_id 메트릭 시각화
+# - 애드온이므로 Addon NodeGroup(role=addon)에 배치
+adminUser: admin
+adminPassword: "Skills53#"
+
+# eksctl 이 만든 IRSA ServiceAccount 사용 (CloudWatch 조회 권한)
+serviceAccount:
+  create: false
+  name: grafana
+
+nodeSelector:
+  role: addon
+
+# Docker Hub 전용 이미지 → bats 테스트(추가 docker.io pull) 비활성
+testFramework:
+  enabled: false
+
+persistence:
+  enabled: true
+  storageClassName: gj2026-sc
+  size: 10Gi
+
+# ALB /grafana 경로(sub-path)로 서빙 (요구사항 9)
+grafana.ini:
+  server:
+    root_url: "%(protocol)s://%(domain)s/grafana"
+    serve_from_sub_path: true
+
+# TargetGroupBinding(gj2026-grafana-tg)이 Pod IP:3000 을 등록
+service:
+  type: ClusterIP
+  port: 3000
+
+# CloudWatch 데이터소스 (IRSA 자격증명 사용)
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: CloudWatch
+        type: cloudwatch
+        uid: cloudwatch
+        isDefault: true
+        jsonData:
+          authType: default
+          defaultRegion: ap-northeast-2
+
+# WSI Dashboard 프로비저닝 (ConfigMap gj2026-dashboard 에서 로드)
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: gj2026
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/gj2026
+
+dashboardsConfigMaps:
+  gj2026: gj2026-dashboard

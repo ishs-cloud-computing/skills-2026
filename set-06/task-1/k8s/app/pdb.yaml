@@ -1,0 +1,11 @@
+# 고가용성: 디스럽션 시에도 최소 1개 Pod 유지
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: book-pdb
+  namespace: skills
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: book

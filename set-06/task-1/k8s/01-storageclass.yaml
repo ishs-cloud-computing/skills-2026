@@ -1,0 +1,14 @@
+# EBS CSI StorageClass — CMK(alias/gj2026-eks-key) 암호화. Grafana PVC 가 사용.
+# <EKS_KMS_KEY_ARN> 은 적용 시 Terraform output 으로 치환.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gj2026-sc
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  type: gp3
+  encrypted: "true"
+  kmsKeyId: "<EKS_KMS_KEY_ARN>"

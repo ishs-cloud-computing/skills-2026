@@ -1,0 +1,10 @@
+# 빌드 컨텍스트(set-06/task-1) 축소: IaC/문서/상태 파일 제외
+terraform/.terraform
+terraform/.terraform.lock.hcl
+terraform/build
+**/*.tfstate
+**/*.tfstate.*
+eksctl
+k8s
+*.md
+*.pdf

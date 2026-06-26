@@ -1,0 +1,130 @@
+# ---------------------------------------------------------------------------
+# Fluent Bit (요구사항 14)
+# - DaemonSet/ConfigMap 이름: aws-for-fluent-bit (채점 10-1)
+# - book-svc 액세스 로그(JSON, remote_addr 포함)를 수집해 remote_addr 의 IP 대역으로
+#   가용영역을 판별, AZ 별 CloudWatch 로그 스트림으로 분리 전송:
+#     10.0.10.0/24 → /book-svc/ap-northeast-2a
+#     10.0.11.0/24 → /book-svc/ap-northeast-2b
+#   Log Group: /eks/book-svc/access
+# - SA(aws-for-fluent-bit)는 eksctl IRSA 로 생성(CloudWatch Logs 권한).
+# - ${ACCOUNT_ID} 는 적용 시 envsubst 로 치환.
+# - 채점 10-1 이 로그 그룹을 매번 삭제하므로 auto_create_group=true 로 재생성.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-for-fluent-bit
+  namespace: logging
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Parsers_File  parsers.conf
+
+    # skills namespace 의 book 컨테이너 stdout(JSON 액세스 로그)만 수집
+    [INPUT]
+        Name              tail
+        Tag               book.*
+        Path              /var/log/containers/*_skills_book-*.log
+        Parser            cri
+        Refresh_Interval  5
+        Mem_Buf_Limit     10MB
+        Skip_Long_Lines   On
+
+    # cri 의 log 필드(JSON 문자열)를 파싱해 remote_addr 등을 최상위로 승격
+    [FILTER]
+        Name         parser
+        Match        book.*
+        Key_Name     log
+        Parser       book_access
+        Reserve_Data On
+
+    # remote_addr 의 IP 대역으로 AZ 별 스트림 키(az_stream) 생성
+    [FILTER]
+        Name    lua
+        Match   book.*
+        script  az.lua
+        call    set_az
+
+    [OUTPUT]
+        Name                 cloudwatch_logs
+        Match                book.*
+        region               ap-northeast-2
+        log_group_name       /eks/book-svc/access
+        log_stream_template  $(az_stream)
+        auto_create_group    true
+
+  parsers.conf: |
+    [PARSER]
+        Name        cri
+        Format      regex
+        Regex       ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<log>.*)$
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+
+    [PARSER]
+        Name        book_access
+        Format      json
+
+  az.lua: |
+    function set_az(tag, ts, record)
+      local ip = record["remote_addr"]
+      local stream = "/book-svc/ap-northeast-2a"
+      if ip ~= nil then
+        local o3 = tonumber(string.match(tostring(ip), "^10%.0%.(%d+)%."))
+        if o3 == 11 then
+          stream = "/book-svc/ap-northeast-2b"
+        end
+      end
+      record["az_stream"] = stream
+      return 2, ts, record
+    end
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: aws-for-fluent-bit
+  namespace: logging
+  labels:
+    app: aws-for-fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: aws-for-fluent-bit
+  template:
+    metadata:
+      labels:
+        app: aws-for-fluent-bit
+    spec:
+      serviceAccountName: aws-for-fluent-bit
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: aws-for-fluent-bit
+          image: ${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/aws-observability/aws-for-fluent-bit:3.4.3
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 50m
+              memory: 100Mi
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc/
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: aws-for-fluent-bit
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers

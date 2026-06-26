@@ -1,0 +1,167 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+# 적용 전 envsubst 로 placeholder(${...}) 를 Terraform output 값으로 치환한다.
+metadata:
+  name: gj2026-eks-cluster
+  region: ap-northeast-2
+  version: "1.35"
+
+# 기존 VPC / 2개 Private Subnet 재사용 (Terraform 생성)
+vpc:
+  id: "${VPC_ID}"
+  subnets:
+    private:
+      gj2026-private-subnet-a:
+        id: "${SUBNET_A_ID}"
+      gj2026-private-subnet-b:
+        id: "${SUBNET_B_ID}"
+  # 채점 4-1: endpointPublicAccess=True, endpointPrivateAccess=True
+  # (CloudShell 에서 public endpoint 로 kubectl, 노드는 private endpoint 로 통신)
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+# Secret Resource KMS Envelope 암호화 (요구사항 7, 채점 4-1)
+secretsEncryption:
+  keyARN: "${EKS_KMS_KEY_ARN}"
+
+iam:
+  withOIDC: true
+  serviceAccounts:
+    # book 앱 Pod: DynamoDB 읽기/쓰기. roleName 고정(쓰기 제한 리소스 정책이 참조).
+    - metadata:
+        name: book-sa
+        namespace: skills
+      roleName: gj2026-book-app-role
+      attachPolicyARNs:
+        - "${BOOK_APP_POLICY_ARN}"
+    # AWS Load Balancer Controller (TargetGroupBinding 관리)
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+    # EBS CSI Driver + CMK 암호화 권한
+    - metadata:
+        name: ebs-csi-controller-sa
+        namespace: kube-system
+      wellKnownPolicies:
+        ebsCSIController: true
+      attachPolicyARNs:
+        - "${EBS_CSI_POLICY_ARN}"
+    # Fluent Bit → CloudWatch Logs (DaemonSet, 요구사항 14)
+    - metadata:
+        name: aws-for-fluent-bit
+        namespace: logging
+      attachPolicyARNs:
+        - "${FLUENTBIT_POLICY_ARN}"
+    # Grafana → CloudWatch 데이터소스 조회 (요구사항 14)
+    - metadata:
+        name: grafana
+        namespace: monitoring
+      attachPolicyARNs:
+        - "${GRAFANA_CW_POLICY_ARN}"
+
+# EKS Control Plane 로그 (운영 가시성)
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+# 버전은 클러스터 버전(1.35) 기본값을 사용. 대회 당일 `eksctl utils
+# describe-addon-versions --kubernetes-version 1.35` 로 확인 후 필요 시 고정.
+addons:
+  - name: vpc-cni
+    resolveConflicts: overwrite
+    # Security Groups for Pods 활성화 (요구사항 8 "ALB 에서 오는 요청만 수신").
+    # strict: 노드-로컬 트래픽도 Pod SG 로 강제 → 동일 노드의 nginx-test 도 차단(채점 4-5).
+    configurationValues: |-
+      {
+        "enableNetworkPolicy": "false",
+        "env": {
+          "ENABLE_POD_ENI": "true",
+          "POD_SECURITY_GROUP_ENFORCING_MODE": "strict"
+        }
+      }
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
+    # 위 iam.serviceAccounts 의 ebs-csi-controller-sa(IRSA) 를 사용
+
+# ---------------------------------------------------------------------------
+# Bottlerocket Managed NodeGroup 2개 (요구사항 7, 채점 4-2/4-3)
+# - 노드명 gj2026.<instance_id>.<role>.node : bootstrap container 가 부팅 시 설정
+# - amiFamily Bottlerocket + x86 → amiType BOTTLEROCKET_x86_64
+# ---------------------------------------------------------------------------
+managedNodeGroups:
+  - name: gj2026-eks-addon-nodegroup
+    amiFamily: Bottlerocket
+    instanceType: t3.medium
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    privateNetworking: true
+    volumeSize: 30
+    volumeType: gp3
+    volumeEncrypted: true
+    volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
+    disableIMDSv1: true
+    labels:
+      role: addon
+    tags:
+      Name: gj2026-eks-addon-node
+    securityGroups:
+      attachIDs:
+        - "${SHARED_NODE_SG_ID}"
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - "${ECR_PULL_THROUGH_POLICY_ARN}"
+    bottlerocket:
+      settings:
+        bootstrap-containers:
+          set-hostname:
+            source: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/gj2026-bootstrap:latest"
+            mode: always
+            essential: true
+            superpowered: true
+            user-data: "YWRkb24=" # base64("addon")
+
+  - name: gj2026-eks-app-nodegroup
+    amiFamily: Bottlerocket
+    instanceType: m5.large
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    privateNetworking: true
+    volumeSize: 30
+    volumeType: gp3
+    volumeEncrypted: true
+    volumeKmsKeyID: "${EKS_KMS_KEY_ARN}"
+    disableIMDSv1: true
+    labels:
+      role: app
+    tags:
+      Name: gj2026-eks-app-node
+    securityGroups:
+      attachIDs:
+        - "${SHARED_NODE_SG_ID}"
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - "${ECR_PULL_THROUGH_POLICY_ARN}"
+    bottlerocket:
+      settings:
+        bootstrap-containers:
+          set-hostname:
+            source: "${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/gj2026-bootstrap:latest"
+            mode: always
+            essential: true
+            superpowered: true
+            user-data: "YXBw" # base64("app")

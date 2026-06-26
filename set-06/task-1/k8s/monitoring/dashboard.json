@@ -1,0 +1,60 @@
+{
+  "title": "WSI Dashboard",
+  "uid": "wsi-dashboard",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "",
+  "tags": ["gj2026"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Reservation Lookups by client_id",
+      "type": "timeseries",
+      "datasource": { "type": "cloudwatch", "uid": "cloudwatch" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "cloudwatch" },
+          "region": "ap-northeast-2",
+          "namespace": "gj2026/Reservation",
+          "metricName": "Invocations",
+          "dimensions": { "client_id": "*" },
+          "statistic": "Sum",
+          "period": "60",
+          "matchExact": true,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "{{client_id}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Total Reservation Lookups by client_id",
+      "type": "barchart",
+      "datasource": { "type": "cloudwatch", "uid": "cloudwatch" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "cloudwatch" },
+          "region": "ap-northeast-2",
+          "namespace": "gj2026/Reservation",
+          "metricName": "Invocations",
+          "dimensions": { "client_id": "*" },
+          "statistic": "Sum",
+          "period": "300",
+          "matchExact": true,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "{{client_id}}"
+        }
+      ]
+    }
+  ]
+}

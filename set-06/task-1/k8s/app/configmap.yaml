@@ -1,0 +1,15 @@
+# book 앱 환경변수 (요구사항 4: AWS_REGION, TABLE_NAME 를 환경변수로 전달)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: book-config
+  namespace: skills
+data:
+  AWS_REGION: "ap-northeast-2"
+  TABLE_NAME: "books"
+  # Pod 는 IRSA(book-sa) 로만 권한을 받는다. IMDS(노드 IAM) 폴백 차단.
+  AWS_EC2_METADATA_DISABLED: "true"
+  # Private 환경: DynamoDB 표준 리전 엔드포인트만 사용(계정 기반 엔드포인트는
+  # PHZ 로 해석되지 않음). PHZ → 인터페이스 VPC 엔드포인트로 해석.
+  AWS_ENDPOINT_URL_DYNAMODB: "https://dynamodb.ap-northeast-2.amazonaws.com"
+  AWS_ACCOUNT_ID_ENDPOINT_MODE: "disabled"

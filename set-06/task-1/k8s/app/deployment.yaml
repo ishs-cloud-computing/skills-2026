@@ -1,0 +1,49 @@
+# book Deployment (요구사항 8: Deployment Name book, 2개 운용, skills namespace)
+# 노드명/probe 참고: book Pod 는 Security Groups for Pods(strict) 로 격리되어
+# kubelet probe 가 차단되므로 liveness/readiness probe 를 두지 않는다. 헬스는 ALB
+# Target Group health check(/health, ALB SG 출처)로 판정한다.
+# <ECR_REPOSITORY_URL> 은 적용 시 Terraform output(book repo)으로 치환.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: book
+  namespace: skills
+  labels:
+    app: book
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: book
+  template:
+    metadata:
+      labels:
+        app: book
+    spec:
+      serviceAccountName: book-sa
+      # App NodeGroup 에만 배치 (요구사항 7: App NodeGroup 은 애플리케이션만)
+      nodeSelector:
+        role: app
+      # 고가용성: 2개 Pod 를 AZ 별로 분산
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: book
+      containers:
+        - name: book
+          image: "<ECR_REPOSITORY_URL>:latest"
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: book-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

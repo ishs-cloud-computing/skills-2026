@@ -1,0 +1,16 @@
+# 요구사항 8: book 앱은 ALB 에서 오는 요청만 수신.
+# Security Groups for Pods 로 book Pod 에 전용 SG(gj2026-book-pod-sg, ALB SG→8080 만
+# 허용)를 부여한다. 클러스터 내 다른 Pod(nginx-test)는 8080 으로 도달 불가(채점 4-5).
+# <BOOK_POD_SG_ID> 은 적용 시 Terraform output 으로 치환.
+apiVersion: vpcresources.k8s.aws/v1beta1
+kind: SecurityGroupPolicy
+metadata:
+  name: book-sgp
+  namespace: skills
+spec:
+  podSelector:
+    matchLabels:
+      app: book
+  securityGroups:
+    groupIds:
+      - "<BOOK_POD_SG_ID>"

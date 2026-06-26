@@ -1,0 +1,14 @@
+# book-svc Pod IP 를 Terraform 이 만든 gj2026-book-tg 에 동적 등록.
+# CloudFront → 내부 ALB → 이 TargetGroup → book Pod(8080) 경로.
+# <BOOK_TARGET_GROUP_ARN> 은 적용 시 Terraform output 으로 치환.
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: book-tgb
+  namespace: skills
+spec:
+  serviceRef:
+    name: book-svc
+    port: 8080
+  targetGroupARN: "<BOOK_TARGET_GROUP_ARN>"
+  targetType: ip
