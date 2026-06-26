@@ -15,21 +15,23 @@ variable "spoke_vpc_cidr" {
 }
 
 # 과제지 "VPC 구성" Hub/Spoke 표와 정확히 일치 (이름 일치 채점).
+# az 는 가용영역 suffix(a/c)만 저장하고, full AZ 는 var.region 과 합성한다(vpc.tf).
+# → 리전 변경 시 var.region 한 곳만 바꾸면 서브넷 AZ 가 함께 따라간다.
 variable "subnets" {
-  description = "Hub/Spoke 서브넷 정의"
+  description = "Hub/Spoke 서브넷 정의 (az 는 가용영역 suffix)"
   type = map(object({
     cidr = string
-    az   = string
+    az   = string # 가용영역 suffix (예: a, c)
     vpc  = string # hub | spoke
     tier = string # public | private
   }))
   default = {
-    "wsc-hub-sn-pub-a"    = { cidr = "10.0.0.0/24", az = "ap-southeast-1a", vpc = "hub", tier = "public" }
-    "wsc-hub-sn-pub-c"    = { cidr = "10.0.1.0/24", az = "ap-southeast-1c", vpc = "hub", tier = "public" }
-    "wsc-spoke-sn-pub-a"  = { cidr = "192.168.0.0/24", az = "ap-southeast-1a", vpc = "spoke", tier = "public" }
-    "wsc-spoke-sn-pub-c"  = { cidr = "192.168.1.0/24", az = "ap-southeast-1c", vpc = "spoke", tier = "public" }
-    "wsc-spoke-sn-priv-a" = { cidr = "192.168.2.0/24", az = "ap-southeast-1a", vpc = "spoke", tier = "private" }
-    "wsc-spoke-sn-priv-c" = { cidr = "192.168.3.0/24", az = "ap-southeast-1c", vpc = "spoke", tier = "private" }
+    "wsc-hub-sn-pub-a"    = { cidr = "10.0.0.0/24", az = "a", vpc = "hub", tier = "public" }
+    "wsc-hub-sn-pub-c"    = { cidr = "10.0.1.0/24", az = "c", vpc = "hub", tier = "public" }
+    "wsc-spoke-sn-pub-a"  = { cidr = "192.168.0.0/24", az = "a", vpc = "spoke", tier = "public" }
+    "wsc-spoke-sn-pub-c"  = { cidr = "192.168.1.0/24", az = "c", vpc = "spoke", tier = "public" }
+    "wsc-spoke-sn-priv-a" = { cidr = "192.168.2.0/24", az = "a", vpc = "spoke", tier = "private" }
+    "wsc-spoke-sn-priv-c" = { cidr = "192.168.3.0/24", az = "c", vpc = "spoke", tier = "private" }
   }
 }
 
