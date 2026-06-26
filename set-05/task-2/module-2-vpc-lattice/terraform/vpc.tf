@@ -34,7 +34,7 @@ resource "aws_subnet" "this" {
 
   vpc_id                  = local.vpc_ids[each.value.vpc]
   cidr_block              = each.value.cidr
-  availability_zone       = each.value.az
+  availability_zone       = "${var.region}${each.value.az}"
   map_public_ip_on_launch = each.value.tier == "public"
 
   tags = { Name = each.key }
