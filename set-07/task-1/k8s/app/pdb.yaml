@@ -1,0 +1,11 @@
+# PodDisruptionBudget - 고가용성 유지 (요구사항 8)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: unicorn-book-app-pdb
+  namespace: unicorn
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: unicorn-book-app

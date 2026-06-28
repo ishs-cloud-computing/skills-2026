@@ -1,0 +1,153 @@
+# ---------------------------------------------------------------------------
+# Fluent Bit (요구사항 12 Container Logging)
+# - DaemonSet(모든 노드), ns logging, SA fluent-bit(Pod Identity → unicorn-fluentbit-role)
+# - unicorn 네임스페이스 Book App stdout 접근 로그를 CloudWatch Logs 로 10초 이내 전송
+# - /health 로그 제외
+# - 출력 JSON 은 정확히 {timestamp, method, path, status_code, client_ip} 5개 키
+#   Book App 로그(logfmt)를 regex 파서로 파싱 후 lua 로 5키 재구성/정수화/시각 포맷.
+# - Log Group: /unicorn/eks/book-app (Terraform 에서 Platform CMK 로 생성)
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluent-bit
+  namespace: logging
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: logging
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Parsers_File  parsers.conf
+
+    # unicorn 네임스페이스 컨테이너 로그만 수집 (파일명 패턴: <pod>_unicorn_<container>-<id>.log)
+    [INPUT]
+        Name              tail
+        Tag               app.*
+        Path              /var/log/containers/*_unicorn_*.log
+        Parser            cri
+        Refresh_Interval  5
+        Mem_Buf_Limit     10MB
+        Skip_Long_Lines   On
+
+    # Book App access 로그(logfmt)에서 method/path/status_code/client_ip 추출
+    [FILTER]
+        Name       parser
+        Match      app.*
+        Key_Name   log
+        Parser     bookaccess
+        Reserve_Data Off
+
+    # 5키 재구성(timestamp ISO8601Z, status_code 정수) + /health·비access 라인 드롭
+    [FILTER]
+        Name    lua
+        Match   app.*
+        script  reshape.lua
+        call    reshape
+
+    [OUTPUT]
+        Name              cloudwatch_logs
+        Match             app.*
+        region            ap-northeast-2
+        log_group_name    /unicorn/eks/book-app
+        log_stream_prefix book-app-
+        auto_create_group false
+
+  parsers.conf: |
+    [PARSER]
+        Name   cri
+        Format regex
+        Regex  ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<log>.*)$
+        Time_Key time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+
+    # 예: 2026/06/09 06:16:16 access method=POST path=/v1/book status=200 duration=1ms remote_addr=10.97.12.236:5xxxx user_agent="..."
+    [PARSER]
+        Name   bookaccess
+        Format regex
+        Regex  ^\S+ \S+ access method=(?<method>\S+) path=(?<path>\S+) status=(?<status_code>\d+) duration=\S+ remote_addr=(?<client_ip>[^:]+):\d+
+        Types  status_code:integer
+
+  reshape.lua: |
+    function reshape(tag, ts, record)
+        -- access 라인이 아니면(파서 미매칭) 드롭
+        if record["method"] == nil or record["path"] == nil then
+            return -1, 0, 0
+        end
+        -- /health 접근 로그 제외 (요구사항 12)
+        if record["path"] == "/health" then
+            return -1, 0, 0
+        end
+        local sec
+        if type(ts) == "table" then
+            sec = ts["sec"] or ts[1] or 0
+        else
+            sec = math.floor(ts)
+        end
+        local sc = record["status_code"]
+        if type(sc) ~= "number" then
+            sc = tonumber(sc) or 0
+        end
+        local out = {
+            timestamp   = os.date("!%Y-%m-%dT%H:%M:%SZ", sec),
+            method      = record["method"],
+            path        = record["path"],
+            status_code = sc,
+            client_ip   = record["client_ip"],
+        }
+        return 1, ts, out
+    end
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: logging
+  labels:
+    app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      serviceAccountName: fluent-bit
+      # 모든 노드(app/addon)에서 수집
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: fluent-bit
+          image: public.ecr.aws/aws-observability/aws-for-fluent-bit:3.4.3
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 50m
+              memory: 100Mi
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc/
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: fluent-bit-config
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers

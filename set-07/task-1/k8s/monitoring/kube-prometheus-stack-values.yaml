@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------------------
+# Helm values: prometheus-community/kube-prometheus-stack (요구사항 12)
+# release name: unicorn-monitoring / namespace: monitoring
+# - Prometheus Operator + Prometheus + node-exporter + kube-state-metrics + Grafana 번들
+# - 관리형 Control Plane 미노출 컴포넌트(controllerManager/scheduler/etcd) 수집 비활성 (mark 11-2-A SM=0)
+# - App/DaemonSet 제외 Addon 은 Addon NodeGroup(unicorn=addon) 에서 운용
+# 설치:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm upgrade --install unicorn-monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring -f kube-prometheus-stack-values.yaml
+# ---------------------------------------------------------------------------
+
+# EKS 관리형 Control Plane 은 해당 메트릭을 노출하지 않으므로 ServiceMonitor 비활성
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheusOperator:
+  nodeSelector:
+    unicorn: addon
+  admissionWebhooks:
+    patch:
+      nodeSelector:
+        unicorn: addon
+
+prometheus:
+  prometheusSpec:
+    nodeSelector:
+      unicorn: addon
+    # CloudWatch Exporter 등 모든 ServiceMonitor 를 release 라벨 없이도 수집
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 6h
+    # PVC: Platform CMK 암호화 StorageClass(unicorn-sc)
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: unicorn-sc
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+# 모든 Node 의 CPU/Memory 수집 (DaemonSet → 전 노드 허용)
+prometheus-node-exporter:
+  tolerations:
+    - operator: Exists
+
+# Pod/오브젝트 상태 메트릭
+kube-state-metrics:
+  nodeSelector:
+    unicorn: addon
+
+# ----- Grafana (요구사항 12) -----
+grafana:
+  nodeSelector:
+    unicorn: addon
+  adminUser: "<GRAFANA_ADMIN_USER>"
+  adminPassword: "<GRAFANA_ADMIN_PASSWORD>"
+  # unicorn-grafana-tg(IP TG) 가 Pod:3000 을 등록하므로 Service 포트를 3000 으로 노출
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  # Prometheus datasource (operator headless service prometheus-operated 는 release 무관 고정 이름)
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: monitoring
+    datasources:
+      defaultDatasourceEnabled: false
+  additionalDataSources:
+    - name: Prometheus
+      type: prometheus
+      uid: prometheus
+      access: proxy
+      url: http://prometheus-operated.monitoring.svc:9090
+      isDefault: true
