@@ -89,7 +89,7 @@ CloudShell VPC 환경은 IaC 로 생성 불가하므로 콘솔에서 직접 만�
    aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/outputs.json" .
    cp mark.sh ~/   # 채점 스크립트는 /home/cloudshell-user 에 둔다(채점 유의사항 13)
    ```
-3. eksctl/helm 설치(미설치 시). kubectl·jq·envsubst 는 CloudShell 기본 제공.
+3. eksctl/helm 설치(미설치 시). kubectl·jq·python3 는 CloudShell 기본 제공이나 **envsubst(gettext)는 미제공** → 5) 에서 cluster.yaml 렌더는 python3 로 한다(또는 `sudo dnf install -y gettext`).
    ```bash
    curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && sudo mv /tmp/eksctl /usr/local/bin/
    curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -135,7 +135,8 @@ source ~/.unicorn-env
 
 ```bash
 cd eksctl
-envsubst < cluster.yaml > cluster.rendered.yaml
+# CloudShell 에 envsubst(gettext) 가 없으므로 python3 로 ${VAR} 치환 (gettext 설치 시 envsubst 대체 가능)
+python3 -c 'import os,sys;sys.stdout.write(os.path.expandvars(sys.stdin.read()))' < cluster.yaml > cluster.rendered.yaml
 eksctl create cluster -f cluster.rendered.yaml
 aws eks update-kubeconfig --name unicorn-eks-cluster --region ap-northeast-2   # 재접속/다른 신원 시 kubeconfig 갱신
 ```
