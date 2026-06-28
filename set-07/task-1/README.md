@@ -44,9 +44,12 @@ terraform init
 terraform apply -var="player_number=$NUM"
 terraform output -json > ../outputs.json   # CloudShell 로 넘길 값 (tfstate 는 넘기지 않는다)
 
-# VPC CloudShell 은 파일 업로드 기능이 없으므로 S3 를 릴레이로 쓴다. web 버킷(unicorn-web-<ACCOUNT_ID>)에 임시 업로드.
+# VPC CloudShell 은 파일 업로드 기능이 없고 레포가 비공개라 git clone 도 불가 → S3 를 릴레이로 쓴다.
+# outputs.json + 프로젝트(eksctl/·k8s/·mark.sh)를 web 버킷(unicorn-web-<ACCOUNT_ID>)에 임시 업로드.
 BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
 aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
+tar czf /tmp/unicorn-cs.tgz -C .. eksctl k8s mark.sh
+aws s3 cp /tmp/unicorn-cs.tgz "s3://$BUCKET/_transfer/unicorn-cs.tgz"
 ```
 
 > Pod Identity 역할·SG·VPC Endpoint 는 Terraform 이 먼저 만들어야 eksctl 이 참조하므로 1) 을 가장 먼저 끝낸다.
@@ -78,16 +81,14 @@ CloudShell VPC 환경은 IaC 로 생성 불가하므로 콘솔에서 직접 만�
    - VPC = `unicorn-vpc`
    - Subnet = `unicorn-subnet-priv-a` (priv b/c 도 가능)
    - Security Group = `unicorn-mark-sg` (`jq -r '.mark_sg_id.value' outputs.json`)
-2. 작업 파일을 쉘로 가져온다. **VPC CloudShell 은 Upload/Download file 기능이 없으므로** S3·git 으로 받는다(private 서브넷 + NAT/엔드포인트로 outbound 가능).
+2. 작업 파일을 쉘로 가져온다. **VPC CloudShell 은 Upload/Download file 이 막혀 있고 레포가 비공개라 git clone 도 불가** → 1) 에서 올린 S3 릴레이에서 받는다(버킷명은 account id 로 결정 → 요구사항 5).
    ```bash
-   # 프로젝트(eksctl/·k8s/·mark.sh) 먼저 받고 작업 디렉토리로 이동
-   git clone <repo> && cd <repo>/set-07/task-1
-   # outputs.json 은 1) 에서 올린 S3 릴레이에서 작업 디렉토리로 받는다 (버킷명은 account id 로 결정 → 요구사항 5)
    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+   mkdir -p ~/unicorn && cd ~/unicorn
+   aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/unicorn-cs.tgz" . && tar xzf unicorn-cs.tgz
    aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/outputs.json" .
+   cp mark.sh ~/   # 채점 스크립트는 /home/cloudshell-user 에 둔다(채점 유의사항 13)
    ```
-   - 채점 스크립트 `mark.sh` 는 `/home/cloudshell-user` 에 둔다(채점 유의사항 13).
-   - 전송 끝나면 릴레이 오브젝트 정리: `aws s3 rm "s3://unicorn-web-$ACCOUNT_ID/_transfer/outputs.json"`.
 3. eksctl/helm 설치(미설치 시). kubectl·jq·envsubst 는 CloudShell 기본 제공.
    ```bash
    curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && sudo mv /tmp/eksctl /usr/local/bin/
@@ -128,7 +129,7 @@ grep -qxF 'source ~/.unicorn-env' ~/.bashrc || echo 'source ~/.unicorn-env' >> ~
 source ~/.unicorn-env
 ```
 
-> CloudShell VPC environment 는 홈 디렉토리가 영구 보존되지 않고 파일 업로드도 막혀 있다. 세션이 끊기면 3) 처럼 S3·git 으로 `outputs.json`·프로젝트를 다시 받고 4) 를 재실행한다.
+> CloudShell VPC environment 는 홈 디렉토리가 영구 보존되지 않고 파일 업로드도 막혀 있다. 세션이 끊기면 3) 처럼 S3 릴레이에서 `outputs.json`·프로젝트 번들을 다시 받고 4) 를 재실행한다.
 
 ### 5) [CloudShell] EKS 클러스터 (eksctl)
 
@@ -210,7 +211,7 @@ web 버킷(`unicorn-web-<ACCOUNT_ID>`)은 채점 대상(mark.sh 3-1-A)이므로,
 (유의사항 9) 실행 중인 부하/테스트가 없어야 한다 — 8) seed 는 one-shot 이라 잔여 부하 없음. DynamoDB seed item 은 채점이 자체 `booking_id` 로 조회하므로 그대로 둬도 무방.
 
 ```bash
-aws s3 rm "s3://unicorn-web-$ACCOUNT_ID/_transfer/outputs.json"   # 3) 에서 이미 지웠으면 No such key (정상)
+aws s3 rm "s3://unicorn-web-$ACCOUNT_ID/_transfer/" --recursive            # outputs.json + unicorn-cs.tgz 제거
 aws s3api list-objects-v2 --bucket "unicorn-web-$ACCOUNT_ID" --prefix _transfer/ --query 'Contents[].Key'  # null 확인
 ```
 
