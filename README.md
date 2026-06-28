@@ -1,5 +1,7 @@
 # 2026 전국기능경기대회 클라우드컴퓨팅
 
+> maintainer: `@zenru1023`
+
 2026 전국기능경기대회 **클라우드컴퓨팅** 직종의 사전 공개 과제(1·2과제)를
 **Terraform / eksctl / Kubernetes manifest** 로 관리하는 저장소.
 
