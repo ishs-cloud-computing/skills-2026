@@ -43,6 +43,10 @@ cd terraform
 terraform init
 terraform apply -var="player_number=$NUM"
 terraform output -json > ../outputs.json   # CloudShell 로 넘길 값 (tfstate 는 넘기지 않는다)
+
+# VPC CloudShell 은 파일 업로드 기능이 없으므로 S3 를 릴레이로 쓴다. web 버킷(unicorn-web-<ACCOUNT_ID>)에 임시 업로드.
+BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
+aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
 ```
 
 > Pod Identity 역할·SG·VPC Endpoint 는 Terraform 이 먼저 만들어야 eksctl 이 참조하므로 1) 을 가장 먼저 끝낸다.
@@ -74,10 +78,16 @@ CloudShell VPC 환경은 IaC 로 생성 불가하므로 콘솔에서 직접 만�
    - VPC = `unicorn-vpc`
    - Subnet = `unicorn-subnet-priv-a` (priv b/c 도 가능)
    - Security Group = `unicorn-mark-sg` (`jq -r '.mark_sg_id.value' outputs.json`)
-2. 작업 파일을 쉘로 올린다.
-   - **Actions → Upload file** 로 본 PC 의 `outputs.json` 업로드.
-   - 프로젝트(`eksctl/`·`k8s/`·`mark.sh`)는 `git clone <repo>` 또는 압축 업로드 (private 서브넷 + NAT 로 outbound 가능).
+2. 작업 파일을 쉘로 가져온다. **VPC CloudShell 은 Upload/Download file 기능이 없으므로** S3·git 으로 받는다(private 서브넷 + NAT/엔드포인트로 outbound 가능).
+   ```bash
+   # 프로젝트(eksctl/·k8s/·mark.sh) 먼저 받고 작업 디렉토리로 이동
+   git clone <repo> && cd <repo>/set-07/task-1
+   # outputs.json 은 1) 에서 올린 S3 릴레이에서 작업 디렉토리로 받는다 (버킷명은 account id 로 결정 → 요구사항 5)
+   ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+   aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/outputs.json" .
+   ```
    - 채점 스크립트 `mark.sh` 는 `/home/cloudshell-user` 에 둔다(채점 유의사항 13).
+   - 전송 끝나면 릴레이 오브젝트 정리: `aws s3 rm "s3://unicorn-web-$ACCOUNT_ID/_transfer/outputs.json"`.
 3. eksctl/helm 설치(미설치 시). kubectl·jq·envsubst 는 CloudShell 기본 제공.
    ```bash
    curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && sudo mv /tmp/eksctl /usr/local/bin/
@@ -118,7 +128,7 @@ grep -qxF 'source ~/.unicorn-env' ~/.bashrc || echo 'source ~/.unicorn-env' >> ~
 source ~/.unicorn-env
 ```
 
-> CloudShell VPC environment 는 홈 디렉토리가 영구 보존되지 않을 수 있다. 세션이 끊기면 `outputs.json`·프로젝트를 다시 올리고 4) 를 재실행한다.
+> CloudShell VPC environment 는 홈 디렉토리가 영구 보존되지 않고 파일 업로드도 막혀 있다. 세션이 끊기면 3) 처럼 S3·git 으로 `outputs.json`·프로젝트를 다시 받고 4) 를 재실행한다.
 
 ### 5) [CloudShell] EKS 클러스터 (eksctl)
 
