@@ -57,7 +57,7 @@ resource "aws_security_group" "grafana_alb" {
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description = "HTTP from anywhere (Grafana 외부 접근)"
+    description = "HTTP from anywhere (Grafana external access)"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
