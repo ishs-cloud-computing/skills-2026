@@ -1,0 +1,150 @@
+# ===========================================================================
+# eksctl Cluster Manifest (요구사항 8)
+# 적용: terraform output 값을 env 로 export → envsubst 로 치환해 적용한다.
+#   envsubst < cluster.yaml | eksctl create cluster -f -
+# 필요한 export 변수 목록 / 생성순서는 ../README.md 참고.
+# ===========================================================================
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: unicorn-eks-cluster
+  region: ap-northeast-2
+  version: "1.35"
+
+# Auto Mode 미사용(직접 정의한 managed nodegroup 으로 운용).
+autoModeConfig:
+  enabled: false
+
+# 인증 모드 = EKS Access Entry (aws-auth ConfigMap 미사용) (요구사항 8 Security)
+accessConfig:
+  authenticationMode: API
+  bootstrapClusterCreatorAdminPermissions: true
+
+# ----- 기존(Terraform 생성) VPC / Private Subnet 재사용 -----
+vpc:
+  id: "${VPC_ID}"
+  # control plane ENI 추가 SG (unicorn-mark CloudShell -> private API 443 인바운드 허용)
+  securityGroup: "${CP_EXTRA_SG_ID}"
+  # 공용 노드 SG (ALB -> Pod 8080 / grafana-alb -> Pod 3000). managed NG 는 attachIDs 로 직접 attach.
+  sharedNodeSecurityGroup: "${NODE_SHARED_SG_ID}"
+  subnets:
+    private:
+      unicorn-subnet-priv-a:
+        id: "${PRIV_SUBNET_A}"
+        az: ap-northeast-2a
+      unicorn-subnet-priv-b:
+        id: "${PRIV_SUBNET_B}"
+        az: ap-northeast-2b
+      unicorn-subnet-priv-c:
+        id: "${PRIV_SUBNET_C}"
+        az: ap-northeast-2c
+
+# Control Plane 외부 접근 차단 (요구사항 8). VPC Endpoint 는 Terraform 에서 생성.
+# private 서브넷에 NAT 가 있어 eks-auth(Pod Identity)·노드 부트스트랩 통신은 가능.
+privateCluster:
+  enabled: true
+  skipEndpointCreation: true
+
+# Secret Resource KMS Envelope Encryption = Platform CMK (요구사항 8)
+secretsEncryption:
+  keyARN: "${PLATFORM_KMS_ARN}"
+
+# Control Plane 모든 로그 -> CloudWatch Logs (요구사항 8)
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+# ----- EKS Pod Identity 연동 (요구사항 8) -----
+# 역할은 Terraform 이 생성(trust=pods.eks.amazonaws.com, 본 클러스터 한정). 여기서는 association 만 연결.
+iam:
+  podIdentityAssociations:
+    - namespace: unicorn
+      serviceAccountName: unicorn-book-app-sa
+      roleARN: "${BOOK_APP_ROLE_ARN}"
+    - namespace: kube-system
+      serviceAccountName: aws-load-balancer-controller
+      roleARN: "${LBC_ROLE_ARN}"
+    - namespace: logging
+      serviceAccountName: fluent-bit
+      roleARN: "${FLUENTBIT_ROLE_ARN}"
+    - namespace: monitoring
+      serviceAccountName: cloudwatch-exporter
+      roleARN: "${CWEXPORTER_ROLE_ARN}"
+
+# ===========================================================================
+# Managed Node Groups (요구사항 8)
+# - 2개(app/addon), AL2023, t3.medium, Private subnet, EBS=Platform CMK, KST, IMDS hop1
+# ===========================================================================
+managedNodeGroups:
+  # ---------- App NodeGroup: label unicorn=app ----------
+  - name: unicorn-app-ng
+    amiFamily: AmazonLinux2023
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 4
+    desiredCapacity: 2
+    privateNetworking: true
+    volumeSize: 30
+    volumeType: gp3
+    volumeEncrypted: true
+    volumeKmsKeyID: "${PLATFORM_KMS_ARN}"
+    disableIMDSv1: true
+    labels:
+      unicorn: app
+    tags:
+      Name: unicorn-k8snode-app-node
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
+    preBootstrapCommands: &common_bootstrap
+      # 모든 노드 시간대 KST (요구사항 8)
+      - "ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime || true"
+      - "timedatectl set-timezone Asia/Seoul || true"
+
+  # ---------- Addon NodeGroup: label unicorn=addon ----------
+  - name: unicorn-addon-ng
+    amiFamily: AmazonLinux2023
+    instanceType: t3.medium
+    minSize: 1
+    maxSize: 3
+    desiredCapacity: 2
+    privateNetworking: true
+    volumeSize: 40
+    volumeType: gp3
+    volumeEncrypted: true
+    volumeKmsKeyID: "${PLATFORM_KMS_ARN}"
+    disableIMDSv1: true
+    labels:
+      unicorn: addon
+    tags:
+      Name: unicorn-k8snode-addon-node
+    securityGroups:
+      attachIDs:
+        - "${NODE_SHARED_SG_ID}"
+    preBootstrapCommands: *common_bootstrap
+
+# ----- Addon -----
+# eks-pod-identity-agent 는 Pod Identity 필수. 나머지는 EKS 1.35 default 버전으로 고정(latest 금지).
+#   eksctl utils describe-addon-versions --kubernetes-version 1.35 --name <addon> 로 확인.
+addons:
+  - name: eks-pod-identity-agent
+  - name: vpc-cni
+    version: v1.21.2-eksbuild.2
+  - name: kube-proxy
+    version: v1.35.3-eksbuild.11
+  # coredns(Deployment 형 Addon)는 Addon NodeGroup 에 배치 (요구사항 8)
+  - name: coredns
+    version: v1.13.2-eksbuild.10
+    configurationValues: |
+      {"nodeSelector": {"unicorn": "addon"}}
+  # aws-ebs-csi-driver: controller(Deployment) 는 Addon NG, node 컴포넌트는 DaemonSet.
+  # SA(ebs-csi-controller-sa) 를 Pod Identity 로 연결 (Platform CMK 권한 포함 역할).
+  - name: aws-ebs-csi-driver
+    version: v1.62.0-eksbuild.1
+    configurationValues: |
+      {"controller": {"nodeSelector": {"unicorn": "addon"}}}
+    podIdentityAssociations:
+      - namespace: kube-system
+        serviceAccountName: ebs-csi-controller-sa
+        roleARN: "${EBS_CSI_ROLE_ARN}"

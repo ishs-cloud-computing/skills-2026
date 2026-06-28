@@ -1,0 +1,14 @@
+# TargetGroupBinding (AWS LB Controller CRD): unicorn-tg(IP TG) 에 Book App Pod IP 등록.
+# CloudFront(app-origin) -> VPC Origin -> unicorn-alb -> unicorn-tg -> Book App Pod.
+# <APP_TARGET_GROUP_ARN> 은 terraform output app_target_group_arn 으로 치환.
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: unicorn-book-app-tgb
+  namespace: unicorn
+spec:
+  serviceRef:
+    name: unicorn-book-app-svc
+    port: 8080
+  targetGroupARN: "<APP_TARGET_GROUP_ARN>"
+  targetType: ip
