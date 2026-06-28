@@ -204,6 +204,16 @@ curl -s -X POST "https://$CF/v1/book" -H 'Content-Type: application/json' \
 for i in $(seq 1 20); do curl -s -o /dev/null "https://$CF/health"; done                              # ALB 메트릭 생성
 ```
 
+### 9) [CloudShell] 채점 전 정리
+
+web 버킷(`unicorn-web-<ACCOUNT_ID>`)은 채점 대상(mark.sh 3-1-A)이므로, 3) 에서 릴레이로 올린 임시 객체가 남아 있으면 제거한다.
+(유의사항 9) 실행 중인 부하/테스트가 없어야 한다 — 8) seed 는 one-shot 이라 잔여 부하 없음. DynamoDB seed item 은 채점이 자체 `booking_id` 로 조회하므로 그대로 둬도 무방.
+
+```bash
+aws s3 rm "s3://unicorn-web-$ACCOUNT_ID/_transfer/outputs.json"   # 3) 에서 이미 지웠으면 No such key (정상)
+aws s3api list-objects-v2 --bucket "unicorn-web-$ACCOUNT_ID" --prefix _transfer/ --query 'Contents[].Key'  # null 확인
+```
+
 ---
 
 ## 요구사항 ↔ 구현 매핑
