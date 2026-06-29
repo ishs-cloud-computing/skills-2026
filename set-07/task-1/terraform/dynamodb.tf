@@ -25,6 +25,7 @@ resource "aws_dynamodb_table" "concert" {
     type = "S"
   }
 
+  // do not change
   global_secondary_index {
     name            = "client-id-created-at-index"
     hash_key        = "client_id"
