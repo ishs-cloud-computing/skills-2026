@@ -40,6 +40,13 @@ data "aws_iam_policy_document" "book_app" {
     actions   = ["dynamodb:PutItem"]
     resources = [aws_dynamodb_table.concert.arn]
   }
+  # 테이블이 App CMK(SSE-KMS)로 암호화되어 있어 PutItem 시 데이터 키 생성/복호화 필요
+  statement {
+    sid       = "AppCmkUse"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey"]
+    resources = [aws_kms_key.app.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "book_app" {
@@ -187,6 +194,13 @@ data "aws_iam_policy_document" "audit" {
       aws_dynamodb_table.concert.arn,
       "${aws_dynamodb_table.concert.arn}/index/*",
     ]
+  }
+  # 테이블이 App CMK(SSE-KMS)로 암호화되어 있어 GetItem/Query 시 복호화 필요
+  statement {
+    sid       = "AppCmkDecrypt"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [aws_kms_key.app.arn]
   }
   # ec2/eks Describe 는 리소스 레벨 ARN 을 지원하지 않으므로 Resource="*".
   # (요구사항: 액션 와일드카드 금지 — 액션은 모두 명시)
