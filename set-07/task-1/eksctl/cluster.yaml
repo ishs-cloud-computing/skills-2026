@@ -92,8 +92,9 @@ managedNodeGroups:
     disableIMDSv1: true
     labels:
       unicorn: app
-    tags:
-      Name: unicorn-k8snode-app-node
+    # managed NG 는 tags.Name 을 쓰면 LT TagSpecifications 에 eksctl 기본 Name(<cluster>-<ng>-Node)과
+    # 중복 등록되어 먼저 등록된 기본값이 인스턴스에 적용된다. instanceName 으로 정확히 지정한다.
+    instanceName: unicorn-k8snode-app-node
     securityGroups:
       attachIDs:
         - "${NODE_SHARED_SG_ID}"
@@ -117,8 +118,7 @@ managedNodeGroups:
     disableIMDSv1: true
     labels:
       unicorn: addon
-    tags:
-      Name: unicorn-k8snode-addon-node
+    instanceName: unicorn-k8snode-addon-node
     securityGroups:
       attachIDs:
         - "${NODE_SHARED_SG_ID}"
