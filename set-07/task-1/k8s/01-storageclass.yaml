@@ -1,0 +1,15 @@
+# StorageClass: EBS CSI + Platform CMK 암호화, Pod AZ 맞춤(WaitForFirstConsumer).
+# 모든 EBS 볼륨은 Platform CMK 로 암호화한다 (요구사항 8).
+# <PLATFORM_KMS_ARN> 은 terraform output platform_kms_arn 으로 치환.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: unicorn-sc
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  type: gp3
+  encrypted: "true"
+  kmsKeyId: "<PLATFORM_KMS_ARN>"
