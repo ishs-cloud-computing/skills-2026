@@ -6,3 +6,6 @@ outputs.json
 **/terraform/build/
 crash.log
 crash.*.log
+
+# 빌드 시 shared/provided 에서 app/ 로 복사하는 제공 바이너리 (재커밋 금지)
+**/app/book
