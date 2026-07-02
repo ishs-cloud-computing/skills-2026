@@ -50,9 +50,12 @@ curl -s -o /dev/null "https://${CF}/v1/nonexistent"
 aws cloudwatch describe-alarms --alarm-names skills-book-4xx-alarm --region ap-northeast-2 \
   --query 'MetricAlarms[].StateValue' --output text
 
-# 7. 셀프 채점
-cd .. && BIBUNHO=<비번호> bash mark.sh
+# 7. 셀프 채점 (CloudShell에서 실행 — 실제 채점 환경과 동일하게 검증)
+#    AWS Console → CloudShell 실행 → 파일 업로드로 mark.sh 전송 (또는 git clone) 후:
+BIBUNHO=<비번호> bash mark.sh
 ```
+
+> 채점은 CloudShell에서 CloudShell을 실행한 IAM User/Role 권한으로 진행된다 (task.md 50, mark.md 8·13). 별도 Access Key를 발급하지 않으므로, 로컬 AWS CLI 프로파일에서만 통과하고 CloudShell 기본 권한으로는 막히는 조회가 없는지 미리 CloudShell에서 `mark.sh`를 한 번 실행해 확인해 둔다. `mark.sh`는 `terraform output`에 의존하지 않고 태그/이름으로 리소스를 조회하도록 작성되어 있어 로컬 state 없이도 동일하게 동작한다.
 
 ## 정리
 
