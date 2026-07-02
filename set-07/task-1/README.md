@@ -12,16 +12,18 @@ terraform/   # AWS 인프라 (VPC/Endpoint/FlowLog, KMS, S3, ECR, DynamoDB, Lamb
   ├─ vpc.tf flowlog.tf endpoints.tf kms.tf
   ├─ s3.tf ecr.tf dynamodb.tf lambda.tf lambda/index.py
   ├─ alb.tf cloudfront.tf waf.tf cloudwatch.tf
-  ├─ iam.tf iam/lbc-policy.json security.tf outputs.tf
-  └─ assets/static/      # 제공된 index.html, main.jpeg
+  └─ iam.tf iam/lbc-policy.json security.tf outputs.tf
 eksctl/cluster.yaml      # EKS 1.35, private, authMode=API, Pod Identity, 2 NodeGroup(app/addon)
 k8s/
   ├─ 00-namespaces.yaml 01-storageclass.yaml
   ├─ app/         # SA, ConfigMap, Deployment(book), Service, PDB, TargetGroupBinding
   ├─ logging/     # Fluent Bit DaemonSet (logfmt → 5키 JSON 재구성)
   └─ monitoring/  # kube-prometheus-stack values, cloudwatch-exporter, grafana TGB, dashboard.json
-app/Dockerfile book      # Book App 컨테이너 (alpine + book)
+app/Dockerfile           # Book App 컨테이너 (alpine + book). book 바이너리는 빌드 시 shared 에서 복사
 ```
+
+> 제공된 배포파일(`book`, `index.html`, `main.jpeg`)은 repo 공용 `shared/provided/task-1/` 에 있다.
+> S3 정적 업로드(`s3.tf`)는 이 경로를 직접 읽고, App 이미지 빌드는 `book` 을 `app/` 로 복사해 쓴다.
 
 ## 배포 순서
 
@@ -62,7 +64,7 @@ aws s3 cp /tmp/unicorn-cs.tgz "s3://$BUCKET/_transfer/unicorn-cs.tgz"
 ```bash
 cd ../app
 ECR=$(jq -r '.ecr_repository_url.value' ../outputs.json)
-cp ../provided/book ./book   # 제공 바이너리 (수정 금지)
+cp ../../../shared/provided/task-1/book ./book   # 제공 바이너리 (수정 금지)
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin "${ECR%/*}"
 docker buildx build --platform linux/amd64 --provenance=false -t "$ECR:v1.0.0" -t "$ECR:latest" --push .
 

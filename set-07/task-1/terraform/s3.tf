@@ -37,19 +37,22 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "web" {
 }
 
 # 제공된 정적 파일(index.html, main.jpeg)을 버킷 루트에 업로드.
+# 소스는 repo 공용 디렉토리(shared/provided/task-1). 같은 디렉토리의 book 바이너리는
+# App 컨테이너용이므로 S3 업로드에서 제외한다.
 resource "aws_s3_object" "static" {
-  for_each = fileset("${path.module}/assets/static", "**")
+  for_each = setsubtract(fileset(local.provided_dir, "**"), ["book"])
 
   bucket                 = aws_s3_bucket.web.id
   key                    = each.value
-  source                 = "${path.module}/assets/static/${each.value}"
-  source_hash            = filemd5("${path.module}/assets/static/${each.value}")
+  source                 = "${local.provided_dir}/${each.value}"
+  source_hash            = filemd5("${local.provided_dir}/${each.value}")
   content_type           = lookup(local.content_types, regex("[^.]+$", each.value), "application/octet-stream")
   server_side_encryption = "aws:kms"
   kms_key_id             = aws_kms_key.data.arn
 }
 
 locals {
+  provided_dir = "${path.module}/../../../shared/provided/task-1"
   content_types = {
     html = "text/html"
     jpeg = "image/jpeg"
