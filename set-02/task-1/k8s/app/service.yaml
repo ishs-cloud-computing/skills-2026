@@ -1,0 +1,15 @@
+# Book App Service (ClusterIP) — wskorea26-book-tg(IP TargetGroup)가 이 Pod 들을 등록
+apiVersion: v1
+kind: Service
+metadata:
+  name: wskorea26-book-svc
+  namespace: wskorea26
+spec:
+  type: ClusterIP
+  selector:
+    app: wskorea26-book
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

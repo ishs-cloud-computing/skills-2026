@@ -1,0 +1,11 @@
+# PodDisruptionBudget — 노드 교체 중에도 최소 1개 파드 유지 (고가용성)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: wskorea26-book-pdb
+  namespace: wskorea26
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: wskorea26-book

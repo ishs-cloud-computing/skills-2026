@@ -1,0 +1,65 @@
+# Book App Deployment (요구사항 5 / 8)
+# - ns wskorea26, App NodeGroup(node-type=app) 전용 (mark 5-4)
+# - replicas 2 + AZ topologySpread (고가용성), /health Liveness/Readiness
+# - IAM 은 IRSA(wskorea26-book-sa — eksctl 이 생성하므로 SA manifest 없음)
+# <ECR_REPOSITORY_URL> 은 terraform output ecr_repository_url 로 치환 (README).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wskorea26-book-deploy
+  namespace: wskorea26
+  labels:
+    app: wskorea26-book
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wskorea26-book
+  template:
+    metadata:
+      labels:
+        app: wskorea26-book
+    spec:
+      serviceAccountName: wskorea26-book-sa
+      nodeSelector:
+        node-type: app
+      # 노드 교체/배포 시 가용성 유지를 위한 graceful shutdown
+      terminationGracePeriodSeconds: 45
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: wskorea26-book
+      containers:
+        - name: book
+          image: "<ECR_REPOSITORY_URL>:stable"
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: wskorea26-book-config
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

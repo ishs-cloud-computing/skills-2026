@@ -7,5 +7,11 @@ outputs.json
 crash.log
 crash.*.log
 
+# envsubst 로 렌더링된 eksctl 설정 (환경별 ID 포함 — 재커밋 금지)
+**/eksctl/*.rendered.yaml
+
 # 빌드 시 shared/provided 에서 app/ 로 복사하는 제공 바이너리 (재커밋 금지)
 **/app/book
+
+# python bytecode
+__pycache__/
