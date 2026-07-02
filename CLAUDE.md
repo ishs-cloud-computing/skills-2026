@@ -31,6 +31,7 @@ skills-2026/
 ├── set-02/ ~ set-10/    # 동일 구조
 ├── shared/               # (현재 미생성) 반복 모듈/스크립트가 생기면 생성
 │   ├── modules/         # 재사용 Terraform 모듈 (vpc, eks 등)
+│   ├── provided/         # 과제 배포파일
 │   └── scripts/
 └── .github/
 ```
