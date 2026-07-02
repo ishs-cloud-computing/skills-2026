@@ -269,6 +269,15 @@ aws s3api list-objects-v2 --bucket "unicorn-web-$ACCOUNT_ID" --prefix _transfer/
 
 > **Fallback — bastion 없이 가려면**: 3)·10) 의 bastion 을 건너뛰고, 4)~8) 을 `unicorn-mark` CloudShell 에서 그대로 실행한다(생성자=채점 신원이라 access entry 도 불필요). 단 CloudShell 제약: ① 30분 유휴 시 삭제 → eksctl 은 `--without-nodegroup` 후 `create nodegroup` 으로 쪼개거나, 끊겨도 같은 명령 재실행으로 수렴. ② 영속·업로드 없음 → 끊기면 S3 릴레이에서 다시 받고 4) 재실행. ③ `eksctl/helm/kubectl` 설치 필요(4) 의 설치 블록 동일), `aws configure` 는 CloudShell 자격증명이 이미 있으면 생략.
 
+
+## 리소스 정리 유의사항
+
+- DynamoDB 테이블의 리소스 삭제 보호 해제
+- S3 비우기 (S3 버전 관리 관련 리소스 존재)
+
+해당 작업을 진행하지 않고 `terraform destroy` 실행 시 리소스가 완전히 삭제되지 않습니다.
+
+
 ---
 
 ## 요구사항 ↔ 구현 매핑
