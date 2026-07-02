@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# Helm values: prometheus-community/prometheus-cloudwatch-exporter (요구사항 12)
+# Book App HTTP Request Duration 패널 데이터 소스 = unicorn-alb TargetResponseTime(p50/p95/p99).
+# SA cloudwatch-exporter 는 Pod Identity 로 unicorn-cwexporter-role 에 매핑(조회 권한).
+# 설치:
+#   helm upgrade --install cloudwatch-exporter prometheus-community/prometheus-cloudwatch-exporter \
+#     -n monitoring -f cloudwatch-exporter-values.yaml
+# ---------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: cloudwatch-exporter
+
+nodeSelector:
+  unicorn: addon
+
+# kube-prometheus-stack Prometheus 가 스크랩하도록 ServiceMonitor 생성
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 30s
+
+# IAM 자격증명은 Pod Identity 로 주입되므로 aws.role/secret 미지정
+config: |-
+  region: ap-northeast-2
+  period_seconds: 60
+  set_timestamp: false
+  metrics:
+    - aws_namespace: AWS/ApplicationELB
+      aws_metric_name: TargetResponseTime
+      aws_dimensions: [LoadBalancer, TargetGroup]
+      aws_statistics: [p50, p95, p99]
+    - aws_namespace: AWS/ApplicationELB
+      aws_metric_name: RequestCount
+      aws_dimensions: [LoadBalancer, TargetGroup]
+      aws_statistics: [Sum]
