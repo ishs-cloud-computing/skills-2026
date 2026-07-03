@@ -1,0 +1,11 @@
+# 노드 드레인/클러스터 업그레이드 시 최소 1대 Pod 유지 (요구사항 8, mark 5-1: MIN AVAILABLE 1)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: wsc2026-book-pdb
+  namespace: wsc2026
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: wsc2026-book

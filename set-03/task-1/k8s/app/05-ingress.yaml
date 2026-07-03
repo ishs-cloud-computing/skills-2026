@@ -1,0 +1,44 @@
+# Ingress → AWS Load Balancer Controller 가 ALB(wsc2026-app-alb) 생성 (요구사항 12)
+# - internet-facing, 대상 Pod IP(8080)
+# - SG 는 Terraform 의 wsc2026-app-alb-sg 를 "단독" 지정:
+#   CloudFront origin-facing prefix list 만 인바운드 허용 → 직접 접근 차단 (mark 8-1).
+#   manage-backend-security-group-rules 를 쓰면 LBC 백엔드 SG 가 추가 부착되어
+#   mark 8-1 의 SG 이름 단독 출력이 깨지므로 사용 금지 — 노드 SG(8080←alb-sg)는
+#   Terraform wsc2026-eks-shared-node-sg 가 사전 허용한다.
+# - /v1/book 외 잘못된 경로는 fixed-response 403 (요구사항 12)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wsc2026-book-ingress
+  namespace: wsc2026
+  annotations:
+    alb.ingress.kubernetes.io/load-balancer-name: wsc2026-app-alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/security-groups: wsc2026-app-alb-sg
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/actions.response-403: >-
+      {"type":"fixed-response","fixedResponseConfig":{"contentType":"text/plain","statusCode":"403","messageBody":"Forbidden"}}
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          # CloudFront /booking 은 CloudFront Function 이 /v1/book 으로 rewrite 해 전달
+          - path: /v1/book
+            pathType: Exact
+            backend:
+              service:
+                name: wsc2026-book-svc
+                port:
+                  number: 80
+          # 그 외 모든 경로 → 403 (catch-all 이 마지막 규칙)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: response-403
+                port:
+                  name: use-annotation

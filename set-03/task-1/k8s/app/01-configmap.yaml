@@ -1,0 +1,10 @@
+# 앱 구동 환경변수 — Dockerfile/deployment 에 직접 적지 않고 ConfigMap 으로 관리 (요구사항 4)
+# mark 5-3: {.data} == {"AWS_REGION":"ap-northeast-2","TABLE_NAME":"wsc2026-book-table"}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: book-config
+  namespace: wsc2026
+data:
+  AWS_REGION: ap-northeast-2
+  TABLE_NAME: wsc2026-book-table

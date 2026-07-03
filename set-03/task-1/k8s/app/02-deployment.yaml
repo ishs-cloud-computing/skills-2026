@@ -1,0 +1,75 @@
+# Book App Deployment (요구사항 8)
+# - replicas 2 + AZ topologySpread (가용 영역 균등 분산, mark 5-2)
+# - workload 노드 전용 (nodeSelector + taint toleration, mark 5-4)
+# - startup/readiness/liveness = /health:8080 (mark 5-3)
+# - 자원: requests = limits = 250m / 512Mi (mark 5-2)
+# <ECR_REPOSITORY_URL> 은 terraform output ecr_repository_url 로 치환 (README).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wsc2026-book-deploy
+  namespace: wsc2026
+  labels:
+    app: wsc2026-book
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wsc2026-book
+  template:
+    metadata:
+      labels:
+        app: wsc2026-book
+    spec:
+      serviceAccountName: wsc2026-book-sa
+      nodeSelector:
+        wsc2026/node: application
+      tolerations:
+        - key: wsc2026/node
+          operator: Equal
+          value: application
+          effect: NoSchedule
+      # 노드 드레인/교체 시 가용성 유지를 위한 graceful shutdown
+      terminationGracePeriodSeconds: 45
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: wsc2026-book
+      containers:
+        - name: book
+          image: "<ECR_REPOSITORY_URL>:v1.0.0"
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: book-config
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
