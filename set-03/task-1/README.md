@@ -32,9 +32,27 @@ app/Dockerfile           # Book App 컨테이너 (alpine + book). book 바이너
 > **모든 CLI 는 terraform 과 같은 자격증명으로 실행한다** — KMS 5키의 관리자 principal 이 배포자 신원뿐이다(유의사항 10: root/kms:* 금지).
 > CloudFront/WAF 는 LBC 가 만드는 ALB 에 의존하므로 **terraform 을 2회(1차 → 클러스터/ingress → 2차)** 적용한다.
 
-### 0) [본 PC] 사전 변수
+### 0) [본 PC] 작업용 IAM 사용자 생성 + 사전 변수
+
+> **대회는 root 계정을 지급한다.** 그러나 유의사항 10(키 정책에 root 금지) 때문에 KMS 키의
+> 관리자는 IAM 신원이어야 하고, 키를 쓰는 모든 작업(terraform/eksctl/docker push/채점)도
+> 그 신원으로 해야 한다. root 는 sts:AssumeRole 호출이 불가하므로 **IAM 사용자 + 액세스 키**
+> 를 만들어 이후 모든 단계를 이 신원으로 실행한다. (root 로 apply 하면
+> `terraform_data.kms_admin_guard` 가 plan 단계에서 차단한다.)
 
 ```bash
+# root 자격증명으로 1회만 실행
+aws iam create-user --user-name wsc2026-admin
+aws iam attach-user-policy --user-name wsc2026-admin \
+  --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+aws iam create-access-key --user-name wsc2026-admin \
+  --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text
+
+# 출력된 키로 프로파일 등록 후 이 신원으로 전환
+aws configure --profile wsc2026        # region = ap-northeast-2
+export AWS_PROFILE=wsc2026
+aws sts get-caller-identity            # arn:...:user/wsc2026-admin 확인
+
 export AWS_DEFAULT_REGION=ap-northeast-2
 export NUM=<선수비번호>       # S3 버킷 이름에 사용
 export RAND4=<임의영문4자리>  # 예: abcd
@@ -56,7 +74,7 @@ aws s3 cp /tmp/wsc2026-cs.tgz "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
 ```
 
 > root 자격증명으로는 apply 가 차단된다(키 정책에 root 금지 — `terraform_data.kms_admin_guard`).
-> 반드시 선수 IAM 사용자/역할 자격증명으로 실행한다.
+> 반드시 step 0 의 `wsc2026-admin` 신원(`AWS_PROFILE=wsc2026`)으로 실행한다.
 
 ### 2) [본 PC] 컨테이너 이미지 빌드 & ECR push (v1.0.0 단일 태그)
 
@@ -114,7 +132,7 @@ curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Li
 curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo install -m755 kubectl /usr/local/bin/kubectl
 curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-aws configure   # 선수 IAM Access Key/Secret (terraform 과 동일 신원!), region = ap-northeast-2
+aws configure   # step 0 의 wsc2026-admin Access Key/Secret (terraform 과 동일 신원!), region = ap-northeast-2
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
@@ -320,7 +338,9 @@ aws s3 rm "s3://$BUCKET/_transfer/" --recursive
   대회 당일 바이너리에 /delay 가 있으면 그대로 동작한다. 나머지 알람(PodHighCPU/PodHighMemory/PodNotReady/
   HighErrorRate/PodCrashLooping)은 채점 스크립트의 부하 파드로 발화된다.
 - **KMS root/kms:* 금지(유의 10)**: 5키 모두 배포자 신원(`aws_iam_session_context`) + 서비스별 최소 statement.
-  따라서 **terraform/eksctl/docker push/kubectl/채점을 모두 같은 IAM 신원으로** 실행해야 한다.
+  **대회 지급 계정은 root 이므로 step 0 에서 IAM 사용자(wsc2026-admin)를 만들고,
+  terraform/eksctl/docker push/kubectl/채점을 전부 그 신원으로** 실행한다.
+  root 로는 KMS 사용은 물론 alias 생성·CMK 테이블/객체 생성도 전부 거부된다(키 정책이 유일한 통제).
   다른 관리자를 추가하려면 `kms_extra_admin_arns` 변수 사용. root 자격증명은 plan 단계에서 차단된다.
 - **HTTP 메트릭은 로그 기반**: 앱이 /metrics 를 노출하지 않아 fluent-bit `log_to_metrics` 필터가
   액세스 로그에서 requests/errors counter 와 duration histogram 을 생성한다(`:2021/metrics`).
