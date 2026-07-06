@@ -53,16 +53,26 @@ RDS Multi-AZ와 CloudFront VPC Origin이 오래 걸린다. 그대로 두고 4번
 terraform -chdir=terraform apply -auto-approve
 ```
 
-## 4. [T+5~] 바이너리 수령 즉시 이미지 빌드/푸시
+## 4. [T+5~] 바이너리 수령 즉시 이미지 빌드/푸시 — AWS CloudShell(ap-northeast-2)
 
-user/product/stress 바이너리를 `app/`에 복사한 뒤:
+RDS가 private subnet에 있어 워크스테이션에서 사설망 리소스에 닿지 않고 로컬에 Docker가
+없을 수 있으므로, Docker·인터넷·ECR 접근이 모두 되는 **CloudShell**에서 in-region으로
+빌드/푸시한다. 콘솔 우상단 리전이 **ap-northeast-2**인지 확인하고 CloudShell을 연다.
+(CloudShell은 2024-09부터 전 상용 리전에서 Docker를 내장한다.)
 
 ```bash
+# CloudShell에 app/(Dockerfile) + 제공 바이너리(user/product/stress)를 올린다:
+#   git clone <repo> && cd task-3   (또는 Actions → Upload file 로 app/ 업로드)
+# 제공 바이너리는 app/ 아래에 파일명 user·product·stress 로 복사.
+
+export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REG=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com
-aws ecr get-login-password | docker login --username AWS --password-stdin $REG
+aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $REG
 for APP in user product stress; do
-  docker buildx build --platform linux/amd64 --provenance=false \
-    --build-arg BINARY=$APP -t $REG/skills-$APP:v1 --push app/
+  # CloudShell=x86_64 → 제공 바이너리(x86 AL2023 빌드)와 동일 아키텍처. buildkit provenance
+  # 매니페스트를 피하려 buildx 대신 classic build+push 사용.
+  docker build --build-arg BINARY=$APP -t $REG/skills-$APP:v1 app/
+  docker push $REG/skills-$APP:v1
 done
 ```
 
@@ -117,11 +127,18 @@ kubectl run db-load --rm -i --restart=Never \
 # GET /v1/user?email= 인덱스 — 0.2s SLO 성패를 가르는 필수 단계
 echo "ALTER TABLE user ADD INDEX idx_email (email);" | kubectl run db-index --rm -i --restart=Never \
   --image=public.ecr.aws/docker/library/mysql:8.0 -- $MYSQL
+
+# 프록시 클라이언트 인증이 MySQL Native → admin 유저도 native 플러그인이어야 한다
+# (MySQL 8.0 기본이 caching_sha2_password인 경우 대비, 이미 native면 무해).
+echo "ALTER USER 'admin'@'%' IDENTIFIED WITH mysql_native_password BY '$DB_PASSWORD';" | \
+  kubectl run db-authfix --rm -i --restart=Never \
+  --image=public.ecr.aws/docker/library/mysql:8.0 -- $MYSQL
 ```
 
 ## 8. [T+30] 앱 배포 — placeholder 치환 후 apply
 
 ```bash
+REG=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com   # 이미지는 CloudShell(4번)에서 push, 배포는 여기서
 PROXY=$(terraform -chdir=terraform output -raw db_proxy_endpoint)
 DB_PORT=$(terraform -chdir=terraform output -raw db_port)
 sed -e "s|<PROXY_ENDPOINT>|$PROXY|" -e "s|<DB_PORT>|$DB_PORT|" \
