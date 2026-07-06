@@ -1,0 +1,110 @@
+# 단일 엔드포인트: CloudFront
+#   기본 동작        → 내부 ALB(VPC Origin)  : /v1/* API + 미지정 경로(ALB 404)
+#   /images/*        → S3(OAC)               : 정적 이미지 캐싱
+# wait_for_deployment=false로 배포 완료를 기다리지 않고 도메인을 즉시 확보한다.
+
+# /images/<key> → S3 오브젝트 키는 루트(<key>)이므로 prefix를 벗겨야 한다.
+# origin_path는 붙이기만 가능하고 제거는 불가 → CloudFront Function이 유일한 방법.
+resource "aws_cloudfront_function" "strip_images" {
+  name    = "skills-strip-images"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      request.uri = request.uri.substring(7); // "/images/a.jpg" -> "/a.jpg"
+      return request;
+    }
+  EOT
+}
+
+resource "aws_cloudfront_origin_access_control" "s3" {
+  name                              = "skills-s3-oac"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# 내부 ALB를 가리키는 VPC Origin (ALB를 외부에 노출하지 않고 CloudFront만 접근)
+resource "aws_cloudfront_vpc_origin" "alb" {
+  vpc_origin_endpoint_config {
+    name                   = "skills-alb-origin"
+    arn                    = aws_lb.this.arn
+    http_port              = 80
+    https_port             = 443
+    origin_protocol_policy = "http-only"
+
+    origin_ssl_protocols {
+      items    = ["TLSv1.2"]
+      quantity = 1
+    }
+  }
+}
+
+locals {
+  # AWS 관리형 정책 ID
+  cache_caching_disabled  = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+  cache_caching_optimized = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimized
+  orp_all_viewer_no_host  = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # Managed-AllViewerExceptHostHeader
+}
+
+resource "aws_cloudfront_distribution" "this" {
+  enabled             = true
+  comment             = "skills-cdn"
+  is_ipv6_enabled     = false
+  price_class         = "PriceClass_All"
+  web_acl_id          = aws_wafv2_web_acl.this.arn
+  wait_for_deployment = false
+
+  origin {
+    origin_id   = "alb"
+    domain_name = aws_lb.this.dns_name
+
+    vpc_origin_config {
+      vpc_origin_id = aws_cloudfront_vpc_origin.alb.id
+    }
+  }
+
+  origin {
+    origin_id                = "s3-images"
+    domain_name              = aws_s3_bucket.this.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.s3.id
+  }
+
+  # API + 미지정 경로: 캐싱 없음, 쿼리스트링/헤더 전부 오리진 전달
+  # (응답이 요청 uuid를 echo하므로 캐시하면 변조가 된다)
+  default_cache_behavior {
+    target_origin_id         = "alb"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods           = ["GET", "HEAD"]
+    cache_policy_id          = local.cache_caching_disabled
+    origin_request_policy_id = local.orp_all_viewer_no_host
+  }
+
+  ordered_cache_behavior {
+    path_pattern           = "/images/*"
+    target_origin_id       = "s3-images"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    cache_policy_id        = local.cache_caching_optimized
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.strip_images.arn
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  tags = { Name = "skills-cdn" }
+}
