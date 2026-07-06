@@ -67,6 +67,13 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 - db.t3.micro(1GB)의 병목은 **max_connections(~85)와 CPU**. 커넥션은 RDS Proxy 멀티플렉싱으로 해결(파드가 늘어도 백엔드 커넥션 고정). 파라미터 그룹 튜닝은 1GB 메모리에서 얻을 게 없어 기본값 유지.
 - **`ALTER TABLE user ADD INDEX idx_email (email)`은 필수** — GET /v1/user?email= 이 유일한 조회 패턴인데 스키마에 email 인덱스가 없다(풀스캔 = SLO 전멸). 과제지의 "테이블 구조 재설계가 필요할 수 있다"가 이것.
 - dump 적재는 프록시가 아닌 직결 엔드포인트로(대량 세션이 프록시에 피닝됨).
+- **프록시 클라이언트 인증 = MySQL Native** (`client_password_auth_type = MYSQL_NATIVE_PASSWORD`, `rds-proxy.tf`). 제공 앱은 수정 불가이고 TLS를 협상하지 않아 `require_tls=false`인데, MySQL 8.0 기본 `caching_sha2_password`는 평문 연결에서 password 교환이 실패한다 → 앱→프록시 인증을 native로 고정한다. 이에 맞춰 백엔드 `admin` 유저도 `mysql_native_password` 플러그인이어야 하므로 DB 초기화(README 7번)에서 `ALTER USER ... IDENTIFIED WITH mysql_native_password`로 맞춘다. 엔진이 바뀌면 `client_password_auth_type`가 `db_engine` 삼항으로 자동 파생(postgres → `POSTGRES_SCRAM_SHA_256`).
+
+## 이미지 빌드는 CloudShell에서
+
+- 제공 바이너리 이미지 빌드/푸시(README 4번)는 **ap-northeast-2 CloudShell**에서 수행한다. 워크스테이션은 사설망(private subnet의 RDS 등)에 닿지 않고 로컬 Docker가 없을 수 있는 반면, CloudShell은 Docker 내장(2024-09부터 전 상용 리전) + 인터넷 + ECR 접근을 모두 제공해 in-region으로 push가 끝난다.
+- CloudShell은 x86_64 → 제공 바이너리(x86 AL2023 빌드)와 아키텍처가 일치한다. buildkit provenance 매니페스트를 피하려 `docker buildx --push` 대신 classic `docker build`+`docker push`를 쓴다.
+- terraform/eksctl/kubectl은 그대로 워크스테이션(본 컴퓨터)에서 실행한다. CloudShell로 옮기는 것은 이미지 빌드 단계 하나뿐이다.
 
 ## WAF 운용 기준
 

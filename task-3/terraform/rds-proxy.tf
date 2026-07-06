@@ -80,6 +80,9 @@ resource "aws_db_proxy" "this" {
     auth_scheme = "SECRETS"
     iam_auth    = "DISABLED"
     secret_arn  = aws_secretsmanager_secret.db.arn
+    # 앱(수정 불가)이 non-TLS로 접속하는데 MySQL 8.0 기본 caching_sha2_password는
+    # 평문 연결에서 인증이 실패한다 → 프록시 클라이언트 인증을 MySQL Native로 고정.
+    client_password_auth_type = contains(["mysql", "mariadb"], var.db_engine) ? "MYSQL_NATIVE_PASSWORD" : "POSTGRES_SCRAM_SHA_256"
   }
 }
 
