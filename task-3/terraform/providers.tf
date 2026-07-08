@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region = local.region
 }
 
 # WAF(scope=CLOUDFRONT)는 us-east-1에서만 생성 가능

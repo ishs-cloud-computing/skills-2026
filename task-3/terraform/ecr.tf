@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "app" {
-  for_each = var.apps
+  for_each = local.apps
 
   name         = "skills-${each.key}"
   force_delete = true

@@ -37,7 +37,7 @@ output "db_endpoint" {
 }
 
 output "db_port" {
-  value = var.db_port
+  value = local.db_port
 }
 
 output "alb_dns" {

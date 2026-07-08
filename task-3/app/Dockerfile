@@ -1,5 +1,5 @@
-# 제공 바이너리는 x86 AL2023에서 빌드/검증됨 → 동일 런타임 사용 (musl 호환성 리스크 제거)
-FROM gcr.io/distroless/static-debian13:nonroot
+# 만약 image scan을 해야하는 경우, alpine linux로 변경
+FROM gcr.io/distroless/static-debian13:nonroot # 만약 image scan이 필수라면 alpine으로 변경
 WORKDIR /app
-COPY {Binary} /app/app
-CMD ["app"]
+COPY {Binary} /app/server
+ENTRYPOINT ["server"]

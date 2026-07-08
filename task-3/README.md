@@ -7,6 +7,7 @@ task-3/
 ├── terraform/   # VPC·RDS(+Proxy)·S3·ECR·ALB·CloudFront·WAF·노드 IAM
 ├── eksctl/      # Auto Mode 클러스터 (+ metrics-server, cloudwatch addon)
 ├── k8s/         # NodeClass/NodePool, DB config, 앱별 Deploy+Svc+TGB+HPA+PDB
+├── db/          # DB 초기화 SQL + 런북 (7번에서 진입)
 └── app/         # Dockerfile (제공 바이너리를 당일 app/ 에 복사)
 ```
 
@@ -15,6 +16,7 @@ task-3/
 ```bash
 cd task-3
 # terraform/terraform.tfvars 수정: player_number, (필요시) db_password
+# 리전·CIDR·앱 목록·DB 사양이 당일 과제와 다르면 terraform/locals.tf 한 파일만 수정
 export DB_PASSWORD='password'   # tfvars의 db_password와 동일하게
 ```
 
@@ -95,45 +97,9 @@ terraform -chdir=terraform output -raw cloudfront_domain
 
 채점 플랫폼에 **`https://<위 도메인>`** 제출 — 프로토콜 포함, 경로 금지.
 
-## 7. [T+25] DB 초기화 — 직결 엔드포인트 사용 (프록시 X)
+## 7. [T+25] DB 초기화 — [db/README.md](db/README.md) 런북 실행
 
-```bash
-DB_HOST=$(terraform -chdir=terraform output -raw db_endpoint)
-MYSQL="mysql -h $DB_HOST -uadmin -p$DB_PASSWORD dev"
-
-# 스키마 (과제지 SQL 그대로)
-kubectl run db-init --rm -i --restart=Never \
-  --image=public.ecr.aws/docker/library/mysql:8.0 -- $MYSQL <<'SQL'
-CREATE TABLE user (
-    id VARCHAR(255) NOT NULL,
-    username VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_username (username)
-);
-CREATE TABLE product (
-    id VARCHAR(255) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    price FLOAT(8) NOT NULL,
-    image_path VARCHAR(500) DEFAULT NULL,
-    PRIMARY KEY (id)
-);
-SQL
-
-# 제공 dump 적재 (파일 경로는 당일 제공 위치로)
-kubectl run db-load --rm -i --restart=Never \
-  --image=public.ecr.aws/docker/library/mysql:8.0 -- $MYSQL < load_user.dump
-
-# GET /v1/user?email= 인덱스 — 0.2s SLO 성패를 가르는 필수 단계
-echo "ALTER TABLE user ADD INDEX idx_email (email);" | kubectl run db-index --rm -i --restart=Never \
-  --image=public.ecr.aws/docker/library/mysql:8.0 -- $MYSQL
-
-# 프록시 클라이언트 인증이 MySQL Native → admin 유저도 native 플러그인이어야 한다
-# (MySQL 8.0 기본이 caching_sha2_password인 경우 대비, 이미 native면 무해).
-echo "ALTER USER 'admin'@'%' IDENTIFIED WITH mysql_native_password BY '$DB_PASSWORD';" | \
-  kubectl run db-authfix --rm -i --restart=Never \
-  --image=public.ecr.aws/docker/library/mysql:8.0 -- $MYSQL
-```
+직결 엔드포인트 사용(프록시 X). 스키마 → dump 적재 → email 인덱스 → admin native 전환 → 검증 순.
 
 ## 8. [T+30] 앱 배포 — placeholder 치환 후 apply
 
@@ -141,8 +107,10 @@ echo "ALTER USER 'admin'@'%' IDENTIFIED WITH mysql_native_password BY '$DB_PASSW
 REG=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com   # 이미지는 CloudShell(4번)에서 push, 배포는 여기서
 PROXY=$(terraform -chdir=terraform output -raw db_proxy_endpoint)
 DB_PORT=$(terraform -chdir=terraform output -raw db_port)
+BUCKET=$(terraform -chdir=terraform output -raw bucket_name)
 sed -e "s|<PROXY_ENDPOINT>|$PROXY|" -e "s|<DB_PORT>|$DB_PORT|" \
-    -e "s|<DB_PASSWORD>|$DB_PASSWORD|" k8s/02-db-config.yaml | kubectl apply -f -
+    -e "s|<DB_PASSWORD>|$DB_PASSWORD|" -e "s|<BUCKET_NAME>|$BUCKET|" \
+    k8s/02-db-config.yaml | kubectl apply -f -
 
 for APP in user product stress; do
   APP_UPPER=$(echo $APP | tr a-z A-Z)

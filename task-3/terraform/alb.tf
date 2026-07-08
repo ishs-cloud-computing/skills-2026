@@ -13,7 +13,7 @@ resource "aws_security_group" "alb" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.vpc_cidr]
   }
 
   egress {
@@ -35,7 +35,7 @@ resource "aws_security_group" "alb_backend" {
   vpc_id      = aws_vpc.this.id
 
   dynamic "ingress" {
-    for_each = toset([for app in var.apps : app.port])
+    for_each = toset([for app in local.apps : app.port])
     content {
       description     = "app port from ALB"
       from_port       = ingress.value
@@ -67,7 +67,7 @@ resource "aws_lb" "this" {
 }
 
 resource "aws_lb_target_group" "app" {
-  for_each = var.apps
+  for_each = local.apps
 
   name        = "skills-tg-${each.key}"
   vpc_id      = aws_vpc.this.id
@@ -88,7 +88,7 @@ resource "aws_lb_target_group" "app" {
   tags = {
     Name = "skills-tg-${each.key}"
     # Auto Mode 컨트롤러가 이 태그 없이는 타깃 등록 권한이 없다 (TGB 필수 조건)
-    "eks:eks-cluster-name" = var.cluster_name
+    "eks:eks-cluster-name" = local.cluster_name
   }
 }
 
@@ -109,7 +109,7 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_lb_listener_rule" "app" {
-  for_each = var.apps
+  for_each = local.apps
 
   listener_arn = aws_lb_listener.http.arn
   priority     = each.value.priority

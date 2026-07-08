@@ -25,7 +25,7 @@ user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 | 비정상 요청 403 | WAF SQLi·KnownBadInputs block, 쿼리스트링 누락 룰 토글 (`waf.tf`) |
 | API 외 경로 404 | ALB 리스너 기본액션 fixed-response 404 (`alb.tf`) |
 | EKS + EC2 t3.medium만 | NodePool instance-type 고정 (`k8s/01-nodepool.yaml`) |
-| 최소 리소스(비용 ratio) | HPA min 2 + Karpenter consolidation → 노드 2~4대 수렴 |
+| 최소 리소스(비용 ratio) | HPA min 2 + Karpenter consolidation → 평시 노드 ~2대, 스파이크 최대 9대(cpu limit 18) |
 | DB 최소 운영 | db.t3.micro Multi-AZ 인스턴스 1대 + RDS Proxy (`rds.tf`, `rds-proxy.tf`) |
 | SLO 0.2s / 1.0s | RDS Proxy·email 인덱스·CPU limit 제거·선제 HPA (아래 참조) |
 | 모니터링·로깅 | amazon-cloudwatch-observability addon (`eksctl/cluster.yaml`) |
@@ -33,33 +33,35 @@ user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 | Fargate/Lambda 금지 | Auto Mode 노드 = EC2 (관리형이지만 EC2 인스턴스) |
 
 주의: product 앱이 버킷 이름을 어떤 env로 받는지 과제지에 없음 — **당일 바이너리 확인 필수**.
+현재 `k8s/02-db-config.yaml`의 `app-config` ConfigMap에 `S3_BUCKET`/`AWS_REGION`으로 넣어두었다
+(demo 실측 이름). 이름이 다르면 그 ConfigMap만 고치고 `kubectl rollout restart deploy product`.
 
 ## 인스턴스 타입별 튜닝 표
 
 t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 적용한다.
 수정 위치는 3곳뿐: ① `k8s/01-nodepool.yaml`의 instance-type values·cpu limit, ② 앱 3파일의 requests, ③ HPA maxReplicas.
 
-| 타입 | vCPU/메모리 | allocatable(약) | max pods | user·product req | stress req | HPA max (u·p / s) | NodePool cpu limit |
-|---|---|---|---|---|---|---|---|
-| **t3.medium** | 2 / 4Gi | 1930m / 3.4Gi | 17 | 150m | 500m | 8 / 6 | 16 |
-| t3.large | 2 / 8Gi | 1930m / 7.2Gi | 35 | 150m | 500m | 8 / 6 | 16 |
-| t3.xlarge | 4 / 16Gi | 3920m / 14.9Gi | 58 | 300m | 1000m | 8 / 6 | 32 |
-| m5.large / m6i.large | 2 / 8Gi | 1930m / 7.2Gi | 29 | 150m | 500m | 8 / 6 | 16 |
-| c5.large / c6i.large | 2 / 4Gi | 1930m / 3.4Gi | 29 | 150m | 500m | 8 / 6 | 16 |
+| 타입 | vCPU/메모리 | allocatable(약) | max pods | 앱 공통 req (cpu/mem) | HPA max | NodePool cpu limit |
+|---|---|---|---|---|---|---|
+| **t3.medium** | 2 / 4Gi | 1930m / 3.4Gi | 17 | 600m / 768Mi | 9 | 18 |
+| t3.large | 2 / 8Gi | 1930m / 7.2Gi | 35 | 600m / 768Mi | 9 | 18 |
+| t3.xlarge | 4 / 16Gi | 3920m / 14.9Gi | 58 | 1200m / 1536Mi | 9 | 36 |
+| m5.large / m6i.large | 2 / 8Gi | 1930m / 7.2Gi | 29 | 600m / 768Mi | 9 | 18 |
+| c5.large / c6i.large | 2 / 4Gi | 1930m / 3.4Gi | 29 | 600m / 768Mi | 9 | 18 |
 
 **공식** (표에 없는 타입):
-- user/product request ≈ allocatable × 0.08, stress request ≈ allocatable × 0.25 (반올림)
-- NodePool cpu limit = 목표 최대 노드 수(8) × vCPU
+- 앱 공통(user·product·stress) cpu request ≈ allocatable × 0.31 — 노드당 3파드 패킹 (demo 실측 600m 기준). memory request=limit는 cpu와 같은 비율(768Mi @3.4Gi).
+- NodePool cpu limit = HPA 전체 상한(27파드) × request 를 수용하는 노드 수 × vCPU (t3.medium: 27×600m=16.2 → 9대 → 18)
 - HPA max는 유지 — vCPU가 커지면 파드당 request가 커져 노드 수가 줄어드는 구조
-- 예상 노드: 최소 2대(min replica 합 1600m + 존 분산), 최대 부하 ~4대(합 5400m) → 비용 ratio 0.5~3.75 밴드 안
+- 예상 노드: 최소 2대(min replica 합 3600m + 존 분산), 최대 부하 9대 상한 → 비용 ratio 0.5~3.75 밴드 안
 
 **t 계열 크레딧**: t3는 unlimited 모드가 기본 → 크레딧 소진 후에도 100% 지속 가능(초과분 $0.05/vCPU·h 과금, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vCPU, t3.large 30%, t3.xlarge 40%. 확인: `aws ec2 describe-instance-credit-specifications --instance-ids <id>`. m/c 계열은 크레딧 개념 없음(지속 100% 기본).
 
 **성능 원칙 (타입 무관 공통)**:
 - **CPU limit 금지** — CFS 스로틀링이 p99를 깎아 0.2s SLO를 직접 해친다. request로만 스케줄링하고 burst는 노드 여유로 흡수.
-- memory limit만 256Mi(누수 방어). Go 앱은 힙이 작다.
-- HPA 60%: 스케일아웃 리드타임(파드 ~10s, 노드 ~2분)을 흡수할 여유분.
-- scaleUp stabilization 0 + 15s당 최대 4파드/100%: T+60 스텝 트래픽에 즉응. scaleDown 300s: 플래핑 방지.
+- memory request=limit 768Mi (demo 실측) — OOM 없이 예측 가능한 패킹. Go 앱 힙은 작지만 여유를 둔다.
+- HPA 75% (demo 실측): 파드를 뜨겁게 굴려 파드·노드 수 최소화(비용 ratio). 스케일아웃 리드타임(파드 ~10s, 노드 ~2분)은 scaleUp 공격성으로 흡수.
+- scaleUp stabilization 0 + 15s당 최대 4파드/100%: T+60 스텝 트래픽에 즉응. scaleDown 120s + 30s당 50%: 스파이크 종료 후 빠른 회수(비용 ratio) — 120s면 채점 트래픽 재상승도 흡수.
 
 ## RDS
 
@@ -67,7 +69,7 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 - db.t3.micro(1GB)의 병목은 **max_connections(~85)와 CPU**. 커넥션은 RDS Proxy 멀티플렉싱으로 해결(파드가 늘어도 백엔드 커넥션 고정). 파라미터 그룹 튜닝은 1GB 메모리에서 얻을 게 없어 기본값 유지.
 - **`ALTER TABLE user ADD INDEX idx_email (email)`은 필수** — GET /v1/user?email= 이 유일한 조회 패턴인데 스키마에 email 인덱스가 없다(풀스캔 = SLO 전멸). 과제지의 "테이블 구조 재설계가 필요할 수 있다"가 이것.
 - dump 적재는 프록시가 아닌 직결 엔드포인트로(대량 세션이 프록시에 피닝됨).
-- **프록시 클라이언트 인증 = MySQL Native** (`client_password_auth_type = MYSQL_NATIVE_PASSWORD`, `rds-proxy.tf`). 제공 앱은 수정 불가이고 TLS를 협상하지 않아 `require_tls=false`인데, MySQL 8.0 기본 `caching_sha2_password`는 평문 연결에서 password 교환이 실패한다 → 앱→프록시 인증을 native로 고정한다. 이에 맞춰 백엔드 `admin` 유저도 `mysql_native_password` 플러그인이어야 하므로 DB 초기화(README 7번)에서 `ALTER USER ... IDENTIFIED WITH mysql_native_password`로 맞춘다. 엔진이 바뀌면 `client_password_auth_type`가 `db_engine` 삼항으로 자동 파생(postgres → `POSTGRES_SCRAM_SHA_256`).
+- **프록시 클라이언트 인증 = MySQL Native** (`client_password_auth_type = MYSQL_NATIVE_PASSWORD`, `rds-proxy.tf`). 제공 앱은 수정 불가이고 TLS를 협상하지 않아 `require_tls=false`인데, MySQL 8.0 기본 `caching_sha2_password`는 평문 연결에서 password 교환이 실패한다 → 앱→프록시 인증을 native로 고정한다. 이에 맞춰 백엔드 `admin` 유저도 `mysql_native_password` 플러그인이어야 하므로 DB 초기화([db/README.md](db/README.md))에서 `ALTER USER ... IDENTIFIED WITH mysql_native_password`로 맞춘다. 엔진이 바뀌면 `client_password_auth_type`가 `locals.tf`의 `db_engine` 삼항으로 자동 파생(postgres → `POSTGRES_SCRAM_SHA_256`).
 
 ## 이미지 빌드는 CloudShell에서
 
@@ -98,15 +100,15 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 
 ### ① DB 엔진 교체 (예: MySQL → PostgreSQL) — 약 20분 (RDS 재생성)
 
-1. `terraform/terraform.tfvars`: `db_engine="postgres"`, `db_engine_version="17"`(당일 확인), `db_port=5432`, `db_username="postgres"` (+ 과제지의 identifier)
-2. `terraform -chdir=terraform apply` — DB·프록시만 재생성(engine_family·SG 포트 자동 파생), ALB·CloudFront·EKS는 no-op
+1. `terraform/locals.tf`: `db_engine = "postgres"`, `db_engine_version = "17"`(당일 확인), `db_port = 5432`, `db_username = "postgres"` (+ 과제지의 identifier)
+2. `terraform -chdir=terraform apply` — DB·프록시만 재생성(engine_family·인증 타입·SG 포트 자동 파생), ALB·CloudFront·EKS는 no-op
 3. `k8s/02-db-config.yaml` 키 이름을 새 과제지의 환경변수 표에 맞게 수정 → sed 재적용(README 8번)
 4. `kubectl rollout restart deploy user product`
-5. DB 초기화(README 7번)를 새 엔진 클라이언트 이미지로 (`public.ecr.aws/docker/library/postgres:17` + `psql`)
+5. DB 초기화([db/README.md](db/README.md))를 새 엔진 클라이언트 이미지로 (`public.ecr.aws/docker/library/postgres:17` + `psql`)
 
 ### ② API 추가/삭제 — 약 10분
 
-1. `variables.tf`의 `apps` 맵에 항목 추가/삭제 (path·priority) → `terraform apply` (~1분: ECR·TG·리스너 규칙)
+1. `locals.tf`의 `apps` 맵에 항목 추가/삭제 (path·priority) → `terraform apply` (~1분: ECR·TG·리스너 규칙)
 2. `k8s/1X-<app>.yaml` 복사 → 이름·라벨·이미지·TG placeholder 치환 (DB 안 쓰면 envFrom 제거, CPU 바운드면 stress 쪽 수치)
 3. 바이너리 빌드/푸시(README 4번) → sed+apply(README 8번)
 

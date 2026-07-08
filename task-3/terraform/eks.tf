@@ -11,7 +11,7 @@ data "aws_iam_policy_document" "automode_node_assume" {
 }
 
 resource "aws_iam_role" "automode_node" {
-  name               = "${var.cluster_name}-automode-node"
+  name               = "${local.cluster_name}-automode-node"
   assume_role_policy = data.aws_iam_policy_document.automode_node_assume.json
 }
 

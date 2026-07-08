@@ -23,11 +23,16 @@ spec:
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["on-demand"]
-  # 저비용: 노드 총량 상한(폭주·비용 캡). HPA 스케일아웃 여유를 보고 조정.
+  # 저비용: 노드 총량 상한(폭주·비용 캡). HPA 전체 상한 27파드 × 600m = 16.2 vCPU
+  # 를 수용하는 t3.medium 9대(18 vCPU). HPA 스케일아웃 여유를 보고 조정.
   limits:
-    cpu: "16"
-  # 빠름·저비용: 놀거나 저활용 노드를 걷어내 consolidation.
+    cpu: "18"
+  # 빠름·저비용: 놀거나 저활용 노드를 걷어내 consolidation (30s = demo 검증값,
+  # HPA scaleDown 120s와 조합해 빈 노드를 빨리 회수 → 비용 ratio).
   # 안정성: PDB를 존중하므로 HPA 대상 워크로드엔 PodDisruptionBudget을 함께 둔다.
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 1m
+    consolidateAfter: 30s
+    # 자발적 중단(consolidation)은 한 번에 노드 1대까지 — PDB 위의 노드 단위 제한
+    budgets:
+      - nodes: "1"

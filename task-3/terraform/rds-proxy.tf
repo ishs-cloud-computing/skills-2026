@@ -10,10 +10,10 @@ resource "aws_security_group" "db" {
 
   ingress {
     description = "DB port from within VPC"
-    from_port   = var.db_port
-    to_port     = var.db_port
+    from_port   = local.db_port
+    to_port     = local.db_port
     protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    cidr_blocks = [local.vpc_cidr]
   }
 
   egress {
@@ -68,7 +68,7 @@ resource "aws_iam_role_policy" "proxy_secret" {
 
 resource "aws_db_proxy" "this" {
   name          = "skills-db-proxy"
-  engine_family = contains(["mysql", "mariadb"], var.db_engine) ? "MYSQL" : "POSTGRESQL"
+  engine_family = contains(["mysql", "mariadb"], local.db_engine) ? "MYSQL" : "POSTGRESQL"
   role_arn      = aws_iam_role.proxy.arn
 
   vpc_subnet_ids         = aws_subnet.private[*].id
@@ -82,7 +82,7 @@ resource "aws_db_proxy" "this" {
     secret_arn  = aws_secretsmanager_secret.db.arn
     # 앱(수정 불가)이 non-TLS로 접속하는데 MySQL 8.0 기본 caching_sha2_password는
     # 평문 연결에서 인증이 실패한다 → 프록시 클라이언트 인증을 MySQL Native로 고정.
-    client_password_auth_type = contains(["mysql", "mariadb"], var.db_engine) ? "MYSQL_NATIVE_PASSWORD" : "POSTGRES_SCRAM_SHA_256"
+    client_password_auth_type = contains(["mysql", "mariadb"], local.db_engine) ? "MYSQL_NATIVE_PASSWORD" : "POSTGRES_SCRAM_SHA_256"
   }
 }
 
