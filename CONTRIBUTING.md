@@ -37,6 +37,7 @@
     - 왜 바꾸었는지
     - 테스트/검증 방법 (`terraform fmt`·`validate`·`plan` 통과, 해당 세트 `mark.sh`/`markN.sh` 실행 결과)
 4. tfstate·`.terraform/`·`outputs.json`은 커밋하지 않으며, `.tfvars`에 시크릿 값이 포함되지 않았는지 반드시 확인 후 PR을 올려주세요.
+5. 병합시 squash merge로 병합.
 
 ## Commit & Branch convention
 
