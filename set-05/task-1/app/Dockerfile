@@ -15,38 +15,8 @@
 #     -f Dockerfile -t "$ECR:v1.0.0" --push .
 # ---------------------------------------------------------------------------
 
-ARG CURL_VERSION=8.11.1
-# curl-${CURL_VERSION}.tar.xz 소스 아카이브의 sha256 (무결성 검증용)
-ARG CURL_SHA256=c7ca7db48b0909743eaef34250da02c19bc61d4f1dcedd6603f109409536ab56
-
-# 1) book UPX 압축 + 정적 curl 소스 빌드(HTTP/HTTPS 전용) + UPX 압축
-FROM alpine:3.20 AS builder
-ARG CURL_VERSION
-ARG CURL_SHA256
-WORKDIR /src
-COPY book /book
-ADD --checksum=sha256:${CURL_SHA256} \
-    https://curl.se/download/curl-${CURL_VERSION}.tar.xz /src/curl.tar.xz
-RUN apk add --no-cache build-base tar xz pkgconf perl upx \
-        openssl-dev openssl-libs-static zlib-dev zlib-static \
-    && tar -xJf curl.tar.xz && cd "curl-${CURL_VERSION}" \
-    && PKG_CONFIG="pkg-config --static" ./configure \
-        --disable-shared --enable-static --with-openssl \
-        --without-libpsl --without-brotli --without-zstd --without-libidn2 \
-        --without-nghttp2 --without-ngtcp2 --without-libssh2 --without-librtmp \
-        --disable-ldap --disable-ldaps --disable-rtsp --disable-dict --disable-telnet \
-        --disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher \
-        --disable-mqtt --disable-smb --disable-manual --disable-ares CFLAGS="-Os" \
-    && make -j"$(nproc)" LDFLAGS="-all-static -s" \
-    && cp src/curl /curl && strip /curl \
-    && chmod +x /book \
-    && (upx --best --lzma /book || true) \
-    && (upx --best --lzma /curl || true)
-
-# 2) 최종 런타임 이미지 (alpine base + 정적 curl → 스캔 가능 + 경량)
-#    정적 curl 은 자체 musl/OpenSSL 을 포함해 추가 .so 의존성이 없음
-FROM alpine:3.20
-COPY --from=builder /curl /usr/bin/curl
-COPY --from=builder /book /book
-EXPOSE 8080
-ENTRYPOINT ["/book"]
+# 만약 arm64라면 https://github.com/ishs-cloud-computing/alpine-curl/pkgs/container/alpine-curl/tag=latest 해당 페이지에서 OS / Arch 선택 후 변경
+FROM ghcr.io/ishs-cloud-computing/alpine-curl:3.23 
+WORKDIR /app
+COPY --chmod=0755 book /app/book
+ENTRYPOINT ["/app/book"]
