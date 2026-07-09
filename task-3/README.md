@@ -70,12 +70,12 @@ RDS가 private subnet에 있어 워크스테이션에서 사설망 리소스에 
 export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REG=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $REG
-for APP in user product stress; do
-  # CloudShell=x86_64 → 제공 바이너리(x86 AL2023 빌드)와 동일 아키텍처. buildkit provenance
-  # 매니페스트를 피하려 buildx 대신 classic build+push 사용.
-  docker build --build-arg BINARY=$APP -t $REG/skills-$APP:v1 app/
-  docker push $REG/skills-$APP:v1
-done
+# CloudShell=x86_64 → 제공 바이너리(x86 AL2023 빌드)와 동일 아키텍처. buildkit provenance
+# 매니페스트를 피하려 buildx 대신 classic build+push 사용.
+# 앱별로 한 줄씩 명시 — 당일 특정 앱만 빌드가 달라지면 그 줄(또는 app/Dockerfile 사본)만 고친다.
+docker build --build-arg BINARY=user    -t $REG/skills-user:v1    app/ && docker push $REG/skills-user:v1
+docker build --build-arg BINARY=product -t $REG/skills-product:v1 app/ && docker push $REG/skills-product:v1
+docker build --build-arg BINARY=stress  -t $REG/skills-stress:v1  app/ && docker push $REG/skills-stress:v1
 ```
 
 ## 5. [T+20] 클러스터 완료 후 노드풀 적용
@@ -103,21 +103,31 @@ terraform -chdir=terraform output -raw cloudfront_domain
 
 ## 8. [T+30] 앱 배포 — placeholder 치환 후 apply
 
+env는 각 앱 매니페스트에 직접 들어있다(공용 ConfigMap/Secret 없음). 앱마다 필요한 값이
+달라 한 파일씩 명시적으로 sed+apply — 당일 한 앱만 바뀌어도 다른 앱에 번지지 않는다.
+
 ```bash
 REG=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com   # 이미지는 CloudShell(4번)에서 push, 배포는 여기서
 PROXY=$(terraform -chdir=terraform output -raw db_proxy_endpoint)
 DB_PORT=$(terraform -chdir=terraform output -raw db_port)
 BUCKET=$(terraform -chdir=terraform output -raw bucket_name)
-sed -e "s|<PROXY_ENDPOINT>|$PROXY|" -e "s|<DB_PORT>|$DB_PORT|" \
-    -e "s|<DB_PASSWORD>|$DB_PASSWORD|" -e "s|<BUCKET_NAME>|$BUCKET|" \
-    k8s/02-db-config.yaml | kubectl apply -f -
+TG=$(terraform -chdir=terraform output -json tg_arns)
 
-for APP in user product stress; do
-  APP_UPPER=$(echo $APP | tr a-z A-Z)
-  TG=$(terraform -chdir=terraform output -json tg_arns | jq -r .$APP)
-  sed -e "s|<ECR_URL_$APP_UPPER>|$REG/skills-$APP|" -e "s|<TG_ARN_$APP_UPPER>|$TG|" \
-    k8s/1*-$APP.yaml | kubectl apply -f -
-done
+# user (DB만)
+sed -e "s|<ECR_URL>|$REG/skills-user|" -e "s|<TG_ARN>|$(echo $TG|jq -r .user)|" \
+    -e "s|<PROXY_ENDPOINT>|$PROXY|" -e "s|<DB_PORT>|$DB_PORT|" -e "s|<DB_PASSWORD>|$DB_PASSWORD|" \
+    k8s/10-user.yaml | kubectl apply -f -
+
+# product (DB + S3)
+sed -e "s|<ECR_URL>|$REG/skills-product|" -e "s|<TG_ARN>|$(echo $TG|jq -r .product)|" \
+    -e "s|<PROXY_ENDPOINT>|$PROXY|" -e "s|<DB_PORT>|$DB_PORT|" -e "s|<DB_PASSWORD>|$DB_PASSWORD|" \
+    -e "s|<BUCKET_NAME>|$BUCKET|" \
+    k8s/11-product.yaml | kubectl apply -f -
+
+# stress (env 없음 — 이미지·TG만)
+sed -e "s|<ECR_URL>|$REG/skills-stress|" -e "s|<TG_ARN>|$(echo $TG|jq -r .stress)|" \
+    k8s/12-stress.yaml | kubectl apply -f -
+
 kubectl get pods -w   # Running 확인 (첫 파드가 노드 생성을 트리거, ~2분)
 ```
 

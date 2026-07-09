@@ -33,8 +33,12 @@ user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 | Fargate/Lambda 금지 | Auto Mode 노드 = EC2 (관리형이지만 EC2 인스턴스) |
 
 주의: product 앱이 버킷 이름을 어떤 env로 받는지 과제지에 없음 — **당일 바이너리 확인 필수**.
-현재 `k8s/02-db-config.yaml`의 `app-config` ConfigMap에 `S3_BUCKET`/`AWS_REGION`으로 넣어두었다
-(demo 실측 이름). 이름이 다르면 그 ConfigMap만 고치고 `kubectl rollout restart deploy product`.
+현재 `k8s/11-product.yaml`의 env에 `S3_BUCKET`/`AWS_REGION`으로 넣어두었다(demo 실측 이름).
+이름이 다르면 그 두 줄만 고치고 `kubectl rollout restart deploy product`.
+
+env는 공용 ConfigMap/Secret 대신 각 앱 매니페스트에 직접 둔다: 채점이 블랙박스라 이들을
+검사하지 않고, 계정도 1회성이라 Secret의 이점이 없으며, 앱마다 env가 달라 자기완결적 파일이
+당일 변경에 안전하기 때문. 값은 README 8번 sed로 치환.
 
 ## 인스턴스 타입별 튜닝 표
 
@@ -102,14 +106,14 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 
 1. `terraform/locals.tf`: `db_engine = "postgres"`, `db_engine_version = "17"`(당일 확인), `db_port = 5432`, `db_username = "postgres"` (+ 과제지의 identifier)
 2. `terraform -chdir=terraform apply` — DB·프록시만 재생성(engine_family·인증 타입·SG 포트 자동 파생), ALB·CloudFront·EKS는 no-op
-3. `k8s/02-db-config.yaml` 키 이름을 새 과제지의 환경변수 표에 맞게 수정 → sed 재적용(README 8번)
+3. `k8s/10-user.yaml`·`k8s/11-product.yaml`의 env 키 이름을 새 과제지 환경변수 표에 맞게 수정 → sed 재적용(README 8번)
 4. `kubectl rollout restart deploy user product`
 5. DB 초기화([db/README.md](db/README.md))를 새 엔진 클라이언트 이미지로 (`public.ecr.aws/docker/library/postgres:17` + `psql`)
 
 ### ② API 추가/삭제 — 약 10분
 
 1. `locals.tf`의 `apps` 맵에 항목 추가/삭제 (path·priority) → `terraform apply` (~1분: ECR·TG·리스너 규칙)
-2. `k8s/1X-<app>.yaml` 복사 → 이름·라벨·이미지·TG placeholder 치환 (DB 안 쓰면 envFrom 제거, CPU 바운드면 stress 쪽 수치)
+2. `k8s/1X-<app>.yaml` 복사 → 이름·라벨·이미지·TG placeholder 치환 (DB 안 쓰면 env 블록 제거, CPU 바운드면 stress 쪽 수치)
 3. 바이너리 빌드/푸시(README 4번) → sed+apply(README 8번)
 
 ### ③ 인스턴스 타입 교체 — 약 5분 + 노드 롤링

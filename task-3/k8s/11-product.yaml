@@ -26,16 +26,27 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: product
-          image: <ECR_URL_PRODUCT>:v1
+          image: <ECR_URL>:v1
           ports:
             - containerPort: 8080
-          envFrom:
-            - configMapRef:
-                name: db-config
-            - configMapRef:
-                name: app-config # S3 버킷·리전 (product만 사용)
-            - secretRef:
-                name: db-secret
+          # <>는 README 8번 sed로 치환. DB 키는 과제지 표와 일치.
+          env:
+            - name: MYSQL_HOST
+              value: "<PROXY_ENDPOINT>"
+            - name: MYSQL_PORT
+              value: "<DB_PORT>"
+            - name: MYSQL_DBNAME
+              value: "dev"
+            - name: MYSQL_USER
+              value: "admin"
+            - name: MYSQL_PASSWORD
+              value: "<DB_PASSWORD>"
+            # S3 버킷·리전 키 이름은 과제지에 없음 → 당일 바이너리 확인 필수.
+            # 다르면 이 두 줄만 고치고 kubectl rollout restart deploy product.
+            - name: S3_BUCKET
+              value: "<BUCKET_NAME>"
+            - name: AWS_REGION
+              value: "ap-northeast-2"
           resources:
             requests:
               # demo 실측값 — t3.medium(allocatable ~1930m)에 2~3파드 패킹
@@ -82,7 +93,7 @@ spec:
   serviceRef:
     name: product-svc
     port: 8080
-  targetGroupARN: "<TG_ARN_PRODUCT>"
+  targetGroupARN: "<TG_ARN>"
   targetType: ip
 ---
 apiVersion: autoscaling/v2
