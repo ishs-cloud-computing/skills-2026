@@ -5,5 +5,5 @@
 FROM gcr.io/distroless/static-debian13:nonroot
 WORKDIR /app
 ARG BINARY
-COPY ${BINARY} /app/server
+COPY --chmod=0755 ${BINARY} /app/server
 ENTRYPOINT ["/app/server"]
