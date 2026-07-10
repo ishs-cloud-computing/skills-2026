@@ -6,7 +6,7 @@ metadata:
   region: ap-northeast-2
   version: "1.36"
 
-# Terraform이 만든 private 서브넷 사용 (README 런북의 sed로 채운다)
+# Terraform이 만든 private 서브넷 사용 (README 런북 STEP 2에서 치환)
 vpc:
   subnets:
     private:

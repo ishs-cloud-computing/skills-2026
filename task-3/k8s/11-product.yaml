@@ -29,7 +29,7 @@ spec:
           image: <ECR_URL>:v1
           ports:
             - containerPort: 8080
-          # <>는 README 8번 sed로 치환. DB 키는 과제지 표와 일치.
+          # <>는 README STEP 8에서 치환. DB 키는 과제지 표와 일치.
           env:
             - name: MYSQL_HOST
               value: "<PROXY_ENDPOINT>"

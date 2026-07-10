@@ -30,7 +30,7 @@ spec:
             - containerPort: 8080
           # 채점은 블랙박스(응답코드/시간/비용)라 Secret/ConfigMap을 검사하지 않는다.
           # 계정도 대회용 1회성 → 앱별 env를 매니페스트에 직접 둬 자기완결적으로 유지.
-          # <>는 README 8번 sed로 치환. 키 이름은 과제지 환경변수 표와 정확히 일치.
+          # <>는 README STEP 8에서 치환. 키 이름은 과제지 환경변수 표와 정확히 일치.
           env:
             - name: MYSQL_HOST
               value: "<PROXY_ENDPOINT>" # RDS 직결이 아닌 프록시 (커넥션 풀링)

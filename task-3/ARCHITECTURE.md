@@ -38,7 +38,7 @@ user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 
 env는 공용 ConfigMap/Secret 대신 각 앱 매니페스트에 직접 둔다: 채점이 블랙박스라 이들을
 검사하지 않고, 계정도 1회성이라 Secret의 이점이 없으며, 앱마다 env가 달라 자기완결적 파일이
-당일 변경에 안전하기 때문. 값은 README 8번 sed로 치환.
+당일 변경에 안전하기 때문. 값은 README STEP 8에서 치환.
 
 ## 인스턴스 타입별 튜닝 표
 
@@ -77,22 +77,21 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 
 ## 이미지 빌드는 CloudShell에서
 
-- 제공 바이너리 이미지 빌드/푸시(README 4번)는 **ap-northeast-2 CloudShell**에서 수행한다. 워크스테이션은 사설망(private subnet의 RDS 등)에 닿지 않고 로컬 Docker가 없을 수 있는 반면, CloudShell은 Docker 내장(2024-09부터 전 상용 리전) + 인터넷 + ECR 접근을 모두 제공해 in-region으로 push가 끝난다.
+- 제공 바이너리 이미지 빌드/푸시(README STEP 4)는 **ap-northeast-2 CloudShell**에서 수행한다. 워크스테이션은 사설망(private subnet의 RDS 등)에 닿지 않고 로컬 Docker가 없을 수 있는 반면, CloudShell은 Docker 내장(2024-09부터 전 상용 리전) + 인터넷 + ECR 접근을 모두 제공해 in-region으로 push가 끝난다.
 - CloudShell은 x86_64 → 제공 바이너리(x86 AL2023 빌드)와 아키텍처가 일치한다. buildkit provenance 매니페스트를 피하려 `docker buildx --push` 대신 classic `docker build`+`docker push`를 쓴다.
 - terraform/eksctl/kubectl은 그대로 워크스테이션(본 컴퓨터)에서 실행한다. CloudShell로 옮기는 것은 이미지 빌드 단계 하나뿐이다.
 
 ## WAF 운용 기준
 
-| 룰 | 초기 상태 | 근거 |
+| 룰 | 상태 | 근거 |
 |---|---|---|
 | SQLiRuleSet | **block** | 비정상 요청에 SQLi 포함 확인됨. FP 낮음. block 기본 응답 = 403 |
-| KnownBadInputsRuleSet | **block** | log4j 등. FP 극히 낮음 |
-| CommonRuleSet | count | NoUserAgent·SizeRestrictions가 채점 트래픽을 오차단할 수 있음 |
-| abnormal-v1-missing-token | count (토글) | POST는 requestid가 body에 있을 수 있음 |
+| KnownBadInputsRuleSet | **block** | 헤더/프로토콜 변조·log4j 등. FP 극히 낮음 |
 
-전환 판단: WAF 콘솔(us-east-1) sampled requests에서 **정상 채점 트래픽이 매치되지 않는 룰만** block으로. 오차단(availability 하락)이 403 처리율 이득보다 손해가 크다.
-- 쿼리스트링 룰: `terraform apply -var waf_v1_block_enabled=true`
-- CommonRuleSet 개별 룰: `rule_action_override { name = "<룰명>" action_to_use { block {} } }` 를 waf.tf common 룰에 추가
+두 관리형 룰만 block으로 둔다(채점 1번 "비정상 요청 403" 충족). CommonRuleSet은
+NoUserAgent·SizeRestrictions 등이 정상 채점 트래픽을 오차단할 수 있어(availability 하락이
+403 처리율 이득보다 손해) 넣지 않는다. 당일 특정 공격 패턴을 추가 차단하려면 해당 관리형 룰을
+`waf.tf`에 룰 블록으로 한 개 더 추가한다(sqli 블록 복사 → name만 교체).
 
 ## TargetGroupBinding 주의
 
@@ -106,7 +105,7 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 
 1. `terraform/locals.tf`: `db_engine = "postgres"`, `db_engine_version = "17"`(당일 확인), `db_port = 5432`, `db_username = "postgres"` (+ 과제지의 identifier)
 2. `terraform -chdir=terraform apply` — DB·프록시만 재생성(engine_family·인증 타입·SG 포트 자동 파생), ALB·CloudFront·EKS는 no-op
-3. `k8s/10-user.yaml`·`k8s/11-product.yaml`의 env 키 이름을 새 과제지 환경변수 표에 맞게 수정 → sed 재적용(README 8번)
+3. `k8s/10-user.yaml`·`k8s/11-product.yaml`의 env 키 이름을 새 과제지 환경변수 표에 맞게 수정 → 재적용(README STEP 8)
 4. `kubectl rollout restart deploy user product`
 5. DB 초기화([db/README.md](db/README.md))를 새 엔진 클라이언트 이미지로 (`public.ecr.aws/docker/library/postgres:17` + `psql`)
 
@@ -114,7 +113,7 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 
 1. `locals.tf`의 `apps` 맵에 항목 추가/삭제 (path·priority) → `terraform apply` (~1분: ECR·TG·리스너 규칙)
 2. `k8s/1X-<app>.yaml` 복사 → 이름·라벨·이미지·TG placeholder 치환 (DB 안 쓰면 env 블록 제거, CPU 바운드면 stress 쪽 수치)
-3. 바이너리 빌드/푸시(README 4번) → sed+apply(README 8번)
+3. 바이너리 빌드/푸시(README STEP 4) → 치환+apply(README STEP 8)
 
 ### ③ 인스턴스 타입 교체 — 약 5분 + 노드 롤링
 

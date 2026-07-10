@@ -10,10 +10,3 @@ variable "db_password" {
   sensitive   = true
   default     = "password"
 }
-
-# ── WAF: requestid/uuid 쿼리스트링 누락 차단 룰 토글.
-# 기본 count — 당일 실트래픽의 쿼리스트링을 관찰한 뒤 -var waf_v1_block_enabled=true로 활성.
-variable "waf_v1_block_enabled" {
-  type    = bool
-  default = false
-}
