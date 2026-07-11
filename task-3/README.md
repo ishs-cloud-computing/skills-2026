@@ -1,6 +1,6 @@
 # task-3 — System operation
 
-CloudFront(단일 엔드포인트) → 내부 ALB(VPC Origin) → EKS Auto Mode(t3.medium) 위 user/product/stress + RDS(Proxy) + S3 이미지. **T+60분 트래픽 시작 전 완료가 목표** — 아래를 위에서 아래로 실행한다. 설계 근거·당일 변경 절차·인스턴스 타입별 튜닝은 [ARCHITECTURE.md](ARCHITECTURE.md).
+CloudFront(단일 엔드포인트) → internet-facing ALB(SG=CloudFront prefix list) → EKS Auto Mode(t3.medium) 위 user/product/stress + RDS(Proxy) + S3 이미지. **T+60분 트래픽 시작 전 완료가 목표** — 아래를 위에서 아래로 실행한다. 설계 근거·당일 변경 절차·인스턴스 타입별 튜닝은 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ```
 task-3/
@@ -81,7 +81,7 @@ cd task-3
 terraform -chdir=terraform apply -auto-approve
 ```
 
-RDS Multi-AZ와 CloudFront VPC Origin이 오래 걸린다. CloudFront 도메인은 배포 완료 전에 확정되므로
+RDS Multi-AZ와 CloudFront 배포가 오래 걸린다. CloudFront 도메인은 배포 완료 전에 확정되므로
 STEP 6에서 미리 제출할 수 있다.
 
 ## STEP 4 — 이미지 빌드/푸시 (CloudShell, 바이너리 수령 즉시)

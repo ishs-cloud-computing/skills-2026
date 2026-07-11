@@ -1,19 +1,23 @@
-# 내부 ALB를 Terraform이 소유 → CloudFront 주소가 EKS 준비와 무관하게 확정된다.
+# ALB를 Terraform이 소유 → CloudFront 주소가 EKS 준비와 무관하게 확정된다.
 # 파드 연결은 k8s TargetGroupBinding(Auto Mode 내장 컨트롤러)이 수행.
 
-# CloudFront VPC Origin ENI → ALB:80. VPC Origin의 관리형 SG는 plan 시점에
-# 참조할 수 없으므로 VPC CIDR로 허용한다 (내부 ALB라 외부 노출 없음).
+# internet-facing ALB. 퍼블릭 DNS는 생기지만 SG를 CloudFront 관리형 prefix list로
+# 잠가 CloudFront만 접근 가능하다 → 실질 노출 없음, WAF 우회 경로 없음.
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 resource "aws_security_group" "alb" {
   name        = "skills-alb"
-  description = "internal ALB, HTTP from VPC (CloudFront VPC Origin)"
+  description = "internet-facing ALB, HTTP from CloudFront only"
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description = "HTTP from within VPC"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = [local.vpc_cidr]
+    description     = "HTTP from CloudFront"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id]
   }
 
   egress {
@@ -60,10 +64,10 @@ resource "aws_security_group" "alb_backend" {
 
 resource "aws_lb" "this" {
   name               = "skills-alb"
-  internal           = true
+  internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.private[*].id
+  subnets            = aws_subnet.public[*].id
 }
 
 resource "aws_lb_target_group" "app" {

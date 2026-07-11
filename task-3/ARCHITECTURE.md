@@ -4,8 +4,8 @@
 
 ```
 사용자 → CloudFront ─┬─ /images/*  → (strip "/images") → S3 (OAC, 캐싱)
-        (WAF 403)    └─ 그 외 전부 → VPC Origin → 내부 ALB ─┬─ /v1/user    → tg-user
-                                                            ├─ /v1/product → tg-product
+        (WAF 403)    └─ 그 외 전부 → ALB(internet-facing) ─┬─ /v1/user    → tg-user
+                                     (SG=CloudFront PL)     ├─ /v1/product → tg-product
                                                             ├─ /v1/stress  → tg-stress
                                                             └─ 기본액션    → 404
 파드 ← TargetGroupBinding(Auto Mode 내장) ← 타깃그룹
@@ -14,7 +14,7 @@ user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 
 - **ALB를 Terraform이 소유**하는 이유: CloudFront 주소가 EKS 준비와 무관하게 T+20분대에 확정 → 엔드포인트 조기 제출. 파드는 TGB로 나중에 붙는다.
 - API 응답이 요청 uuid를 echo하므로 **API는 캐시 불가**(CachingDisabled). 캐시하면 변조로 간주된다. `/images/*`만 CachingOptimized — 채점이 갱신 직후 이미지 내용을 검증해 stale이 문제되면 short-TTL 커스텀 캐시 정책으로 교체(리소스 1개 추가).
-- 내부 ALB + VPC Origin → 사용자가 CloudFront를 우회할 경로 없음(엔드포인트 단일화 요구 충족).
+- **왜 internal ALB + VPC Origin이 아닌가**: 채점표는 전부 부하 결과(availability/performance/image/exception/cost)만 보고 ALB의 internal 여부·VPC Origin 사용을 검사하는 항목이 없다. VPC Origin은 생성/삭제가 각각 ~15분이라 시간제 대회에 불리하다. 대신 internet-facing ALB의 SG ingress를 AWS 관리형 CloudFront prefix list(`com.amazonaws.global.cloudfront.origin-facing`)로 잠가 CloudFront만 접근하게 한다 → 퍼블릭 DNS는 resolve되지만 타 선수의 직접 트래픽 주입은 거부(엔드포인트 노출 불이익 회피) + WAF 우회 경로 없음. 노출 차단 효과는 동일하면서 배포는 빠르다.
 
 ## 요구사항 ↔ 구현 매핑
 

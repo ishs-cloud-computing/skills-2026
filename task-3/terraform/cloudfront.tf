@@ -1,5 +1,5 @@
 # 단일 엔드포인트: CloudFront
-#   기본 동작        → 내부 ALB(VPC Origin)  : /v1/* API + 미지정 경로(ALB 404)
+#   기본 동작        → internet-facing ALB   : /v1/* API + 미지정 경로(ALB 404)
 #   /images/*        → S3(OAC)               : 정적 이미지 캐싱
 # wait_for_deployment=false로 배포 완료를 기다리지 않고 도메인을 즉시 확보한다.
 
@@ -25,22 +25,6 @@ resource "aws_cloudfront_origin_access_control" "s3" {
   signing_protocol                  = "sigv4"
 }
 
-# 내부 ALB를 가리키는 VPC Origin (ALB를 외부에 노출하지 않고 CloudFront만 접근)
-resource "aws_cloudfront_vpc_origin" "alb" {
-  vpc_origin_endpoint_config {
-    name                   = "skills-alb-origin"
-    arn                    = aws_lb.this.arn
-    http_port              = 80
-    https_port             = 443
-    origin_protocol_policy = "http-only"
-
-    origin_ssl_protocols {
-      items    = ["TLSv1.2"]
-      quantity = 1
-    }
-  }
-}
-
 locals {
   # AWS 관리형 정책 ID
   cache_caching_disabled  = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
@@ -60,8 +44,11 @@ resource "aws_cloudfront_distribution" "this" {
     origin_id   = "alb"
     domain_name = aws_lb.this.dns_name
 
-    vpc_origin_config {
-      vpc_origin_id = aws_cloudfront_vpc_origin.alb.id
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
 
