@@ -40,8 +40,7 @@ export DB_PASSWORD='password'   # tfvars의 db_password와 동일하게
 
 ## STEP 1 — 선행 apply: 네트워크·노드롤·ECR (로컬 bash, ~3분)
 
-eksctl가 참조할 VPC/서브넷과 이미지 push 대상 ECR을 먼저 만든다. 리프 리소스만 지정하면
-VPC·서브넷·IGW·NAT·라우트·노드롤은 종속성으로 딸려 온다.
+리프 리소스만 지정 — VPC·서브넷·IGW·NAT·라우트·노드롤은 종속성으로 딸려 온다.
 
 ```bash
 # ── 로컬 bash ──
@@ -59,7 +58,6 @@ terraform -chdir=terraform apply -auto-approve \
 
 ## STEP 2 — eksctl 클러스터 생성 (로컬 bash, ~15분)
 
-서브넷·계정ID를 `terraform output`에서 읽어 `cluster.yaml`을 렌더한 뒤 생성한다.
 이 터미널은 생성이 끝날 때까지 점유되므로, **바로 STEP 3을 새 터미널에서 병렬로** 돌린다.
 
 ```bash
@@ -88,8 +86,7 @@ cd task-3
 terraform -chdir=terraform apply -auto-approve
 ```
 
-RDS Multi-AZ와 CloudFront 배포가 오래 걸린다. CloudFront 도메인은 배포 완료 전에 확정되므로
-STEP 6에서 미리 제출할 수 있다.
+RDS Multi-AZ·CloudFront 배포가 오래 걸린다. CloudFront 도메인은 배포 완료 전 확정되므로 STEP 6에서 미리 제출한다.
 
 ## STEP 4 — 이미지 빌드/푸시 (CloudShell, 바이너리 수령 즉시)
 
@@ -121,7 +118,7 @@ kubectl get nodeclass,nodepool   # Ready 확인
 
 ## STEP 6 — 엔드포인트 제출 (로컬 bash)
 
-CloudFront 도메인은 EKS 준비와 무관하게 확정되므로 앱 배포 전에 미리 제출한다(조기 제출 = 채점 이득).
+앱 배포 전에 미리 제출한다(조기 제출 = 채점 이득).
 
 ```bash
 # ── 로컬 bash ──
@@ -136,8 +133,7 @@ terraform -chdir=terraform output -raw cloudfront_domain
 
 ## STEP 8 — 앱 배포: placeholder 치환 후 apply (로컬 bash)
 
-env는 각 앱 매니페스트에 직접 들어있다(공용 ConfigMap/Secret 없음). 앱마다 필요한 값이 달라
-한 파일씩 명시적으로 치환+apply — 당일 한 앱만 바뀌어도 다른 앱에 번지지 않는다.
+env는 각 앱 매니페스트에 직접 들어있다. 한 파일씩 치환 후 apply.
 
 sed 구분자로 `#`를 쓴다(URL·ARN에 없음). DB_PASSWORD에 `#`가 들어있으면 구분자를 바꾼다.
 
@@ -185,14 +181,34 @@ CF="https://$(terraform -chdir=terraform output -raw cloudfront_domain)"
 Q="requestid=999999999999&uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729"
 c() { curl -s -o /dev/null -w "%{http_code} %{time_total}s $1\n" "$1"; }
 
+# user — POST(생성) → GET(조회). dbdump500001은 dump에 없어 신규 생성됨.
+curl -s -o /dev/null -w "%{http_code} POST user\n" -X POST "$CF/v1/user?$Q" \
+  -H 'Content-Type: application/json' \
+  -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","username":"dbdump500001","email":"dbdump500001@example.org"}'  # 201
 c "$CF/v1/user?email=dbdump500001@example.org&$Q"                          # 200
+
+# product — POST(생성) → GET(조회). 테이블은 비어 있음(dump는 user만).
+curl -s -o /dev/null -w "%{http_code} POST product\n" -X POST "$CF/v1/product?$Q" \
+  -H 'Content-Type: application/json' \
+  -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","id":"dbdump500001","name":"dbdump500001","price":1234}'  # 201
 c "$CF/v1/product?id=dbdump500001&$Q"                                      # 200
-curl -s -o /dev/null -w "%{http_code}\n" -X POST "$CF/v1/stress?$Q" \
+
+# product 이미지 업로드(PUT, 멀티파트) → 동일 엔드포인트 /images 로 다운로드.
+# ⚠ 멀티파트 필드명(image=@..)·업로드 후 오브젝트 키(/images/<key>)는 제공 바이너리로 확인 필수.
+head -c 1024 /dev/urandom > /tmp/smoke.jpg
+curl -s -o /dev/null -w "%{http_code} PUT product image\n" -X PUT "$CF/v1/product?$Q" \
+  -F "requestid=999999999999" -F "uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729" \
+  -F "id=dbdump500001" -F 'image=@/tmp/smoke.jpg'                          # 200
+c "$CF/images/dbdump500001.jpg"                                           # 200 (PUT 업로드 후, 키는 바이너리 확인)
+
+# stress (DB 미사용)
+curl -s -o /dev/null -w "%{http_code} POST stress\n" -X POST "$CF/v1/stress?$Q" \
   -H 'Content-Type: application/json' \
   -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","length":256}'  # 201
+
+# 비정상 요청
 c "$CF/v1/none?$Q"                                                         # 404
 c "$CF/v1/user?email=%27%20OR%201=1--&$Q"                                  # 403 (WAF SQLi)
-c "$CF/images/product50001.jpg"                                            # 200 (이미지 업로드 후)
 
 # 타깃 등록 상태
 kubectl get targetgroupbindings
