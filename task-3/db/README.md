@@ -1,6 +1,6 @@
 # DB 초기화 런북 (PowerShell)
 
-메인 런북 [../README.md](../README.md) STEP 7에서 진입한다. **cwd = task-3/** 기준, 본 컴퓨터 PowerShell.
+메인 런북 [../README.md](../README.md) STEP 7에서 진입한다. **cwd = task-3/** 기준, 본 컴퓨터 PowerShell. Linux bash 판은 [README.linux.md](README.linux.md).
 
 - 모든 작업은 **직결 엔드포인트**(`db_endpoint`)로 한다 — 프록시 경유 대량 적재는 세션이 프록시에 피닝되어 풀링을 깨뜨린다. 앱만 프록시(`db_proxy_endpoint`)를 쓴다.
 - 정적 SQL은 이 디렉토리의 `.sql` 파일을 `Get-Content -Raw`로 stdin 주입, 비밀번호가 들어가는 문장(ALTER USER)만 문자열 — 시크릿을 git에 넣지 않기 위함.
