@@ -1,0 +1,16 @@
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: default
+spec:
+  role: skills-eks-automode-node # = terraform output automode_node_role_name
+  subnetSelectorTerms:
+    - tags:
+        kubernetes.io/role/internal-elb: "1"
+  # terms는 OR — 매칭된 SG가 모두 노드에 붙는다.
+  securityGroupSelectorTerms:
+    - tags:
+        aws:eks:cluster-name: skills-eks
+    # ALB→파드(8080) 개방용. Auto Mode TGB는 spec.networking 미지원이라 SG로 해결.
+    - tags:
+        skills:alb-backend: "1"
