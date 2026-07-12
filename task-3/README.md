@@ -43,6 +43,7 @@ VPC·서브넷·IGW·NAT·라우트·노드롤은 종속성으로 딸려 온다.
 # ── Windows PowerShell ──
 terraform -chdir=terraform init
 terraform -chdir=terraform apply -auto-approve `
+  -target=data.aws_caller_identity.current `
   -target=aws_ecr_repository.app `
   -target=aws_vpc_endpoint.s3 `
   -target=aws_nat_gateway.this `
