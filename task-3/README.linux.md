@@ -64,11 +64,14 @@ terraform -chdir=terraform apply -auto-approve \
 
 ```bash
 # ── 로컬 bash ──
-sn=($(terraform -chdir=terraform output -json private_subnet_ids | jq -r '.[]'))
+# jq 인덱스로 직접 읽는다. bash 배열 ${arr[0]}은 zsh에서 1-index라 subnet-a가 비니 쓰지 않는다.
+sn_json=$(terraform -chdir=terraform output -json private_subnet_ids)
+sn_a=$(jq -r '.[0]' <<<"$sn_json")
+sn_b=$(jq -r '.[1]' <<<"$sn_json")
 acct=$(terraform -chdir=terraform output -raw account_id)
 
-sed -e "s/subnet-REPLACE_A/${sn[0]}/" \
-    -e "s/subnet-REPLACE_B/${sn[1]}/" \
+sed -e "s/subnet-REPLACE_A/${sn_a}/" \
+    -e "s/subnet-REPLACE_B/${sn_b}/" \
     -e "s/ACCOUNT_ID/${acct}/" \
     eksctl/cluster.yaml > eksctl/cluster.rendered.yaml
 
