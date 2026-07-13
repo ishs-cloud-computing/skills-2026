@@ -96,16 +96,20 @@ CMD_ID=$(aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShe
    parallelism.default 1
    ```
 
-   병렬도 1이면 shard 수보다 서브태스크가 많을 때 나는 Kinesis `ShardConsumer RejectedExecutionException`을 원천 차단한다 (ON_DEMAND 스트림 + COUNT 쿼리엔 1로 충분).
+   병렬도 1이면 shard 수보다 서브태스크가 많을 때 나는 Kinesis `ShardConsumer RejectedExecutionException`을 원천 차단한다 (ON_DEMAND 스트림 + COUNT 쿼리엔 1로 충분). `%flink.conf`는 인터프리터 프로세스가 뜨기 전에만 먹으므로 반드시 첫 문단이어야 하고, 이미 실행된 세션이면 인터프리터를 재시작한 뒤 실행한다.
 
    ```sql
    %flink.ssql
-   CREATE TABLE order_stream (
+   -- 세션 TZ를 UTC로 (SET은 런타임 적용 → conf 재시작 불필요). 프로듀서가 UTC 벽시계를 보내므로 CAST가 정확히 맞는다.
+   SET 'table.local-time-zone' = 'UTC';
+
+   -- 베이스 테이블: event_time을 TIMESTAMP(3)로 파싱 (bare 'yyyy-MM-dd HH:mm:ss' → SQL 포맷 그대로 파싱)
+   CREATE TABLE order_stream_base (
      order_id     VARCHAR,
      product_name VARCHAR,
      price        BIGINT,
      quantity     INT,
-     event_time   TIMESTAMP_LTZ(3)
+     event_time   TIMESTAMP(3)
    ) WITH (
      'connector' = 'kinesis',
      'stream' = 'wsc2026-order-stream',
@@ -114,9 +118,15 @@ CMD_ID=$(aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShe
      'format' = 'json',
      'json.timestamp-format.standard' = 'SQL'
    );
+
+   -- 뷰: event_time을 TIMESTAMP_LTZ(3)로 캐스트해 CURRENT_TIMESTAMP(LTZ)와 비교 가능하게. 과제 쿼리는 이 뷰(order_stream)를 그대로 쓴다.
+   CREATE VIEW order_stream AS
+   SELECT order_id, product_name, price, quantity,
+          CAST(event_time AS TIMESTAMP_LTZ(3)) AS event_time
+   FROM order_stream_base;
    ```
 
-   `event_time`은 반드시 `TIMESTAMP_LTZ(3)` — `CURRENT_TIMESTAMP`가 LTZ라 `TIMESTAMP(3)`이면 쿼리1이 `Incomparable types` 에러. 생산자가 UTC 문자열을 보내므로 SQL format이 LTZ로 정확히 매핑한다.
+   프로듀서(수정 금지)는 `2026-07-13 08:10:51`처럼 `T`/`Z` 없는 bare 문자열을 보낸다. JSON SQL 포맷은 `TIMESTAMP_LTZ`에 대해선 끝에 리터럴 `Z`를 요구(`... HH:mm:ss'Z'`)해 `DateTimeParseException`이 나고, 반대로 `TIMESTAMP(3)`은 bare 문자열을 그대로 파싱하지만 Flink 1.15 플래너가 `TIMESTAMP` vs `TIMESTAMP_LTZ` 비교에서 암시적 캐스트를 안 해 `Incomparable types`가 난다. → **베이스 테이블은 `TIMESTAMP(3)`로 파싱, 뷰에서 `TIMESTAMP_LTZ`로 명시 CAST**해 둘 다 우회한다. 과제 쿼리 원문(`FROM order_stream`, `event_time > CURRENT_TIMESTAMP`)은 그대로 유지된다.
 
    ```sql
    %flink.ssql(type=update)
@@ -134,7 +144,7 @@ CMD_ID=$(aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShe
    GROUP BY product_name;
    ```
 
-4. **시연 후 반드시 노트북 Stop** → 상태가 READY로 복귀해야 mark 2-4 통과 (**RUNNING이면 오답**). CREATE TABLE DDL은 Glue DB에 저장되므로 Stop해도 유지된다.
+4. **시연 후 반드시 노트북 Stop** → 상태가 READY로 복귀해야 mark 2-4 통과 (**RUNNING이면 오답**). CREATE TABLE/VIEW DDL은 Glue DB에 저장되므로 Stop해도 유지된다. 이전에 `order_stream`을 테이블로 만들었다면 뷰로 바꾸기 전에 `DROP TABLE order_stream;` 먼저 실행한다.
 
 ---
 
