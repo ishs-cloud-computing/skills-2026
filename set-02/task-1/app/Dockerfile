@@ -8,9 +8,7 @@
 # - Critical/High 취약점 금지(mark 3-1) → 최신 안정 alpine 로 고정, 필요 시
 #   `apk upgrade --no-cache` 라인 추가로 패치 (README 주의사항 참고)
 #
-# 빌드(과제 디렉토리에서, 제공자료를 컨텍스트로 사용 — 복사/수정 없음):
-#   docker buildx build --platform linux/amd64 --provenance=false \
-#     -f app/Dockerfile -t "$ECR:stable" --push ../../shared/provided/task-1
+# 빌드: 로컬 Docker 없음 → 기본 CloudShell 에서 book+Dockerfile 만 받아 빌드. README §2 참고.
 # ---------------------------------------------------------------------------
 FROM alpine:3.24.1
 

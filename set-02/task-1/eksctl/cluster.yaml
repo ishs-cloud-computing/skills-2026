@@ -133,15 +133,12 @@ managedNodeGroups:
 # 설치하는데, 이는 app 노드에 스케줄될 수 있어 mark 5-4 를 위반한다.
 addonsConfig:
   disableDefaultAddons: true
-# 버전은 EKS 1.35 default 로 고정(latest 금지 — 작업규칙 2).
-#   eksctl utils describe-addon-versions --kubernetes-version 1.35 --name <addon> 로 재확인.
+# 버전 미지정 → eksctl 이 클러스터 버전(1.35) default 애드온 버전 사용 (작업규칙 2: EKS Addon 은 고정하지 않는다).
+#   현재 default 확인: eksctl utils describe-addon-versions --kubernetes-version 1.35 --name <addon>
 addons:
   - name: vpc-cni
-    version: v1.21.2-eksbuild.2
   - name: kube-proxy
-    version: v1.35.3-eksbuild.11
   # coredns(Deployment)는 Addon NodeGroup 에 배치 (mark 5-4)
   - name: coredns
-    version: v1.13.2-eksbuild.10
     configurationValues: |
       {"nodeSelector": {"node-type": "addon"}}

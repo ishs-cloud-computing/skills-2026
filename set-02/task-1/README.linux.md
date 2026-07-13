@@ -1,10 +1,10 @@
-# set-02 / 제1과제 — wskorea26 Concert Platform (Windows PowerShell 런북)
+# set-02 / 제1과제 — wskorea26 Concert Platform (Linux/bash 런북)
+
+> 대회 PC 는 Windows 이므로 **주 런북은 [README.md](./README.md) (PowerShell)** 다.
+> 이 파일은 리눅스 개발 환경용 bash 런북을 보존한 것이다. 명령만 다르고 리소스/순서는 동일하다.
 
 CloudFront + S3(정적 웹) + EKS(book 앱) + Lambda(예매 조회) + DynamoDB + 모니터링(Grafana)을
 **Terraform / eksctl / Kubernetes manifest** 로 구성한다. 모든 리소스는 서울(`ap-northeast-2`).
-
-> 대회 PC 는 Windows 11 이므로 이 런북은 **PowerShell** 기준이다.
-> 리눅스 개발 환경용 bash 런북은 [README.linux.md](./README.linux.md) 에 보존돼 있다.
 
 ## 디렉토리 구조
 
@@ -32,75 +32,56 @@ app/
 
 ### 0) 준비
 
-```powershell
-$env:AWS_DEFAULT_REGION = "ap-northeast-2"
-$env:NUM = "103"            # 비번호로 교체
-cd set-02\task-1
+```bash
+export AWS_DEFAULT_REGION=ap-northeast-2
+export NUM=<비번호>            # 예: 103
+cd set-02/task-1
 ```
 
 ### 1) Terraform
 
-```powershell
+```bash
 cd terraform
 terraform init
-terraform apply -var "player_number=$env:NUM"
+terraform apply -var="player_number=$NUM"
 ```
 
-**작업 변수 영구화 (`set-02\task-1\.env.ps1`)** — 이후 모든 단계가 이 변수를 재사용한다.
+**작업 변수 영구화 (`set-02/task-1/.env`)** — 이후 모든 단계가 이 변수를 재사용한다.
 터미널이 바뀌어도 이어서 작업할 수 있게 파일로 박아둔다 (cwd = `terraform`):
 
-```powershell
-terraform output -json | Set-Content ..\outputs.json
+```bash
+terraform output -json > ../outputs.json
 
-$env:ACCOUNT_ID          = terraform output -raw account_id
-$env:VPC_ID              = terraform output -raw vpc_id
-$env:PRIV_SUBNET_C       = (terraform output -json private_subnet_ids | ConvertFrom-Json).'wskorea26-priv-subnet-c'
-$env:PRIV_SUBNET_D       = (terraform output -json private_subnet_ids | ConvertFrom-Json).'wskorea26-priv-subnet-d'
-$env:CLUSTER_EXTRA_SG_ID = terraform output -raw cluster_extra_sg_id
-$env:NODE_SG_ID          = terraform output -raw node_sg_id
-$env:EKS_KMS_ARN         = terraform output -raw eks_kms_arn
-$env:BOOK_APP_POLICY_ARN = terraform output -raw book_app_policy_arn
-$env:LBC_POLICY_ARN      = terraform output -raw lbc_policy_arn
-$env:FLUENT_BIT_POLICY_ARN = terraform output -raw fluent_bit_policy_arn
-$env:ECR             = terraform output -raw ecr_repository_url
-$env:APP_TG          = terraform output -raw app_target_group_arn
-$env:GRAFANA_TG      = terraform output -raw grafana_target_group_arn
-$env:BUCKET          = terraform output -raw s3_bucket_name
-$env:ALB_DNS         = terraform output -raw book_alb_dns
-$env:GRAFANA_ALB_DNS = terraform output -raw grafana_alb_dns
-$env:CF              = terraform output -raw cloudfront_domain
+cat > ../.env <<EOF
+export AWS_DEFAULT_REGION=ap-northeast-2
+export NUM=$NUM
+export ACCOUNT_ID=$(terraform output -raw account_id)
+export VPC_ID=$(terraform output -raw vpc_id)
+export PRIV_SUBNET_C=$(terraform output -json private_subnet_ids | jq -r '."wskorea26-priv-subnet-c"')
+export PRIV_SUBNET_D=$(terraform output -json private_subnet_ids | jq -r '."wskorea26-priv-subnet-d"')
+export CLUSTER_EXTRA_SG_ID=$(terraform output -raw cluster_extra_sg_id)
+export NODE_SG_ID=$(terraform output -raw node_sg_id)
+export EKS_KMS_ARN=$(terraform output -raw eks_kms_arn)
+export BOOK_APP_POLICY_ARN=$(terraform output -raw book_app_policy_arn)
+export LBC_POLICY_ARN=$(terraform output -raw lbc_policy_arn)
+export FLUENT_BIT_POLICY_ARN=$(terraform output -raw fluent_bit_policy_arn)
+export ECR=$(terraform output -raw ecr_repository_url)
+export APP_TG=$(terraform output -raw app_target_group_arn)
+export GRAFANA_TG=$(terraform output -raw grafana_target_group_arn)
+export BUCKET=$(terraform output -raw s3_bucket_name)
+export ALB_DNS=$(terraform output -raw book_alb_dns)
+export GRAFANA_ALB_DNS=$(terraform output -raw grafana_alb_dns)
+export CF=$(terraform output -raw cloudfront_domain)
+EOF
 
-# 현재 값을 그대로 파일에 박아 재접속 시 재사용
-@"
-`$env:AWS_DEFAULT_REGION = "ap-northeast-2"
-`$env:NUM                = "$env:NUM"
-`$env:ACCOUNT_ID         = "$env:ACCOUNT_ID"
-`$env:VPC_ID             = "$env:VPC_ID"
-`$env:PRIV_SUBNET_C      = "$env:PRIV_SUBNET_C"
-`$env:PRIV_SUBNET_D      = "$env:PRIV_SUBNET_D"
-`$env:CLUSTER_EXTRA_SG_ID = "$env:CLUSTER_EXTRA_SG_ID"
-`$env:NODE_SG_ID         = "$env:NODE_SG_ID"
-`$env:EKS_KMS_ARN        = "$env:EKS_KMS_ARN"
-`$env:BOOK_APP_POLICY_ARN = "$env:BOOK_APP_POLICY_ARN"
-`$env:LBC_POLICY_ARN     = "$env:LBC_POLICY_ARN"
-`$env:FLUENT_BIT_POLICY_ARN = "$env:FLUENT_BIT_POLICY_ARN"
-`$env:ECR                = "$env:ECR"
-`$env:APP_TG             = "$env:APP_TG"
-`$env:GRAFANA_TG         = "$env:GRAFANA_TG"
-`$env:BUCKET             = "$env:BUCKET"
-`$env:ALB_DNS            = "$env:ALB_DNS"
-`$env:GRAFANA_ALB_DNS    = "$env:GRAFANA_ALB_DNS"
-`$env:CF                 = "$env:CF"
-"@ | Set-Content ..\.env.ps1
-
-. ..\.env.ps1   # 새 터미널로 이어서 할 땐 task-1 에서 `. .\.env.ps1` 만 다시 실행
+source ../.env   # 새 터미널로 이어서 할 땐 task-1 에서 `source .env` 만 다시 실행
 ```
 
 ### 2) 컨테이너 이미지 빌드 & ECR push (태그 `stable`) — 기본 CloudShell
 
-로컬(Windows)엔 Docker 가 없으므로 빌드는 **기본 CloudShell**(인터넷 O, docker 내장)에서 한다.
+로컬엔 Docker 가 없으므로 빌드는 **기본 CloudShell**(인터넷 O, docker 내장)에서 한다.
 VPC CloudShell(§9)은 인터넷이 없어 alpine 베이스를 못 받으니 쓰지 않는다.
-`shared\provided\task-1\book` 과 `app\Dockerfile` 을 **Actions → Upload file** 로 올린다(홈 `~` 에 저장). 빌드 블록은 모든 플랫폼 동일하다:
+`shared/provided/task-1/book` 과 `app/Dockerfile` 을 **Actions → Upload file** 로 올린다(홈 `~` 에 저장). 빌드 블록은 모든 플랫폼 동일하다:
 
 ```bash
 # [기본 CloudShell] — book, Dockerfile 업로드 후
@@ -121,20 +102,13 @@ aws ecr describe-image-scan-findings --repository-name wskorea26-book-repo --ima
 
 ### 3) EKS 클러스터 (eksctl)
 
-`envsubst` 대체 — cluster.yaml 의 `${VAR}` 를 현재 env 값으로 치환한다:
-
-```powershell
+```bash
 cd eksctl
-$c = Get-Content cluster.yaml -Raw
-foreach ($v in 'VPC_ID','PRIV_SUBNET_C','PRIV_SUBNET_D','CLUSTER_EXTRA_SG_ID','NODE_SG_ID',
-               'EKS_KMS_ARN','BOOK_APP_POLICY_ARN','LBC_POLICY_ARN','FLUENT_BIT_POLICY_ARN') {
-  $c = $c.Replace('${' + $v + '}', [Environment]::GetEnvironmentVariable($v))
-}
-$c | Set-Content cluster.rendered.yaml
+envsubst < cluster.yaml > cluster.rendered.yaml
 eksctl create cluster -f cluster.rendered.yaml     # 약 20분
 
 aws eks update-kubeconfig --region ap-northeast-2 --name wskorea26-cluster
-kubectl get nodes --show-labels | Select-String node-type   # addon/app 라벨 확인
+kubectl get nodes --show-labels | grep node-type   # addon/app 라벨 확인
 ```
 
 > addon 버전은 `eksctl utils describe-addon-versions --kubernetes-version 1.35 --name <addon>` 로
@@ -147,84 +121,84 @@ kubectl get nodes --show-labels | Select-String node-type   # addon/app 라벨 �
 
 ### 4) AWS Load Balancer Controller (TargetGroupBinding 용)
 
-```powershell
-helm repo add eks https://aws.github.io/eks-charts; helm repo update
-helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller `
-  --version 3.4.0 `
-  -n kube-system `
-  --set clusterName=wskorea26-cluster `
-  --set serviceAccount.create=false `
-  --set serviceAccount.name=aws-load-balancer-controller `
-  --set region=ap-northeast-2 `
-  --set vpcId="$env:VPC_ID" `
+```bash
+helm repo add eks https://aws.github.io/eks-charts && helm repo update
+helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --version 3.4.0 \
+  -n kube-system \
+  --set clusterName=wskorea26-cluster \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set region=ap-northeast-2 \
+  --set vpcId="$VPC_ID" \
   --set nodeSelector.node-type=addon
 ```
 
 ### 5) Book 애플리케이션 (k8s)
 
-```powershell
-cd ..\k8s
+```bash
+cd ../k8s
 kubectl apply -f 00-namespaces.yaml
 kubectl apply -f app/configmap.yaml
-(Get-Content app/deployment.yaml -Raw).Replace('<ECR_REPOSITORY_URL>', $env:ECR) | kubectl apply -f -
+sed "s|<ECR_REPOSITORY_URL>|$ECR|g" app/deployment.yaml | kubectl apply -f -
 kubectl apply -f app/service.yaml -f app/pdb.yaml
-(Get-Content app/targetgroupbinding.yaml -Raw).Replace('<APP_TARGET_GROUP_ARN>', $env:APP_TG) | kubectl apply -f -
+sed "s|<APP_TARGET_GROUP_ARN>|$APP_TG|g" app/targetgroupbinding.yaml | kubectl apply -f -
 
 # 타겟 healthy 대기
-aws elbv2 wait target-in-service --target-group-arn "$env:APP_TG"
+aws elbv2 wait target-in-service --target-group-arn "$APP_TG"
 ```
 
 ### 6) 모니터링 (kube-prometheus-stack + Grafana)
 
-```powershell
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts; helm repo update
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 
 # Grafana 계정 치환: skills-<비번호>-admin / $korea26!! (mark 10)
-(Get-Content monitoring/kube-prometheus-stack-values.yaml -Raw).
-  Replace('<GRAFANA_ADMIN_USER>', "skills-$($env:NUM)-admin").
-  Replace('<GRAFANA_ADMIN_PASSWORD>', '$korea26!!') | Set-Content "$env:TEMP\kps-values.yaml"
+sed -e "s|<GRAFANA_ADMIN_USER>|skills-${NUM}-admin|" \
+    -e 's|<GRAFANA_ADMIN_PASSWORD>|$korea26!!|' \
+    monitoring/kube-prometheus-stack-values.yaml > /tmp/kps-values.yaml
 
-helm upgrade --install wskorea26-monitoring prometheus-community/kube-prometheus-stack `
-  --version 87.5.1 -n monitoring -f "$env:TEMP\kps-values.yaml"
+helm upgrade --install wskorea26-monitoring prometheus-community/kube-prometheus-stack \
+  --version 87.5.1 -n monitoring -f /tmp/kps-values.yaml
 
 # 대시보드 provisioning (uid=wskorea26, title=wskorea26-monitoring)
-kubectl -n monitoring create configmap wskorea26-dashboard `
+kubectl -n monitoring create configmap wskorea26-dashboard \
   --from-file=dashboard.json=monitoring/dashboard.json
 kubectl -n monitoring label configmap wskorea26-dashboard grafana_dashboard=1
 
 # Grafana ALB 연결
-(Get-Content monitoring/grafana-targetgroupbinding.yaml -Raw).Replace('<GRAFANA_TARGET_GROUP_ARN>', $env:GRAFANA_TG) | kubectl apply -f -
-aws elbv2 wait target-in-service --target-group-arn "$env:GRAFANA_TG"
+sed "s|<GRAFANA_TARGET_GROUP_ARN>|$GRAFANA_TG|g" monitoring/grafana-targetgroupbinding.yaml | kubectl apply -f -
+aws elbv2 wait target-in-service --target-group-arn "$GRAFANA_TG"
 ```
 
 ### 7) 로깅 (Fluent Bit → CloudWatch Logs)
 
-```powershell
+```bash
 kubectl apply -f monitoring/fluent-bit.yaml
 kubectl -n monitoring get ds fluent-bit   # DESIRED = 노드 수
 ```
 
 ### 8) 검증 시드 (mark 순서대로)
 
-```powershell
+```bash
 # CloudFront 배포 완료 대기 (mark 8-1 은 Status=Deployed 를 검사)
-$CF_ID = aws cloudfront list-distributions `
-  --query "DistributionList.Items[?Comment=='wskorea26-concert-cf'].Id | [0]" --output text
+CF_ID=$(aws cloudfront list-distributions \
+  --query "DistributionList.Items[?Comment=='wskorea26-concert-cf'].Id | [0]" --output text)
 aws cloudfront wait distribution-deployed --id "$CF_ID"
 
-curl.exe -o NUL -s -w "%{http_code}\n" "https://$env:CF"            # 200 (정적 웹)
-curl.exe -o NUL -s -w "%{http_code}\n" "http://$env:CF/"            # 301 (HTTPS 리다이렉트)
-curl.exe -o NUL -s -w "%{size_download}\n" "https://$env:CF/main.jpeg"  # 180926
-curl.exe -o NUL -s -w "%{http_code}\n" "http://$env:ALB_DNS/book"   # 403 (CloudFront 미경유)
+curl -o /dev/null -s -w "%{http_code}\n" "https://$CF"            # 200 (정적 웹)
+curl -o /dev/null -s -w "%{http_code}\n" "http://$CF/"            # 301 (HTTPS 리다이렉트)
+curl -o /dev/null -s -w "%{size_download}\n" "https://$CF/main.jpeg"  # 180926
+curl -o /dev/null -s -w "%{http_code}\n" "http://$ALB_DNS/book"   # 403 (CloudFront 미경유)
 
-curl.exe -s -X POST -H "Content-Type: application/json" `
-  -d '{"client_id":"T0001","username":"tester","email":"t@t.com","concert_name":"SEED_CON"}' `
-  "https://$env:CF/book"                                            # {"booking_id": "..."}
-curl.exe -s "https://$env:CF/book?concert_name=SEED_CON"            # 최신순 배열
-curl.exe -o NUL -s -w "%{http_code}\n" "https://$env:CF/book"       # 400 (파라미터 없음)
+curl -s -X POST -H 'Content-Type: application/json' \
+  -d '{"client_id":"T0001","username":"tester","email":"t@t.com","concert_name":"SEED_CON"}' \
+  "https://$CF/book"                                              # {"booking_id": "..."}
+curl -s "https://$CF/book?concert_name=SEED_CON"                  # 최신순 배열
+curl -o /dev/null -s -w "%{http_code}\n" "https://$CF/book"       # 400 (파라미터 없음)
 
-echo "Grafana: http://$($env:GRAFANA_ALB_DNS)/d/wskorea26/wskorea26-monitoring"
-echo "Login  : skills-$($env:NUM)-admin / `$korea26!!"
+echo "Grafana: http://$GRAFANA_ALB_DNS/d/wskorea26/wskorea26-monitoring"
+echo "Login  : skills-${NUM}-admin / \$korea26!!"
 ```
 
 ### 9) 채점 준비 (CloudShell VPC Environment)
@@ -234,7 +208,7 @@ echo "Login  : skills-$($env:NUM)-admin / `$korea26!!"
 안 되지만 터미널 붙여넣기는 되므로 mark.sh 는 heredoc 으로 붙여넣는다:
 
 ```bash
-# [CloudShell VPC Environment] — CloudShell 은 Linux 이므로 bash
+# [CloudShell VPC Environment]
 rm -rf ~/.aws && aws configure   # default region: ap-northeast-2
 cat > ~/mark.sh <<'MARKEOF'
 # ← 본 PC 의 mark.sh 내용을 그대로 붙여넣기
@@ -244,14 +218,14 @@ chmod +x ~/mark.sh
 
 ### 10) 정리 (대회 종료 후)
 
-```powershell
-cd set-02\task-1   # 과제 루트에서 실행
+```bash
+cd set-02/task-1   # 과제 루트에서 실행
 helm -n monitoring uninstall wskorea26-monitoring
 helm -n kube-system uninstall aws-load-balancer-controller
 eksctl delete cluster -f eksctl/cluster.rendered.yaml --disable-nodegroup-eviction
 # DynamoDB 삭제방지 해제 후 destroy
 aws dynamodb update-table --table-name wskorea26-data-table --no-deletion-protection-enabled
-cd terraform; terraform destroy -var "player_number=$env:NUM"
+cd terraform && terraform destroy -var="player_number=$NUM"
 ```
 
 ---
@@ -304,8 +278,8 @@ cd terraform; terraform destroy -var "player_number=$env:NUM"
 
 - **비번호(`player_number`)**: `terraform.tfvars` 기본 103. 반드시 본인 번호로 교체
   (버킷 이름 + Grafana 계정에 사용).
-- **Grafana 비밀번호 `$korea26!!`**: PowerShell 에서 **작은따옴표**로 감쌀 것
-  (`'$korea26!!'` — `$` 확장 방지). 배포 순서 6) 의 Replace 인자가 그 형태다.
+- **Grafana 비밀번호 `$korea26!!`**: 셸에서 반드시 **작은따옴표**로 감쌀 것
+  (`$`, `!` 확장 방지). 배포 순서 6) 의 sed 명령이 그 형태다.
 - **ECR 스캔**: 당일 alpine 패치 상태에 따라 결과가 달라질 수 있다. 기준은
   "Critical/High 없음"(mark 3-1 비고). High 가 나오면 Dockerfile 에
   `RUN apk upgrade --no-cache` 를 추가해 재빌드/재푸시한다.
@@ -316,7 +290,3 @@ cd terraform; terraform destroy -var "player_number=$env:NUM"
   `wait distribution-deployed` 로 확인.
 - **eksctl/helm 옵션 드리프트**: `clusterEndpoints`·`addonsConfig.disableDefaultAddons`·
   `instanceName` 등은 버전 따라 바뀔 수 있으니 사용 전 공식 문서로 확인 (작업규칙 7).
-- **curl 별칭**: PowerShell 의 `curl` 은 `Invoke-WebRequest` 별칭이므로 검증 단계는
-  Windows 기본 `curl.exe` 를 명시해 호출한다.
-</content>
-</invoke>

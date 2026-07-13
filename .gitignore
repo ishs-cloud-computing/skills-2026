@@ -3,6 +3,8 @@
 *.tfstate
 *.tfstate.*
 outputs.json
+.env
+.env.ps1
 **/terraform/build/
 crash.log
 crash.*.log
