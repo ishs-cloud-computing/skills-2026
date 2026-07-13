@@ -57,8 +57,9 @@ skills-2026/
 │   │   ├── mark.pdf         # 채점지
 │   │   └── mark.sh          # 채점 스크립트
 │   └── task-2/              # 독립 모듈 여러 개
-│       ├── module-1/        # 모듈별로 terraform/ eksctl/ k8s/ app/ 중 필요한 것만
-│       ├── module-2/
+│       ├── module-N-<name>/ # 구현: 모듈별 terraform/ eksctl/ k8s/ app/ 중 필요한 것만
+│       ├── provided/        # 대회 제공 소스 (세트마다 다름), module1/ module2/ ... 모듈별 분리
+│       ├── mark/            # 모듈별 채점 스크립트 mark2-1.sh, mark2-2.sh ...
 │       └── ...              # 모듈 수는 세트마다 다름
 ├── shared/
 │   ├── modules/             # 재사용 Terraform 모듈 (vpc, eks 등)
