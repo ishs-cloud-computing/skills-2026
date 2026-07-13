@@ -3,15 +3,14 @@
 *.tfstate
 *.tfstate.*
 outputs.json
+.env
+.env.ps1
 **/terraform/build/
 crash.log
 crash.*.log
-
-# 빌드 시 shared/provided 에서 app/ 로 복사하는 제공 바이너리 (재커밋 금지)
+__pycache__/
 **/app/book
 **/app/user
 **/app/product
 **/app/stress
-
-# 런북 sed가 생성하는 렌더링 산출물
 **/eksctl/*.rendered.yaml

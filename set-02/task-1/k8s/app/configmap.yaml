@@ -1,0 +1,9 @@
+# Book App 환경변수 (Reference02: AWS_REGION / TABLE_NAME 필요, 8080 바인딩)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wskorea26-book-config
+  namespace: wskorea26
+data:
+  AWS_REGION: "ap-northeast-2"
+  TABLE_NAME: "wskorea26-data-table"

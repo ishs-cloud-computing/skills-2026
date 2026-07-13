@@ -1,0 +1,16 @@
+# TargetGroupBinding: wskorea26-grafana-tg(IP TG)에 Grafana Pod IP 등록 (요구사항 12)
+# wskorea26-grafana-alb(internet-facing:80) -> wskorea26-grafana-tg -> Grafana Pod:3000
+# 서비스 이름은 kube-prometheus-stack 번들 Grafana(release wskorea26-monitoring)
+#   = wskorea26-monitoring-grafana.
+# <GRAFANA_TARGET_GROUP_ARN> 은 terraform output grafana_target_group_arn 으로 치환 (README).
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: wskorea26-grafana-tgb
+  namespace: monitoring
+spec:
+  serviceRef:
+    name: wskorea26-monitoring-grafana
+    port: 3000
+  targetGroupARN: "<GRAFANA_TARGET_GROUP_ARN>"
+  targetType: ip
