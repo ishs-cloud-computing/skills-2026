@@ -14,3 +14,7 @@ __pycache__/
 **/app/product
 **/app/stress
 **/eksctl/*.rendered.yaml
+# set-02 module-4: sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
+**/lambda/sensor_consumer/*
+!**/lambda/sensor_consumer/index.py
+!**/lambda/sensor_consumer/requirements.txt

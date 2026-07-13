@@ -6,8 +6,8 @@
 |---|---|---|---|---|
 | [module-1-workflow](module-1-workflow/) | 성적 처리 서버리스 워크플로우 | ap-southeast-1 | S3, Lambda, DynamoDB, Step Functions | 구현 완료 |
 | [module-2-analytics](module-2-analytics/) | 실시간 주문 로그 분석 | ap-northeast-2 | VPC, EC2, ALB, Kinesis, Managed Flink Studio | 구현 완료 |
-| module-3 | Cloud event handling | - | - | 미구현 |
-| module-4 | MSK | - | - | 미구현 |
+| [module-3-event](module-3-event/) | 정책 위반 자동 복구·알림 | eu-west-1 | EventBridge, Lambda, CloudTrail, Config, SNS | 구현 완료 |
+| [module-4-msk](module-4-msk/) | MSK 센서 스트리밍 | ap-northeast-1 | VPC, MSK, EC2, Lambda, DynamoDB, S3 | 구현 완료 |
 
 ## 공통 워크플로
 
