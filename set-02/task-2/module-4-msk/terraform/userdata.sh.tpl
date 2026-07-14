@@ -22,7 +22,7 @@ EOF
 # ===== 2) 토픽 생성 (과제지 3. MSK Topic — RF/파티션 정확 일치) =====
 # EC2 는 MSK ACTIVE 후 생성되지만 브로커 기동 직후 잠깐 실패할 수 있어 재시도
 create_topic() {
-  /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${bootstrap_servers}" \
+  /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${bootstrap_servers_iam}" \
     --command-config /opt/kafka/client.properties \
     --create --if-not-exists --topic "$1" --partitions "$2" --replication-factor "$3"
 }
@@ -47,7 +47,8 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Environment=BOOTSTRAP_SERVERS=${bootstrap_servers}
+# app 은 포트 9094 에서만 TLS 를 켜고 IAM 인증은 불가 → 비인증 TLS 엔드포인트 사용
+Environment=BOOTSTRAP_SERVERS=${bootstrap_servers_tls}
 Environment=TOPIC_RAW=${raw_topic_name}
 ExecStart=/opt/app/app
 Restart=always

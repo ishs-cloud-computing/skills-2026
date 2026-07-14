@@ -1,12 +1,12 @@
 # module-4-msk — MSK 이벤트 스트리밍 (ap-northeast-1)
 
-프라이빗 MSK(IAM 인증 전용)로 Go producer가 센서 데이터를 발행하면, Lambda consumer가 이상치를 판별해 정상은 DynamoDB에 저장하고 이상치는 alert 토픽 → SNS 알림 + S3 저장으로 분기한다.
+프라이빗 MSK(IAM 인증 + producer용 비인증 TLS 9094)로 Go producer가 센서 데이터를 발행하면, Lambda consumer가 이상치를 판별해 정상은 DynamoDB에 저장하고 이상치는 alert 토픽 → SNS 알림 + S3 저장으로 분기한다.
 
 ```
 module-4-msk/
 └── terraform/
     ├── vpc.tf security.tf iam.tf
-    ├── msk.tf                        # wsc2026-msk-cluster (3.6.0, t3.small×2, IAM only)
+    ├── msk.tf                        # wsc2026-msk-cluster (3.6.0, t3.small×2, IAM+비인증TLS)
     ├── ec2.tf userdata.sh.tpl        # producer: 토픽 생성 + Go 바이너리 systemd 'app'
     ├── dynamodb.tf s3.tf sns.tf
     ├── lambda.tf                     # consumer 2개 (python3.14) + MSK ESM
@@ -69,6 +69,7 @@ export AWS_DEFAULT_REGION=ap-northeast-1
 export NUM=$NUM
 export CLUSTER_ARN=$(jq -r '.cluster_arn.value' outputs.json)
 export BOOTSTRAP=$(jq -r '.bootstrap_brokers_sasl_iam.value' outputs.json)
+export BOOTSTRAP_TLS=$(jq -r '.bootstrap_brokers_tls.value' outputs.json)
 export BUCKET=$(jq -r '.alert_bucket.value' outputs.json)
 export BASTION_IP=$(jq -r '.bastion_public_ip.value' outputs.json)
 EOF
@@ -93,7 +94,16 @@ aws dynamodb scan --table-name wsc2026-sensor-data --max-items 3 --query "Items[
 aws s3 ls s3://$BUCKET/alert/ --recursive | head
 ```
 
-kafka 디버깅 (bastion, `ssh ec2-user@$BASTION_IP` 패스워드 로그인 후):
+bastion 접속 (PowerShell·Linux 공통, 키페어 없이 패스워드 로그인):
+
+```bash
+# BASTION_IP = terraform output -raw bastion_public_ip  (또는 .env 의 $BASTION_IP)
+ssh ec2-user@<BASTION_IP>          # 비번: Skill53## (var.ssh_password, tfvars 로 변경 가능)
+```
+
+접속이 안 되면 user_data 의 패스워드 설정이 아직 안 끝난 것 — 부팅 후 1~2분 대기.
+
+kafka 디버깅 (bastion 접속 후, IAM jar·CLI 는 user_data 로 설치됨):
 
 ```bash
 BOOTSTRAP=<outputs.json 의 bootstrap_brokers_sasl_iam>
@@ -108,7 +118,7 @@ BOOTSTRAP=<outputs.json 의 bootstrap_brokers_sasl_iam>
 | 항목 | 요구 | 구현 |
 |---|---|---|
 | task 1. VPC | msk-vpc 192.168.0.0/16, pub/priv a·d, 표의 RTB/IGW/NAT 이름 | `vpc.tf` (`variables.tf` subnets 맵) |
-| task 2. MSK | wsc2026-msk-cluster, 3.6.0, kafka.t3.small, 프라이빗, HA, IAM 전용 | `msk.tf` (mark 4-3) |
+| task 2. MSK | wsc2026-msk-cluster, 3.6.0, kafka.t3.small, 프라이빗, HA, IAM 인증 | `msk.tf` (mark 4-3) — 비인증 TLS 병행, 함정 참고 |
 | task 3. Topic | sensor-raw 3/2, sensor-alert 1/2, PK sensorId | `userdata.sh.tpl` 토픽 생성 + producer/consumer 가 sensorId 키 사용 |
 | task 4. EC2 | wsc2026-sensor-producer t3.small 프라이빗, wsc2026-msk-ec2-role 최소권한 | `ec2.tf` + `iam.tf` + `userdata.sh.tpl` (systemd `app`) |
 | task 5. Lambda | consumer 2개 python3.14, MSK 트리거, wsc2026-msk-lambda-role 최소권한 | `lambda.tf` + `lambda/*/index.py` + `iam.tf` (mark 4-2/4-4) |
@@ -120,6 +130,10 @@ BOOTSTRAP=<outputs.json 의 bootstrap_brokers_sasl_iam>
 ## 설계 근거 · 함정
 
 - **MSK 클러스터 생성 ~30분.** producer EC2 의 user_data 가 `bootstrap_brokers_sasl_iam` 을 참조해 클러스터 ACTIVE 후에만 부팅된다 — `-target` 으로 EC2 를 먼저 만들지 말 것. 토픽 생성이 첫 부팅에 자동 수행된다(실패 시 bastion 의 kafka CLI 로 수동 생성 가능).
+- **제공 producer 바이너리는 SASL/IAM 을 못 한다** → 클러스터에 `unauthenticated = true` 병행, app 에는 `bootstrap_brokers_tls`(9094). 근거·바이너리 분석: https://github.com/ishs-cloud-computing/skills-2026/issues/49
+  - 9098 을 주면 `unexpected EOF: broker appears to be expecting TLS` 로 영원히 실패. mark 4-3 은 `Sasl.Iam.Enabled` 만 확인. 이미 배포된 클러스터에도 in-place 업데이트(~15-30분, 토픽/데이터 보존).
+  - 배포된 EC2 즉시 복구: `sudo sed -i 's/:9098/:9094/g' /etc/systemd/system/app.service && sudo systemctl daemon-reload && sudo systemctl restart app`
+  - 기존 클러스터에 리스너 추가 apply 는 `bootstrap_brokers_tls` 가 빈 값이라 EC2 생성에서 `inconsistent final plan` 으로 1회 실패할 수 있다 — MSK 변경은 적용됐으므로 **apply 를 한 번 더**.
 - **mark 4-5-A 가 `temperature.S`/`status.S` 를 조회 — DynamoDB 에 Number 로 저장하면 0점.** sensor_consumer 는 전 속성을 String 으로 저장한다.
 - **`pip install -t` 를 건너뛰면 zip 에 kafka-python 이 빠져 import 실패로 조용히 죽는다** → `lambda.tf` 의 precondition 이 apply 단계에서 잡아준다. kafka-python 3.0.8 / aws-msk-iam-sasl-signer-python 1.0.2 는 pure-python 이라 Windows/리눅스 동일하게 동작 (Docker 불필요).
 - **Lambda 런타임은 python3.14 정확 일치** (mark 4-2). aws provider 6.21+ 에서 지원 — versions.tf `~> 6.54` 로 충족.

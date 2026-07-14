@@ -48,6 +48,16 @@ resource "aws_vpc_security_group_ingress_rule" "msk_iam_clients" {
   referenced_security_group_id = each.value
 }
 
+# 제공 app 바이너리는 IAM 불가·9094 전용 TLS → producer 만 비인증 TLS 리스너 접근 허용
+resource "aws_vpc_security_group_ingress_rule" "msk_tls_producer" {
+  security_group_id            = aws_security_group.msk.id
+  description                  = "TLS (unauthenticated) from producer app"
+  from_port                    = 9094
+  to_port                      = 9094
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = aws_security_group.producer.id
+}
+
 # ----- Producer EC2 (프라이빗 — 인바운드 없음, SSM 접속) -----
 
 resource "aws_security_group" "producer" {
@@ -75,6 +85,14 @@ resource "aws_security_group" "producer" {
     description     = "Kafka SASL/IAM to MSK"
     from_port       = 9098
     to_port         = 9098
+    protocol        = "tcp"
+    security_groups = [aws_security_group.msk.id]
+  }
+
+  egress {
+    description     = "Kafka TLS to MSK (app binary)"
+    from_port       = 9094
+    to_port         = 9094
     protocol        = "tcp"
     security_groups = [aws_security_group.msk.id]
   }

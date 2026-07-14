@@ -12,18 +12,21 @@ resource "aws_instance" "producer" {
   vpc_security_group_ids = [aws_security_group.producer.id]
   iam_instance_profile   = aws_iam_instance_profile.producer.name
 
+  # 토픽 생성 CLI 는 IAM(9098), 제공 app 바이너리는 비인증 TLS(9094)만 지원 — msk.tf 참고
+  user_data_replace_on_change = true
   user_data = templatefile("${path.module}/userdata.sh.tpl", {
-    bootstrap_servers    = aws_msk_cluster.this.bootstrap_brokers_sasl_iam
-    kafka_version        = var.kafka_version
-    msk_iam_auth_version = var.msk_iam_auth_version
-    raw_topic_name       = var.topic_raw.name
-    raw_partitions       = var.topic_raw.partitions
-    raw_rf               = var.topic_raw.replication_factor
-    alert_topic_name     = var.topic_alert.name
-    alert_partitions     = var.topic_alert.partitions
-    alert_rf             = var.topic_alert.replication_factor
-    app_bucket           = aws_s3_bucket.alert.id
-    app_key              = aws_s3_object.app.key
+    bootstrap_servers_iam = aws_msk_cluster.this.bootstrap_brokers_sasl_iam
+    bootstrap_servers_tls = aws_msk_cluster.this.bootstrap_brokers_tls
+    kafka_version         = var.kafka_version
+    msk_iam_auth_version  = var.msk_iam_auth_version
+    raw_topic_name        = var.topic_raw.name
+    raw_partitions        = var.topic_raw.partitions
+    raw_rf                = var.topic_raw.replication_factor
+    alert_topic_name      = var.topic_alert.name
+    alert_partitions      = var.topic_alert.partitions
+    alert_rf              = var.topic_alert.replication_factor
+    app_bucket            = aws_s3_bucket.alert.id
+    app_key               = aws_s3_object.app.key
   })
 
   metadata_options {

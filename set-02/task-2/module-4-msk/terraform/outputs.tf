@@ -8,6 +8,11 @@ output "bootstrap_brokers_sasl_iam" {
   value       = aws_msk_cluster.this.bootstrap_brokers_sasl_iam
 }
 
+output "bootstrap_brokers_tls" {
+  description = "비인증 TLS 부트스트랩 브로커 :9094 (제공 producer app 전용)"
+  value       = aws_msk_cluster.this.bootstrap_brokers_tls
+}
+
 output "alert_bucket" {
   description = "wsc2026-sensor-alert-bucket-<비번호> (mark 4-1)"
   value       = aws_s3_bucket.alert.id
