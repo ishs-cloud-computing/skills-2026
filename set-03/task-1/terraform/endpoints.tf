@@ -15,5 +15,5 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [for k in local.private_subnet_keys : aws_route_table.app[k].id]
 
-  tags = { Name = "wsc2026-vpce-s3" }
+  tags = { Name = "${var.name_prefix}-vpce-s3" }
 }

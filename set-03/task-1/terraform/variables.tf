@@ -1,3 +1,9 @@
+variable "name_prefix" {
+  description = "리소스 이름 공통 접두어 — 대회 당일 이름 변경 대비 (작업 규칙 5). k8s/eksctl 쪽 치환은 README 참고"
+  type        = string
+  default     = "wsc2026"
+}
+
 variable "region" {
   description = "모든 리소스를 생성할 리전 (유의사항 9)"
   type        = string

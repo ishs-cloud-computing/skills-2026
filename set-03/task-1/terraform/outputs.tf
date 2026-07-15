@@ -1,4 +1,5 @@
-# bastion 에서 terraform output -json > outputs.json 으로 내려 jq 로 소비한다.
+# terraform output -json > outputs.json 으로 내려 본 PC(eksctl 렌더)와
+# VPC CloudShell(jq)에서 소비한다.
 
 output "account_id" {
   value = local.account_id

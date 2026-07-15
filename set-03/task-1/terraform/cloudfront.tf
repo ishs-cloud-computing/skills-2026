@@ -13,25 +13,25 @@
 
 data "aws_lb" "app" {
   count = var.enable_cdn ? 1 : 0
-  name  = "wsc2026-app-alb"
+  name  = "${var.name_prefix}-app-alb"
 }
 
 resource "aws_cloudfront_origin_access_control" "s3" {
-  name                              = "wsc2026-s3-oac"
+  name                              = "${var.name_prefix}-s3-oac"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
 
 resource "aws_cloudfront_origin_access_control" "lambda" {
-  name                              = "wsc2026-lambda-oac"
+  name                              = "${var.name_prefix}-lambda-oac"
   origin_access_control_origin_type = "lambda"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
 
 resource "aws_cloudfront_function" "booking_rewrite" {
-  name    = "wsc2026-booking-rewrite"
+  name    = "${var.name_prefix}-booking-rewrite"
   runtime = "cloudfront-js-2.0"
   comment = "Rewrite /booking to app path /v1/book"
   publish = true
@@ -62,7 +62,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 
   enabled             = true
   is_ipv6_enabled     = false
-  comment             = "wsc2026-cdn"
+  comment             = "${var.name_prefix}-cdn"
   price_class         = "PriceClass_All"
   default_root_object = "index.html"
   web_acl_id          = aws_wafv2_web_acl.wsc2026.arn
@@ -148,5 +148,5 @@ resource "aws_cloudfront_distribution" "cdn" {
     cloudfront_default_certificate = true
   }
 
-  tags = { Name = "wsc2026-cdn" }
+  tags = { Name = "${var.name_prefix}-cdn" }
 }

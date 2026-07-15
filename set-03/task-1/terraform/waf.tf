@@ -9,7 +9,7 @@
 
 resource "aws_wafv2_web_acl" "wsc2026" {
   provider = aws.use1
-  name     = "wsc2026-waf"
+  name     = "${var.name_prefix}-waf"
   scope    = "CLOUDFRONT"
 
   default_action {
@@ -17,7 +17,7 @@ resource "aws_wafv2_web_acl" "wsc2026" {
   }
 
   rule {
-    name     = "wsc2026-sqli"
+    name     = "${var.name_prefix}-sqli"
     priority = 1
     action {
       block {}
@@ -36,13 +36,13 @@ resource "aws_wafv2_web_acl" "wsc2026" {
     }
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "wsc2026-sqli"
+      metric_name                = "${var.name_prefix}-sqli"
       sampled_requests_enabled   = true
     }
   }
 
   rule {
-    name     = "wsc2026-xss"
+    name     = "${var.name_prefix}-xss"
     priority = 2
     action {
       block {}
@@ -64,13 +64,13 @@ resource "aws_wafv2_web_acl" "wsc2026" {
     }
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "wsc2026-xss"
+      metric_name                = "${var.name_prefix}-xss"
       sampled_requests_enabled   = true
     }
   }
 
   rule {
-    name     = "wsc2026-rate-limit"
+    name     = "${var.name_prefix}-rate-limit"
     priority = 3
     action {
       block {}
@@ -84,16 +84,16 @@ resource "aws_wafv2_web_acl" "wsc2026" {
     }
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "wsc2026-rate-limit"
+      metric_name                = "${var.name_prefix}-rate-limit"
       sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "wsc2026-waf"
+    metric_name                = "${var.name_prefix}-waf"
     sampled_requests_enabled   = true
   }
 
-  tags = { Name = "wsc2026-waf" }
+  tags = { Name = "${var.name_prefix}-waf" }
 }

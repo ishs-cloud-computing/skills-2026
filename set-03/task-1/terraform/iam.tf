@@ -31,7 +31,7 @@ data "aws_iam_policy_document" "pod_identity_trust" {
 
 # ----- Book App Pod (wsc2026/wsc2026-book-sa) : PutItem 최소 권한 (요구사항 8) -----
 resource "aws_iam_role" "book_pod" {
-  name               = "wsc2026-book-pod-role"
+  name               = "${var.name_prefix}-book-pod-role"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
 }
 
@@ -52,7 +52,7 @@ data "aws_iam_policy_document" "book_pod" {
 }
 
 resource "aws_iam_policy" "book_pod" {
-  name   = "wsc2026-book-pod-policy"
+  name   = "${var.name_prefix}-book-pod-policy"
   policy = data.aws_iam_policy_document.book_pod.json
 }
 
@@ -73,7 +73,7 @@ data "aws_iam_policy_document" "lambda_assume" {
 }
 
 resource "aws_iam_role" "book_function" {
-  name               = "wsc2026-book-function-role"
+  name               = "${var.name_prefix}-book-function-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
@@ -105,7 +105,7 @@ data "aws_iam_policy_document" "book_function" {
 }
 
 resource "aws_iam_policy" "book_function" {
-  name   = "wsc2026-book-function-policy"
+  name   = "${var.name_prefix}-book-function-policy"
   policy = data.aws_iam_policy_document.book_function.json
 }
 
@@ -116,12 +116,12 @@ resource "aws_iam_role_policy_attachment" "book_function" {
 
 # ----- AWS Load Balancer Controller (kube-system/aws-load-balancer-controller) -----
 resource "aws_iam_role" "lbc" {
-  name               = "wsc2026-lbc-role"
+  name               = "${var.name_prefix}-lbc-role"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
 }
 
 resource "aws_iam_policy" "lbc" {
-  name   = "wsc2026-lbc-policy"
+  name   = "${var.name_prefix}-lbc-policy"
   policy = file("${path.module}/iam/lbc-policy.json")
 }
 
@@ -132,7 +132,7 @@ resource "aws_iam_role_policy_attachment" "lbc" {
 
 # ----- Fluent Bit (observability/fluent-bit) : 앱 로그 → CloudWatch Logs -----
 resource "aws_iam_role" "fluentbit" {
-  name               = "wsc2026-fluentbit-role"
+  name               = "${var.name_prefix}-fluentbit-role"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
 }
 
@@ -149,7 +149,7 @@ data "aws_iam_policy_document" "fluentbit" {
 }
 
 resource "aws_iam_policy" "fluentbit" {
-  name   = "wsc2026-fluentbit-policy"
+  name   = "${var.name_prefix}-fluentbit-policy"
   policy = data.aws_iam_policy_document.fluentbit.json
 }
 
@@ -160,7 +160,7 @@ resource "aws_iam_role_policy_attachment" "fluentbit" {
 
 # ----- Grafana (observability/monitoring-grafana) : CloudWatch 데이터소스 -----
 resource "aws_iam_role" "grafana" {
-  name               = "wsc2026-grafana-role"
+  name               = "${var.name_prefix}-grafana-role"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
 }
 
@@ -188,7 +188,7 @@ data "aws_iam_policy_document" "grafana" {
 }
 
 resource "aws_iam_policy" "grafana" {
-  name   = "wsc2026-grafana-policy"
+  name   = "${var.name_prefix}-grafana-policy"
   policy = data.aws_iam_policy_document.grafana.json
 }
 

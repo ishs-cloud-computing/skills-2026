@@ -15,7 +15,7 @@ resource "aws_vpc" "this" {
 
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
-  tags   = { Name = "wsc2026-skills-igw" }
+  tags   = { Name = "${var.name_prefix}-skills-igw" }
 }
 
 resource "aws_subnet" "this" {
@@ -42,7 +42,7 @@ resource "aws_subnet" "this" {
 # ----- Public Route Table : 공용 wsc2026-skills-hub-rtb (IGW) -----
 resource "aws_route_table" "hub" {
   vpc_id = aws_vpc.this.id
-  tags   = { Name = "wsc2026-skills-hub-rtb" }
+  tags   = { Name = "${var.name_prefix}-skills-hub-rtb" }
 }
 
 resource "aws_route" "hub_igw" {
@@ -68,14 +68,14 @@ locals {
 resource "aws_eip" "nat" {
   for_each = toset(local.private_subnet_keys)
   domain   = "vpc"
-  tags     = { Name = "wsc2026-skills-nat-eip-${local.private_az_suffix[each.key]}" }
+  tags     = { Name = "${var.name_prefix}-skills-nat-eip-${local.private_az_suffix[each.key]}" }
 }
 
 resource "aws_nat_gateway" "this" {
   for_each      = toset(local.private_subnet_keys)
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.this[local.public_by_az[var.subnets[each.key].az]].id
-  tags          = { Name = "wsc2026-skills-nat-${local.private_az_suffix[each.key]}" }
+  tags          = { Name = "${var.name_prefix}-skills-nat-${local.private_az_suffix[each.key]}" }
   depends_on    = [aws_internet_gateway.this]
 }
 
@@ -83,7 +83,7 @@ resource "aws_nat_gateway" "this" {
 resource "aws_route_table" "app" {
   for_each = toset(local.private_subnet_keys)
   vpc_id   = aws_vpc.this.id
-  tags     = { Name = "wsc2026-skills-app-rtb-${local.private_az_suffix[each.key]}" }
+  tags     = { Name = "${var.name_prefix}-skills-app-rtb-${local.private_az_suffix[each.key]}" }
 }
 
 resource "aws_route" "app_nat" {

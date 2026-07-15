@@ -16,7 +16,7 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
 
   # 요구사항 9: wsc2026-static-<임의의 영문 4자리>-<본인 비번호>-bucket
-  bucket_name = "wsc2026-static-${var.bucket_suffix}-${var.player_number}-bucket"
+  bucket_name = "${var.name_prefix}-static-${var.bucket_suffix}-${var.player_number}-bucket"
 
   public_subnet_keys  = [for k, v in var.subnets : k if v.tier == "public"]
   private_subnet_keys = [for k, v in var.subnets : k if v.tier == "private"]

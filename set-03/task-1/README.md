@@ -2,7 +2,9 @@
 
 EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / Kubernetes manifest** 로 구성한 결과물.
 모든 리소스는 서울(`ap-northeast-2`) 리전 기준(단, WAF 는 scope=CLOUDFRONT 라 `us-east-1`).
-`terraform apply` 는 본 PC, EKS 구성(eksctl/helm/kubectl)은 **작업용 SSM bastion**, 채점은 **CloudShell(mark-sg)** 에서 한다.
+`terraform`·`eksctl` 은 **본 PC(Windows PowerShell)**, 컨테이너 빌드는 **일반 CloudShell**,
+kubectl/helm 작업과 채점은 **CloudShell VPC environment(`mark-sg`)** 에서 한다.
+본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
 
 ## 디렉토리 구조
 
@@ -20,19 +22,27 @@ k8s/
   ├─ logging/     # Fluent Bit DaemonSet (logfmt → Reference02 JSON + log_to_metrics)
   └─ monitoring/  # kube-prometheus-stack values, PrometheusRule 6종, dashboard.json
 app/Dockerfile           # Book App 컨테이너 (alpine + book). book 바이너리는 빌드 시 shared 에서 복사
+README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7 명령 (CloudShell 단계는 본 문서 공통)
 ```
 
 > 제공된 배포파일(`book`, `index.html`, `main.jpeg`)은 repo 공용 `shared/provided/task-1/` 에 있다.
-> S3 정적 업로드(`s3.tf`)는 이 경로를 직접 읽고, App 이미지 빌드는 `book` 을 `app/` 로 복사해 쓴다.
+> S3 정적 업로드(`s3.tf`)는 이 경로를 직접 읽고, App 이미지 빌드는 `book` 을 CloudShell 에 올려 쓴다.
 
 ## 배포 순서
 
-> **머신 3분할** — ① **본 PC**: `terraform apply`(2회) + 컨테이너 빌드. ② **작업용 SSM bastion**(임시 EC2): eksctl/helm/kubectl.
-> ③ **CloudShell**(VPC environment + `mark-sg`): 채점 전용(채점 유의 10·11).
-> **모든 CLI 는 terraform 과 같은 자격증명으로 실행한다** — KMS 5키의 관리자 principal 이 배포자 신원뿐이다(유의사항 10: root/kms:* 금지).
+> **머신 2분할** — ① **본 PC**(Windows PowerShell): `terraform apply`(2회) + `eksctl create cluster`.
+> ② **CloudShell**: 컨테이너 빌드는 **일반 CloudShell**(step 2), kubectl/helm 작업·E2E·채점은
+> **VPC environment**(`mark-sg` — 채점 유의 10·11과 동일 환경, step 4~9).
+> **모든 CLI 는 terraform 과 같은 자격증명(wsc2026-admin)으로 실행한다** — KMS 5키의 관리자 principal 이 배포자 신원뿐이다(유의사항 10: root/kms:* 금지).
 > CloudFront/WAF 는 LBC 가 만드는 ALB 에 의존하므로 **terraform 을 2회(1차 → 클러스터/ingress → 2차)** 적용한다.
+> fully-private 클러스터여도 eksctl 은 생성 중 퍼블릭 엔드포인트를 임시로 켰다가 완료 시 닫으므로
+> **생성은 본 PC 에서 가능**하다(eksctl 공식 문서 Limitations). 생성 이후 K8s API 작업(kubectl/helm/채점)은 VPC 안에서만 된다.
 
-### 0) [본 PC] 작업용 IAM 사용자 생성 + 사전 변수
+### 0) [본 PC·PowerShell] 도구 준비 + 작업용 IAM 사용자 + 사전 변수
+
+> **필요 도구**: AWS CLI v2(msi) · Terraform · eksctl (zip 해제 → PATH 등록). `tar`·`curl` 은
+> Windows 10+ 기본 내장, jq 불필요(`ConvertFrom-Json` 내장), **Docker 불필요**(빌드는 step 2 일반 CloudShell).
+> 본 PC 는 기본 미설치 + 재시동 시 초기화(CLAUDE.md 환경)이므로 매 세션 준비한다.
 
 > **대회는 root 계정을 지급한다.** 그러나 유의사항 10(키 정책에 root 금지) 때문에 KMS 키의
 > 관리자는 IAM 신원이어야 하고, 키를 쓰는 모든 작업(terraform/eksctl/docker push/채점)도
@@ -40,52 +50,66 @@ app/Dockerfile           # Book App 컨테이너 (alpine + book). book 바이너
 > 를 만들어 이후 모든 단계를 이 신원으로 실행한다. (root 로 apply 하면
 > `terraform_data.kms_admin_guard` 가 plan 단계에서 차단한다.)
 
-```bash
+```powershell
 # root 자격증명으로 1회만 실행
 aws iam create-user --user-name wsc2026-admin
-aws iam attach-user-policy --user-name wsc2026-admin \
-  --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
-aws iam create-access-key --user-name wsc2026-admin \
-  --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text
+aws iam attach-user-policy --user-name wsc2026-admin --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+aws iam create-access-key --user-name wsc2026-admin --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text
 
-# 출력된 키로 프로파일 등록 후 이 신원으로 전환
+# 출력된 키로 프로파일 등록 — CloudShell 단계(2·4)에서도 같은 키를 입력하므로 잘 보관
 aws configure --profile wsc2026        # region = ap-northeast-2
-export AWS_PROFILE=wsc2026
+
+# local .env.ps1 — 셸 재시작에도 재사용 (작업 규칙 6, .gitignore 등록됨)
+@'
+$env:AWS_PROFILE = "wsc2026"
+$env:AWS_DEFAULT_REGION = "ap-northeast-2"
+'@ | Set-Content .env.ps1 -Encoding Ascii
+. .\.env.ps1
 aws sts get-caller-identity            # arn:...:user/wsc2026-admin 확인
 
-export AWS_DEFAULT_REGION=ap-northeast-2
-export NUM=<선수비번호>       # S3 버킷 이름에 사용
-export RAND4=<임의영문4자리>  # 예: abcd
+# 대회 당일 바뀌는 값은 tfvars 로 — 1·2차 apply 가 같은 값을 쓴다 (-var 재입력 금지)
+# player_number = 선수 비번호(S3 버킷 이름에 사용), bucket_suffix = 소문자 영문 4자리(예: abcd)
+# 주의: 한글 주석을 넣으면 PS5.1 이 CP949 로 저장해 terraform 이 invalid UTF-8 로 실패한다
+@'
+player_number = "00"
+bucket_suffix = "abcd"
+'@ | Set-Content terraform\terraform.tfvars -Encoding Ascii
 ```
 
-### 1) [본 PC] Terraform 1차 (네트워크 + AWS 리소스, CDN 제외)
+### 1) [본 PC·PowerShell] Terraform 1차 (네트워크 + AWS 리소스, CDN 제외)
 
-```bash
+```powershell
 cd terraform
 terraform init
-terraform apply -var="player_number=$NUM" -var="bucket_suffix=$RAND4"
-terraform output -json > ../outputs.json   # 작업 호스트로 넘길 값 (tfstate 는 넘기지 않는다)
+terraform apply
+# 주의: PS5.1 의 `>` 리다이렉트는 UTF-16 으로 저장돼 CloudShell 의 jq 가 못 읽는다 — Ascii 명시
+terraform output -json | Set-Content ..\outputs.json -Encoding Ascii
 
-# bastion 은 파일 업로드가 안 되므로 S3 를 릴레이로 쓴다 (_transfer/ 는 채점 전 삭제 — step 10)
-BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
-aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
-tar czf /tmp/wsc2026-cs.tgz -C .. eksctl k8s mark.sh
-aws s3 cp /tmp/wsc2026-cs.tgz "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
+# CloudShell VPC environment 는 파일 업로드 UI 가 없어 S3 를 릴레이로 쓴다 (_transfer/ 는 채점 전 삭제 — step 9)
+$o = Get-Content ..\outputs.json | ConvertFrom-Json
+$BUCKET = $o.s3_bucket_name.value
+aws s3 cp ..\outputs.json "s3://$BUCKET/_transfer/outputs.json"
+tar czf "$env:TEMP\wsc2026-cs.tgz" -C .. k8s mark.sh
+aws s3 cp "$env:TEMP\wsc2026-cs.tgz" "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
 ```
 
 > root 자격증명으로는 apply 가 차단된다(키 정책에 root 금지 — `terraform_data.kms_admin_guard`).
-> 반드시 step 0 의 `wsc2026-admin` 신원(`AWS_PROFILE=wsc2026`)으로 실행한다.
+> 반드시 step 0 의 `wsc2026-admin` 신원(`$env:AWS_PROFILE = "wsc2026"`)으로 실행한다.
 
-### 2) [본 PC] 컨테이너 이미지 빌드 & ECR push (v1.0.0 단일 태그)
+### 2) [일반 CloudShell] 컨테이너 이미지 빌드 & ECR push (v1.0.0 단일 태그)
 
 > **latest 태그 금지** — mark 3-1 이 이미지 태그 목록 `v1.0.0` 단독 출력을 요구한다.
+> 콘솔에서 **일반 CloudShell**(VPC environment 아님 — Docker·업로드 UI 지원, 홈 1GB 영속)을 열고,
+> **Actions → Upload file** 로 `app/Dockerfile` 과 `shared/provided/task-1/book` 두 파일을 올린다.
 
 ```bash
-cd ../app
-ECR=$(jq -r '.ecr_repository_url.value' ../outputs.json)
-cp ../../../shared/provided/task-1/book ./book   # 제공 바이너리 (수정 금지)
+aws configure   # step 0 의 wsc2026-admin 키, region = ap-northeast-2 — 기본 신원(root)로는 ECR CMK 사용 불가
+mkdir -p ~/book-image && mv ~/Dockerfile ~/book ~/book-image/ && cd ~/book-image
+
+ECR=$(aws ecr describe-repositories --repository-names wsc2026-book-ecr --query 'repositories[0].repositoryUri' --output text)
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin "${ECR%/*}"
-docker buildx build --platform linux/amd64 --provenance=false -t "$ECR:v1.0.0" --push .
+docker build -t "$ECR:v1.0.0" .    # CloudShell 은 x86_64 — --platform 불필요, 태그도 v1.0.0 하나만 생성
+docker push "$ECR:v1.0.0"
 
 # scan 완료 / 취약점 0 확인 (요구사항 6)
 aws ecr wait image-scan-complete --repository-name wsc2026-book-ecr --image-id imageTag=v1.0.0 || \
@@ -96,89 +120,75 @@ aws ecr describe-image-scan-findings --repository-name wsc2026-book-ecr --image-
 aws ecr list-images --repository-name wsc2026-book-ecr --query 'imageIds[].imageTag'   # ["v1.0.0"] 만
 ```
 
-### 3) [본 PC] 작업용 SSM bastion 생성 (임시)
+### 3) [본 PC·PowerShell] EKS 클러스터 (eksctl)
 
-> private 서브넷 EC2 + **`mark-sg` 공유** + SSM 접속(인바운드 0). EKS API(443)는 cp-extra SG 가 `mark-sg` 에 열어두므로 bastion 에서 바로 kubectl 가능. 인스턴스 프로파일은 SSM 전용. **채점 전 삭제**(step 10).
+```powershell
+cd ..\eksctl
+# terraform outputs → 환경변수 (cluster.yaml 의 ${VAR} 자리)
+$o = Get-Content ..\outputs.json | ConvertFrom-Json
+$env:VPC_ID             = $o.vpc_id.value
+$env:CP_EXTRA_SG_ID     = $o.eks_cp_extra_sg_id.value
+$env:NODE_SHARED_SG_ID  = $o.eks_shared_node_sg_id.value
+$env:PRIV_SUBNET_A      = $o.private_subnet_ids.value.'wsc2026-skills-app-sub-a'
+$env:PRIV_SUBNET_B      = $o.private_subnet_ids.value.'wsc2026-skills-app-sub-b'
+$env:EKS_KMS_ARN        = $o.eks_kms_arn.value
+$env:BOOK_POD_ROLE_ARN  = $o.pod_identity_role_arns.value.book_pod
+$env:LBC_ROLE_ARN       = $o.pod_identity_role_arns.value.lbc
+$env:FLUENTBIT_ROLE_ARN = $o.pod_identity_role_arns.value.fluentbit
+$env:GRAFANA_ROLE_ARN   = $o.pod_identity_role_arns.value.grafana
 
-```bash
-cd ../terraform
-SUBNET=$(jq -r '.private_subnet_ids.value["wsc2026-skills-app-sub-a"]' ../outputs.json)
-MARK_SG=$(jq -r '.mark_sg_id.value' ../outputs.json)
-AMI=$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --query Parameter.Value --output text)
+# ${VAR} 렌더 (PowerShell 5.1 호환)
+$c = Get-Content cluster.yaml -Raw
+[regex]::Matches($c, '\$\{(\w+)\}') | ForEach-Object { $c = $c.Replace($_.Value, (Get-Item "env:$($_.Groups[1].Value)").Value) }
+$c | Set-Content cluster.rendered.yaml -Encoding Ascii
+Select-String '\$\{' cluster.rendered.yaml     # 출력이 없어야 함 (치환 누락 검사)
 
-aws iam create-role --role-name wsc2026-bastion-role \
-  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-aws iam attach-role-policy --role-name wsc2026-bastion-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-aws iam create-instance-profile --instance-profile-name wsc2026-bastion-profile
-aws iam add-role-to-instance-profile --instance-profile-name wsc2026-bastion-profile --role-name wsc2026-bastion-role
-sleep 10   # instance profile 전파 대기
-
-BID=$(aws ec2 run-instances --image-id "$AMI" --instance-type t3.small \
-  --iam-instance-profile Name=wsc2026-bastion-profile \
-  --subnet-id "$SUBNET" --security-group-ids "$MARK_SG" \
-  --metadata-options HttpTokens=required,HttpEndpoint=enabled \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=wsc2026-bastion}]' \
-  --query 'Instances[0].InstanceId' --output text)
-echo "bastion=$BID"
-
-aws ssm start-session --target "$BID"   # 1–2분 후 접속 (session-manager-plugin 필요)
+eksctl create cluster -f cluster.rendered.yaml   # 약 20분. 생성 중 퍼블릭 엔드포인트 임시 활성 → 완료 시 자동 private 전환
+aws eks describe-cluster --name wsc2026-eks-cluster `
+  --query 'cluster.resourcesVpcConfig.[endpointPublicAccess,endpointPrivateAccess]'   # false, true
 ```
 
-### 4) [bastion] 도구 설치 · 자격증명 · 파일 수신 · 환경 변수
+> 생성이 중간에 끊기면 퍼블릭 엔드포인트가 열린 채 남을 수 있다 — 위 확인이 `true` 면:
+> `aws eks update-cluster-config --name wsc2026-eks-cluster --resources-vpc-config endpointPublicAccess=false`
+>
+> addon 버전은 지정하지 않는다 — eksctl 이 클러스터 버전의 default 버전을 설치한다 (작업 규칙 2: EKS Addon 버전 미고정).
+> 생성 완료 후 본 PC 에서는 kubectl 이 불가하다(private-only) — 이후 모든 K8s 작업은 step 4 의 VPC CloudShell.
+
+### 4) [VPC CloudShell] 환경 생성 + 셋업 (세션 초기화 시 이 블록 재실행)
+
+> 콘솔 CloudShell → **Actions → Create VPC environment** → VPC `wsc2026-skills-vpc`,
+> Subnet `wsc2026-skills-app-sub-a`, SG `mark-sg`. **이 환경이 그대로 채점 환경이다**(채점 유의 11) —
+> 작업 내내 채점 경로(mark-sg → EKS API, wsc2026-admin 신원)를 상시 검증하는 셈.
+> **VPC environment 홈은 세션 종료 시 삭제된다(비영속)** — 재접속하면 아래 블록을 통째로 재실행한다.
 
 ```bash
-sudo dnf install -y jq tar gzip
-curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && sudo install -m755 /tmp/eksctl /usr/local/bin/eksctl
-curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo install -m755 kubectl /usr/local/bin/kubectl
+# ---- VPC CloudShell 셋업 (멱등 — 재접속 시 통째로 재실행) ----
+aws configure   # step 0 의 wsc2026-admin 키, region = ap-northeast-2 (terraform 과 동일 신원!)
+sudo curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo chmod +x /usr/local/bin/kubectl
 curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-aws configure   # step 0 의 wsc2026-admin Access Key/Secret (terraform 과 동일 신원!), region = ap-northeast-2
-
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
 mkdir -p ~/wsc2026 && cd ~/wsc2026
 aws s3 cp "s3://$BUCKET/_transfer/wsc2026-cs.tgz" . && tar xzf wsc2026-cs.tgz
 aws s3 cp "s3://$BUCKET/_transfer/outputs.json" .
 
-# 환경 변수 — 재접속에도 유지되도록 .bashrc 에 등록 (작업 규칙 6)
 cat > ~/.wsc2026-env <<EOF
 export AWS_DEFAULT_REGION=ap-northeast-2
-export ACCOUNT_ID=$(jq -r '.account_id.value' outputs.json)
 export VPC_ID=$(jq -r '.vpc_id.value' outputs.json)
-export EKS_KMS_ARN=$(jq -r '.eks_kms_arn.value' outputs.json)
-export PRIV_SUBNET_A=$(jq -r '.private_subnet_ids.value["wsc2026-skills-app-sub-a"]' outputs.json)
-export PRIV_SUBNET_B=$(jq -r '.private_subnet_ids.value["wsc2026-skills-app-sub-b"]' outputs.json)
-export CP_EXTRA_SG_ID=$(jq -r '.eks_cp_extra_sg_id.value' outputs.json)
-export NODE_SHARED_SG_ID=$(jq -r '.eks_shared_node_sg_id.value' outputs.json)
-export BOOK_POD_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.book_pod' outputs.json)
-export LBC_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.lbc' outputs.json)
-export FLUENTBIT_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.fluentbit' outputs.json)
-export GRAFANA_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.grafana' outputs.json)
 export ECR=$(jq -r '.ecr_repository_url.value' outputs.json)
 EOF
-grep -qxF 'source ~/.wsc2026-env' ~/.bashrc || echo 'source ~/.wsc2026-env' >> ~/.bashrc
 source ~/.wsc2026-env
-```
 
-### 5) [bastion] EKS 클러스터 (eksctl)
-
-```bash
-cd eksctl
-python3 -c 'import os,sys;sys.stdout.write(os.path.expandvars(sys.stdin.read()))' < cluster.yaml > cluster.rendered.yaml
-eksctl create cluster -f cluster.rendered.yaml     # 약 20분
 aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
-
-# kubelet clusterDomain 반영 확인 (wsc2026.skills.local 이어야 함)
+# kubelet clusterDomain 확인 (wsc2026.skills.local — cp-extra SG 가 mark-sg → API 443 을 허용)
 NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 kubectl get --raw "/api/v1/nodes/$NODE/proxy/configz" | jq -r .kubeletconfig.clusterDomain
 ```
 
-> addon 버전은 `eksctl utils describe-addon-versions --kubernetes-version 1.35 --name <addon>` 로 확인 후 cluster.yaml 에 고정한다.
-
-### 6) [bastion] CoreDNS 내부 도메인 패치 + 기본 k8s 리소스
+### 5) [VPC CloudShell] CoreDNS 내부 도메인 패치 + 기본 k8s 리소스
 
 ```bash
-cd ../k8s
+cd ~/wsc2026/k8s
 kubectl apply -f 00-namespaces.yaml
 kubectl apply -f 01-coredns-wsc2026.yaml
 kubectl -n kube-system rollout restart deploy/coredns
@@ -189,10 +199,10 @@ kubectl run dns-test --rm -it --restart=Never --image=busybox \
   -- nslookup kubernetes.default.svc.wsc2026.skills.local
 ```
 
-### 7) [bastion] Helm 애드온 + 앱/관측성 리소스
+### 6) [VPC CloudShell] Helm 애드온 + 앱/관측성 리소스
 
 ```bash
-# 7-1) AWS Load Balancer Controller (SA 는 Pod Identity 로 권한 획득)
+# 6-1) AWS Load Balancer Controller (SA 는 Pod Identity 로 권한 획득)
 helm repo add eks https://aws.github.io/eks-charts && helm repo update
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --version 1.13.4 -n kube-system \
@@ -202,17 +212,17 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set region=ap-northeast-2 --set vpcId="$VPC_ID" \
   --set nodeSelector.wsc2026/node=addon
 
-# 7-2) kube-prometheus-stack (release: monitoring — mark 11-1 파드 이름 카운트와 정합)
+# 6-2) kube-prometheus-stack (release: monitoring — mark 11-1 파드 이름 카운트와 정합)
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --version 87.2.1 -n observability -f monitoring/kube-prometheus-stack-values.yaml
 
-# 7-3) App (ECR 치환 → apply)
+# 6-3) App (ECR 치환 → apply)
 kubectl apply -f app/00-serviceaccount.yaml -f app/01-configmap.yaml
 sed "s|<ECR_REPOSITORY_URL>|$ECR|g" app/02-deployment.yaml | kubectl apply -f -
 kubectl apply -f app/03-service.yaml -f app/04-pdb.yaml -f app/05-ingress.yaml
 
-# 7-4) 로깅 + 알람 룰 + 대시보드
+# 6-4) 로깅 + 알람 룰 + 대시보드
 kubectl apply -f logging/fluent-bit.yaml
 kubectl apply -f monitoring/prometheus-rules.yaml
 kubectl create configmap wsc2026-grafana-dashboard -n observability \
@@ -224,18 +234,18 @@ kubectl get ingress -n wsc2026    # ADDRESS 에 wsc2026-app-alb-...elb.amazonaws
 aws elbv2 describe-load-balancers --names wsc2026-app-alb --query 'LoadBalancers[0].State.Code'   # active
 ```
 
-### 8) [본 PC] Terraform 2차 (CloudFront / WAF / 버킷 정책 / Lambda permission)
+### 7) [본 PC·PowerShell] Terraform 2차 (CloudFront / WAF / 버킷 정책 / Lambda permission)
 
-```bash
-cd terraform
-terraform apply -var="player_number=$NUM" -var="bucket_suffix=$RAND4" -var="enable_cdn=true"
+```powershell
+cd ..\terraform
+terraform apply -var="enable_cdn=true"     # player_number/bucket_suffix 는 tfvars (step 0)
 terraform output -raw cloudfront_domain    # 이후 $CF 로 사용
 ```
 
-### 9) [bastion] E2E 검증 + 실측 확인
+### 8) [VPC CloudShell] E2E 검증 + 실측 확인
 
 ```bash
-CF=<cloudfront_domain>   # step 8 출력
+CF=<cloudfront_domain>   # step 7 출력
 # 루트(정적 페이지) 200
 curl -s -o /dev/null -w '%{http_code}\n' "https://$CF/"
 # POST /booking → booking_id
@@ -261,35 +271,21 @@ curl -s -u admin:'Skills$#$@!' "http://$GRAFANA_LB/api/search?query=wsc2026" | j
 aws logs tail /wsc2026/eks/book-app --since 10m | head -5
 ```
 
-### 10) [본 PC] 채점 전 정리
+### 9) [VPC CloudShell] 채점 전 정리 + 채점
+
+> mark.sh 는 step 4 에서 `~/wsc2026/` 에 이미 풀려 있다. 세션이 초기화됐으면 step 4 블록을
+> 재실행하고, `_transfer` 를 이미 지운 뒤라면 mark.sh 만 레포 원본을 붙여넣는다(`vi ~/wsc2026/mark.sh`).
+> 이 CloudShell(mark-sg + wsc2026-admin 신원)이 곧 채점 환경 — 기본 신원(root)로 돌리면
+> check_kms 5건·S3 조회·kubectl 이 전부 실패하므로 `aws configure` 상태를 유지한다.
 
 ```bash
-BID=$(aws ec2 describe-instances --filters Name=tag:Name,Values=wsc2026-bastion Name=instance-state-name,Values=running \
-  --query "Reservations[].Instances[].InstanceId" --output text)
-aws ec2 terminate-instances --instance-ids "$BID"
-aws ec2 wait instance-terminated --instance-ids "$BID"
-aws iam remove-role-from-instance-profile --instance-profile-name wsc2026-bastion-profile --role-name wsc2026-bastion-role
-aws iam delete-instance-profile --instance-profile-name wsc2026-bastion-profile
-aws iam detach-role-policy --role-name wsc2026-bastion-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-aws iam delete-role --role-name wsc2026-bastion-role
-
 # S3 릴레이 제거 (static/ 만 남긴다 — mark 6-1)
 BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
 aws s3 rm "s3://$BUCKET/_transfer/" --recursive
+
+# 채점
+bash ~/wsc2026/mark.sh
 ```
-
-### 11) [CloudShell] 채점
-
-1. 콘솔 CloudShell → **Actions → Create VPC environment** → VPC `wsc2026-skills-vpc`, Subnet `wsc2026-skills-app-sub-a`, SG `mark-sg` (채점 유의 11).
-2. ```bash
-   BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
-   # 채점 전 _transfer 가 남아 있으면 step 10 을 먼저 수행
-   aws s3 cp "s3://$BUCKET/_transfer/wsc2026-cs.tgz" /tmp/ 2>/dev/null && tar xzf /tmp/wsc2026-cs.tgz -C /tmp mark.sh && cp /tmp/mark.sh ~/ || true
-   aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
-   bash ~/mark.sh
-   ```
-   > mark.sh 를 S3 릴레이로 받을 수 없으면(이미 정리함) 레포에서 복사해 붙여넣는다.
-   > 채점 셸 신원이 클러스터 생성자와 다르면 access entry 추가 + **KMS 채점(check_kms)이 키 조회 권한 부족으로 실패할 수 있으므로** 같은 신원 사용을 권장.
 
 ## 리소스 정리 유의사항
 
@@ -329,6 +325,10 @@ aws s3 rm "s3://$BUCKET/_transfer/" --recursive
 
 ## 주의 / 알려진 한계
 
+- **이름 접두어 변경(30% 변동) 대응**: terraform 은 `name_prefix` 변수(기본 `wsc2026`)로 일괄 변경.
+  k8s/eksctl 은 `grep -rl wsc2026 eksctl k8s app | xargs sed -i 's/wsc2026/<새접두어>/g'` 로 치환한다
+  (라벨 키 `wsc2026/node` 포함 — cluster.yaml 과 manifest 가 함께 바뀌어 일관됨).
+  네트워크(`-skills-*`)·클러스터·테이블·ECR·Lambda·버킷 이름은 별도 변수라 tfvars 에서 개별 변경.
 - **mark 5-5 스크립트 오타**: `aws eks list-pod-identity-associations --cluster-name wsi2026-cluster` —
   실제 클러스터는 `wsc2026-eks-cluster` 이므로 스크립트 그대로는 항상 FAIL 이다. 구현은 실제 클러스터에
   정상 구성되어 있으며(`aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026` 로 확인),
@@ -342,9 +342,11 @@ aws s3 rm "s3://$BUCKET/_transfer/" --recursive
   terraform/eksctl/docker push/kubectl/채점을 전부 그 신원으로** 실행한다.
   root 로는 KMS 사용은 물론 alias 생성·CMK 테이블/객체 생성도 전부 거부된다(키 정책이 유일한 통제).
   다른 관리자를 추가하려면 `kms_extra_admin_arns` 변수 사용. root 자격증명은 plan 단계에서 차단된다.
+- **VPC CloudShell 은 비영속**: 홈 디렉토리가 세션 종료 시 삭제되고 업로드 UI 도 없다.
+  도구/파일/kubeconfig 는 step 4 셋업 블록 하나로 복구한다(재접속 시 통째로 재실행, 약 1–2분).
 - **HTTP 메트릭은 로그 기반**: 앱이 /metrics 를 노출하지 않아 fluent-bit `log_to_metrics` 필터가
   액세스 로그에서 requests/errors counter 와 duration histogram 을 생성한다(`:2021/metrics`).
-  배포 후 step 9 에서 **메트릭 실명을 확인**하고 `prometheus-rules.yaml`/`dashboard.json` 의
+  배포 후 step 8 에서 **메트릭 실명을 확인**하고 `prometheus-rules.yaml`/`dashboard.json` 의
   `log_metric_counter_wsc2026_*` 이름과 다르면 맞춘다. aws-for-fluent-bit 이미지에 log_to_metrics 가
   없으면 upstream `fluent/fluent-bit` 최신 안정 태그로 교체(fallback).
 - **ALB SG 단독 부착**: ingress 의 `security-groups` 어노테이션에 `wsc2026-app-alb-sg` 만 지정하고

@@ -6,8 +6,8 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_cloudwatch_log_group" "book_app" {
-  name              = "/wsc2026/eks/book-app"
+  name              = "/${var.name_prefix}/eks/book-app"
   retention_in_days = 7
 
-  tags = { Name = "/wsc2026/eks/book-app" }
+  tags = { Name = "/${var.name_prefix}/eks/book-app" }
 }

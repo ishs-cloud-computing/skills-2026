@@ -1,8 +1,10 @@
 # ===========================================================================
 # eksctl Cluster Manifest (요구사항 7)
-# 적용: terraform output 값을 env 로 export → envsubst 로 치환해 적용한다.
-#   envsubst < cluster.yaml | eksctl create cluster -f -
-# 필요한 export 변수 목록 / 생성 순서는 ../README.md 참고.
+# 적용: 본 PC 에서 terraform outputs 로 ${...} 플레이스홀더를 치환해 렌더 후 create 한다.
+#   렌더/변수 목록: ../README.md step 3 (PowerShell) 또는 ../README.linux.md step 3 (bash)
+#   eksctl create cluster -f cluster.rendered.yaml
+# fully-private 여도 생성은 본 PC 에서 가능 — eksctl 이 생성 중 퍼블릭 엔드포인트를
+# 임시로 켰다가 완료 시 닫는다. 생성 후 kubectl 은 VPC CloudShell 에서만 된다.
 # 주의: eksctl 은 terraform 과 같은 자격증명으로 실행한다 (wsc2026-eks-kms
 #       키 정책이 배포자 신원에만 CreateGrant 를 허용 — 유의사항 10).
 # ===========================================================================
@@ -28,7 +30,9 @@ vpc:
   id: "${VPC_ID}"
   # control plane ENI 추가 SG (mark-sg CloudShell → private API 443 인바운드 허용)
   securityGroup: "${CP_EXTRA_SG_ID}"
-  # 공용 노드 SG (wsc2026-app-alb → Pod 8080). managed NG 는 attachIDs 로 직접 attach.
+  # 공용 노드 SG (wsc2026-app-alb → Pod 8080). managed NG 에는 자동 attach 되지 않아
+  # 각 NG 의 attachIDs 로 직접 부착하고, 이 필드는 eksctl 이 자체 shared SG 를
+  # 새로 만들지 않게 하는 용도다.
   sharedNodeSecurityGroup: "${NODE_SHARED_SG_ID}"
   subnets:
     private:
@@ -143,18 +147,15 @@ managedNodeGroups:
             clusterDomain: wsc2026.skills.local
 
 # ----- Addon -----
-# eks-pod-identity-agent 는 Pod Identity 필수. 나머지는 EKS 1.35 default 버전으로
-# 고정(latest 금지). eksctl utils describe-addon-versions --kubernetes-version 1.35 로 확인.
+# eks-pod-identity-agent 는 Pod Identity 필수. 버전은 지정하지 않는다 — eksctl 이
+# 클러스터 버전의 default addon 버전을 설치한다 (작업 규칙 2: EKS Addon 버전 미고정).
 addons:
   - name: eks-pod-identity-agent
   - name: vpc-cni
-    version: v1.21.2-eksbuild.2
   - name: kube-proxy
-    version: v1.35.3-eksbuild.11
   # coredns(Deployment 형 Addon)는 Addon NodeGroup 에 배치.
   # 도메인 변경은 addon 설정이 아닌 Corefile 패치로 수행 (k8s/01-coredns-wsc2026.yaml)
   # — addon 업데이트 시 Corefile 이 되돌아갈 수 있으므로 패치 후 grep 재확인.
   - name: coredns
-    version: v1.13.2-eksbuild.10
     configurationValues: |
       {"nodeSelector": {"wsc2026/node": "addon"}}

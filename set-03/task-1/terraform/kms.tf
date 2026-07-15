@@ -80,39 +80,39 @@ data "aws_iam_policy_document" "kms_db" {
 }
 
 resource "aws_kms_key" "db" {
-  description             = "wsc2026-db-kms : DynamoDB SSE"
+  description             = "${var.name_prefix}-db-kms : DynamoDB SSE"
   enable_key_rotation     = true
   deletion_window_in_days = 7
   policy                  = data.aws_iam_policy_document.kms_db.json
 }
 resource "aws_kms_alias" "db" {
-  name          = "alias/wsc2026-db-kms"
+  name          = "alias/${var.name_prefix}-db-kms"
   target_key_id = aws_kms_key.db.key_id
 }
 
 # ----- wsc2026-ecr-kms : ECR -----
 # 리포지토리 생성 시 배포자의 CreateGrant 로 ECR 서비스에 위임되므로 admin 만으로 충분.
 resource "aws_kms_key" "ecr" {
-  description             = "wsc2026-ecr-kms : ECR image encryption"
+  description             = "${var.name_prefix}-ecr-kms : ECR image encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 7
   policy                  = data.aws_iam_policy_document.kms_admin.json
 }
 resource "aws_kms_alias" "ecr" {
-  name          = "alias/wsc2026-ecr-kms"
+  name          = "alias/${var.name_prefix}-ecr-kms"
   target_key_id = aws_kms_key.ecr.key_id
 }
 
 # ----- wsc2026-eks-kms : EKS secrets envelope -----
 # eksctl(=배포자 신원)이 CreateCluster 시 CreateGrant/DescribeKey 를 호출한다.
 resource "aws_kms_key" "eks" {
-  description             = "wsc2026-eks-kms : EKS secrets envelope encryption"
+  description             = "${var.name_prefix}-eks-kms : EKS secrets envelope encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 7
   policy                  = data.aws_iam_policy_document.kms_admin.json
 }
 resource "aws_kms_alias" "eks" {
-  name          = "alias/wsc2026-eks-kms"
+  name          = "alias/${var.name_prefix}-eks-kms"
   target_key_id = aws_kms_key.eks.key_id
 }
 
@@ -140,13 +140,13 @@ data "aws_iam_policy_document" "kms_bucket" {
 }
 
 resource "aws_kms_key" "bucket" {
-  description             = "wsc2026-bucket-kms : S3 static hosting SSE-KMS"
+  description             = "${var.name_prefix}-bucket-kms : S3 static hosting SSE-KMS"
   enable_key_rotation     = true
   deletion_window_in_days = 7
   policy                  = data.aws_iam_policy_document.kms_bucket.json
 }
 resource "aws_kms_alias" "bucket" {
-  name          = "alias/wsc2026-bucket-kms"
+  name          = "alias/${var.name_prefix}-bucket-kms"
   target_key_id = aws_kms_key.bucket.key_id
 }
 
@@ -168,12 +168,12 @@ data "aws_iam_policy_document" "kms_function" {
 }
 
 resource "aws_kms_key" "function" {
-  description             = "wsc2026-function-kms : Lambda code/env encryption"
+  description             = "${var.name_prefix}-function-kms : Lambda code/env encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 7
   policy                  = data.aws_iam_policy_document.kms_function.json
 }
 resource "aws_kms_alias" "function" {
-  name          = "alias/wsc2026-function-kms"
+  name          = "alias/${var.name_prefix}-function-kms"
   target_key_id = aws_kms_key.function.key_id
 }

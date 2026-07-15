@@ -34,7 +34,9 @@ resource "aws_lambda_function" "book_get" {
   filename         = data.archive_file.book_get.output_path
   source_code_hash = data.archive_file.book_get.output_base64sha256
   timeout          = 10
-  kms_key_arn      = aws_kms_key.function.arn
+  # kms_key_arn = 환경변수 at-rest, source_kms_key_arn = 코드(zip) at-rest (요구사항 10 "람다 코드 암호화")
+  kms_key_arn        = aws_kms_key.function.arn
+  source_kms_key_arn = aws_kms_key.function.arn
 
   environment {
     variables = {

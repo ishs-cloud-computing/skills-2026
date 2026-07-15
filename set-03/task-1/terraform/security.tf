@@ -11,8 +11,8 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_security_group" "alb" {
-  name        = "wsc2026-app-alb-sg"
-  description = "wsc2026-app-alb - allow 80 from CloudFront origin-facing only"
+  name        = "${var.name_prefix}-app-alb-sg"
+  description = "${var.name_prefix}-app-alb - allow 80 from CloudFront origin-facing only"
   vpc_id      = aws_vpc.this.id
 
   ingress {
@@ -28,19 +28,19 @@ resource "aws_security_group" "alb" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "wsc2026-app-alb-sg" }
+  tags = { Name = "${var.name_prefix}-app-alb-sg" }
 }
 
 # 노드에 직접 attach 하는 공용 SG. ingress 어노테이션에 wsc2026-app-alb-sg 를
 # 단독 지정(manage-backend-security-group-rules 미사용 — mark 8-1 이 ALB SG 이름
 # 단독 출력을 요구)하므로, ALB → Pod(8080) target/health check 를 사전 허용한다.
 resource "aws_security_group" "eks_shared_node" {
-  name        = "wsc2026-eks-shared-node-sg"
+  name        = "${var.name_prefix}-eks-shared-node-sg"
   description = "Shared node SG - allow ALB to reach Book App Pod (8080)"
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description     = "wsc2026-app-alb to Book App Pod (8080)"
+    description     = "${var.name_prefix}-app-alb to Book App Pod (8080)"
     from_port       = 8080
     to_port         = 8080
     protocol        = "tcp"
@@ -52,7 +52,7 @@ resource "aws_security_group" "eks_shared_node" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "wsc2026-eks-shared-node-sg" }
+  tags = { Name = "${var.name_prefix}-eks-shared-node-sg" }
 }
 
 # 채점용 CloudShell VPC Environment 가 사용할 SG (채점 유의 10: 선수 임의 구성).
@@ -73,7 +73,7 @@ resource "aws_security_group" "mark" {
 # EKS Control Plane 추가 SG: cluster.yaml 의 vpc.securityGroup 으로 지정.
 # Fully private API 에 CloudShell(mark-sg)이 접근할 수 있게 한다.
 resource "aws_security_group" "eks_cp_extra" {
-  name        = "wsc2026-eks-cp-extra-sg"
+  name        = "${var.name_prefix}-eks-cp-extra-sg"
   description = "Extra control plane SG - allow mark-sg to reach private API (443)"
   vpc_id      = aws_vpc.this.id
 
@@ -90,5 +90,5 @@ resource "aws_security_group" "eks_cp_extra" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "wsc2026-eks-cp-extra-sg" }
+  tags = { Name = "${var.name_prefix}-eks-cp-extra-sg" }
 }
