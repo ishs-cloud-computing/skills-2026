@@ -31,9 +31,9 @@ skills-2026/
 │   │   ├── mark.md / mark.pdf   # 채점지
 │   │   └── mark.sh             # 채점 스크립트 (단일 과제 → 단일 파일)
 │   └── task-2/
-│       ├── module-N-<name>/   # 모듈별 terraform/ eksctl/ k8s/ app/ 중 필요한 것만 (이름은 서술형)
-│       ├── mark/              # 모듈별 채점 스크립트 mark1.sh, mark2.sh ...
-│       ├── provided/          # 대회에서 제공한 소스 (수정 금지, 그대로 사용)
+│       ├── module-N-<name>/   # 구현: 모듈별 terraform/ eksctl/ k8s/ app/ 중 필요한 것만 (이름은 서술형)
+│       ├── provided/          # 대회 제공 소스 (수정 금지). 세트마다 다르며 module1/ module2/ ... 로 모듈별 분리
+│       ├── mark/              # 모듈별 채점 스크립트 mark2-1.sh, mark2-2.sh ... (mark<과제번호>-<모듈번호>.sh)
 │       ├── task.md / task.pdf · mark.md / mark.pdf
 │       └── ...                # 모듈 수는 세트마다 다름
 ├── set-02/ ~ set-10/    # 동일 구조
@@ -51,6 +51,7 @@ skills-2026/
 - `eksctl/`: EKS 클러스터/노드그룹 YAML. Terraform과 같은 IaC 레이어이므로 `k8s/`가 아니라 `terraform/`과 같은 레벨에 둔다.
 - `k8s/`: 클러스터 생성 후 `kubectl apply`할 리소스. apply가 알파벳 순이므로 의존 순서를 번호 prefix로 강제한다 (`00-namespace.yaml`, `01-configmap.yaml` ...). 도메인이 많으면 `app/`·`monitoring/`·`logging/` 같은 그룹용 서브디렉토리로 묶고, 번호 prefix는 순서 의존 파일에만 쓴다.
 - `app/`: ECR에 빌드/푸시할 컨테이너 소스.
+- `provided/` (task-2 전용): 대회가 세트별로 제공하는 소스. 모듈별 `module1/`·`module2/` ... 서브디렉토리에 원본 그대로 두고 수정하지 않는다. 구현 코드는 `module-N-<name>/`에 따로 작성한다.
 
 ## 설계 규칙
 

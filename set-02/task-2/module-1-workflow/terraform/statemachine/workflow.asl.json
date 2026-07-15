@@ -1,0 +1,98 @@
+{
+  "Comment": "wsc2026 student score workflow (workflow.md)",
+  "StartAt": "CheckS3File",
+  "States": {
+    "CheckS3File": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:headObject",
+      "Parameters": {
+        "Bucket": "${bucket}",
+        "Key.$": "$.key"
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FileCheckFailed"
+        }
+      ],
+      "Next": "ProcessStudentData"
+    },
+    "FileCheckFailed": {
+      "Type": "Fail",
+      "Error": "FileNotFound",
+      "Cause": "input file does not exist in S3"
+    },
+    "ProcessStudentData": {
+      "Type": "Task",
+      "Resource": "${lambda_arn}",
+      "ResultPath": "$.result",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Next": "CheckResult"
+    },
+    "CheckResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.result.statusCode",
+          "NumericEquals": 200,
+          "Next": "MoveToProcessed"
+        }
+      ],
+      "Default": "MoveToError"
+    },
+    "MoveToProcessed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:copyObject",
+      "Parameters": {
+        "Bucket": "${bucket}",
+        "CopySource.$": "States.Format('${bucket}/{}', $.key)",
+        "Key.$": "States.Format('processed/{}', States.ArrayGetItem(States.StringSplit($.key, '/'), 1))"
+      },
+      "ResultPath": null,
+      "Next": "DeleteInputProcessed"
+    },
+    "DeleteInputProcessed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:deleteObject",
+      "Parameters": {
+        "Bucket": "${bucket}",
+        "Key.$": "$.key"
+      },
+      "End": true
+    },
+    "MoveToError": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:copyObject",
+      "Parameters": {
+        "Bucket": "${bucket}",
+        "CopySource.$": "States.Format('${bucket}/{}', $.key)",
+        "Key.$": "States.Format('error/{}', States.ArrayGetItem(States.StringSplit($.key, '/'), 1))"
+      },
+      "ResultPath": null,
+      "Next": "DeleteInputError"
+    },
+    "DeleteInputError": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:deleteObject",
+      "Parameters": {
+        "Bucket": "${bucket}",
+        "Key.$": "$.key"
+      },
+      "Next": "WorkflowFailed"
+    },
+    "WorkflowFailed": {
+      "Type": "Fail",
+      "Error": "ProcessingFailed",
+      "Cause": "processing lambda returned non-200"
+    }
+  }
+}
