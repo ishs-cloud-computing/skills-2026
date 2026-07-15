@@ -165,6 +165,26 @@ variable "msk_iam_auth_version" {
   default     = "2.3.7"
 }
 
+# producer 인증 경로 스위치. tls(기본): 제공 바이너리 + 비인증 TLS 9094 (채점 검증 완료 경로).
+# iam: 자체 구현한 IAM 인증 바이너리 + SASL/IAM 9098, 클러스터는 IAM 전용(unauthenticated=false)
+# 으로 좁혀 과제지 "IAM 인증을 통해서만 접근" 요구를 실제로 만족한다.
+variable "producer_auth_mode" {
+  description = "producer 접속 방식: tls(제공 바이너리·9094) 또는 iam(자체 바이너리·9098)"
+  type        = string
+  default     = "tls"
+  validation {
+    condition     = contains(["tls", "iam"], var.producer_auth_mode)
+    error_message = "producer_auth_mode 는 tls 또는 iam 이어야 한다."
+  }
+}
+
+# producer_auth_mode="iam" 일 때 S3 로 올릴 자체 IAM 바이너리 경로 (placeholder — 빌드한 바이너리를 이 경로에 둔다).
+variable "iam_producer_binary_path" {
+  description = "IAM 인증 producer 바이너리 경로 (auth_mode=iam 에서만 사용)"
+  type        = string
+  default     = "../app/producer"
+}
+
 # ----- Lambda Consumer (과제지 5. Lambda, provided/module4/lambda.md — mark 4-2/4-4) -----
 
 variable "lambda_role_name" {

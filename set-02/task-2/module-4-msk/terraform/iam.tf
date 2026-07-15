@@ -84,8 +84,10 @@ resource "aws_iam_role_policy_attachment" "lambda_msk_esm" {
 
 data "aws_iam_policy_document" "lambda" {
   statement {
-    sid       = "ConnectCluster"
-    actions   = ["kafka-cluster:Connect", "kafka-cluster:DescribeCluster"]
+    sid = "ConnectCluster"
+    # WriteDataIdempotently: kafka-python 3.x KafkaProducer 는 기본이 멱등 프로듀서라
+    # alert 토픽 발행 시 InitProducerId(클러스터 레벨)를 호출한다 — 없으면 Error 31.
+    actions   = ["kafka-cluster:Connect", "kafka-cluster:DescribeCluster", "kafka-cluster:WriteDataIdempotently"]
     resources = [aws_msk_cluster.this.arn]
   }
 

@@ -47,9 +47,11 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-# app 은 포트 9094 에서만 TLS 를 켜고 IAM 인증은 불가 → 비인증 TLS 엔드포인트 사용
-Environment=BOOTSTRAP_SERVERS=${bootstrap_servers_tls}
+# tls: 제공 바이너리(9094 비인증 TLS). iam: 자체 IAM 전용 바이너리(SASL/IAM 9098, AWS_REGION 으로 signer 리전 지정).
+# 바이너리 선택은 producer_auth_mode 로 결정(s3.tf), 엔드포인트는 그에 맞춰 주입된다.
+Environment=BOOTSTRAP_SERVERS=${app_bootstrap_servers}
 Environment=TOPIC_RAW=${raw_topic_name}
+Environment=AWS_REGION=${region}
 ExecStart=/opt/app/app
 Restart=always
 

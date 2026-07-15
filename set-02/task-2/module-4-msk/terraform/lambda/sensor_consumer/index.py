@@ -6,6 +6,7 @@ from datetime import datetime
 import boto3
 from aws_msk_iam_sasl_signer import MSKAuthTokenProvider
 from kafka import KafkaProducer
+from kafka.net.sasl.oauth import AbstractTokenProvider
 
 DDB_TABLE = os.environ["DDB_TABLE"]
 ALERT_TOPIC = os.environ["ALERT_TOPIC"]
@@ -20,7 +21,9 @@ def log(msg):
     print(f"{datetime.now().strftime('%Y/%m/%d %H:%M:%S')} {msg}")
 
 
-class TokenProvider:
+# kafka-python 3.x 는 sasl_oauth_token_provider 가 AbstractTokenProvider 서브클래스일 것을 강제한다
+# (duck typing 불가) — 미상속 시 KafkaConfigurationError 로 producer 생성이 실패한다.
+class TokenProvider(AbstractTokenProvider):
     def token(self):
         token, _ = MSKAuthTokenProvider.generate_auth_token(REGION)
         return token

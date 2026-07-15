@@ -1,8 +1,9 @@
 # ---------------------------------------------------------------------------
 # MSK (과제지 2. MSK — mark 4-3: 이름/ACTIVE/3.6.0/kafka.t3.small/IAM=True)
-# - 프라이빗 서브넷 2AZ, IAM 인증 + 비인증 TLS(9094) 병행: 제공 producer 바이너리는
-#   IAM signer 가 없고 9094 에서만 TLS 를 켠다(로컬 실행 테스트로 확정) → 9094 필수.
-#   mark 4-3 은 Sasl.Iam.Enabled 만 확인하므로 채점 영향 없음.
+# - 프라이빗 서브넷 2AZ. IAM 인증은 항상 켠다(mark 4-3: Sasl.Iam.Enabled=True).
+#   비인증 TLS(9094)는 producer_auth_mode=tls(기본)일 때만 켠다: 제공 producer 바이너리는
+#   IAM signer 가 없고 9094 에서만 TLS 를 켠다(로컬 실행 테스트로 확정). iam 모드에서는
+#   자체 IAM 바이너리를 쓰므로 unauthenticated=false 로 좁혀 IAM 전용 클러스터가 된다.
 # - 브로커 2대: RF 2 토픽을 지지하는 최소 고가용성 구성 (~30분 생성 소요)
 # ---------------------------------------------------------------------------
 
@@ -27,7 +28,7 @@ resource "aws_msk_cluster" "this" {
     sasl {
       iam = true
     }
-    unauthenticated = true
+    unauthenticated = var.producer_auth_mode == "tls"
   }
 
   encryption_info {

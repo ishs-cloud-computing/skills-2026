@@ -12,6 +12,7 @@ data "archive_file" "sensor_consumer" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/sensor_consumer"
   output_path = "${path.module}/build/sensor_consumer.zip"
+  excludes    = ["**/__pycache__/**"]
 }
 
 data "archive_file" "alert_consumer" {

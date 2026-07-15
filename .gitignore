@@ -9,10 +9,6 @@ outputs.json
 crash.log
 crash.*.log
 __pycache__/
-**/app/book
-**/app/user
-**/app/product
-**/app/stress
 **/eksctl/*.rendered.yaml
 # set-02 module-4: sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
 **/lambda/sensor_consumer/*
