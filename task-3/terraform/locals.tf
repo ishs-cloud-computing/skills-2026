@@ -1,5 +1,5 @@
-# 과제 상수 모음. 당일 과제 ~30% 변경(이름·CIDR·앱 목록·DB 사양 등)은 이 파일
-# 하나만 수정한다. 실행별 입력(비번호·DB 비밀번호·WAF 토글)만 variables.tf에 있다.
+# 과제 상수 모음. 당일 과제 ~30% 변경(이름·CIDR·DB 사양 등)은 이 파일에서 수정한다.
+# 앱 목록·이미지 태그와 실행별 입력(비번호·DB 비밀번호)은 variables.tf에 있다.
 locals {
   region = "ap-northeast-2"
   azs    = ["ap-northeast-2a", "ap-northeast-2b"]
@@ -10,14 +10,8 @@ locals {
 
   cluster_name = "skills-eks"
 
-  # ── 앱 목록: ECR 레포·ALB 타깃그룹·리스너 규칙이 전부 이 맵에서 생성된다.
-  # 당일 API 추가/삭제 = 여기 한 항목 + k8s/1X-<app>.yaml 복사/삭제.
-  # path는 ALB 경로 규칙, priority는 규칙 우선순위.
-  apps = {
-    user    = { path = "/v1/user", priority = 10, port = 8080, health_path = "/healthcheck" }
-    product = { path = "/v1/product", priority = 20, port = 8080, health_path = "/healthcheck" }
-    stress  = { path = "/v1/stress", priority = 30, port = 8080, health_path = "/healthcheck" }
-  }
+  # 앱 목록은 variables.tf의 var.apps (기존 local.apps 참조 유지용 별칭)
+  apps = var.apps
 
   # ── DB: 당일 엔진 변경(예: PostgreSQL) 시 engine/engine_version/port/username만 수정.
   # rds.tf·rds-proxy.tf만 이 값을 참조하고 다른 리소스는 DB를 참조하지 않으므로

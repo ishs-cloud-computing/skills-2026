@@ -4,7 +4,7 @@ CloudFront(단일 엔드포인트) → internet-facing ALB(SG=CloudFront prefix 
 
 ```
 task-3/
-├── terraform/   # VPC·RDS(+Proxy)·S3·ECR·ALB·CloudFront·WAF·노드 IAM
+├── terraform/   # VPC·ECR·RDS(+Proxy)·S3·ALB·CloudFront·WAF·노드 IAM
 ├── eksctl/      # Auto Mode 클러스터 (+ metrics-server, cloudwatch addon)
 ├── k8s/         # NodeClass/NodePool, 앱별 Deploy+Svc+TGB+HPA+PDB
 ├── db/          # DB 초기화 SQL + 런북 (STEP 7에서 진입)
@@ -12,10 +12,10 @@ task-3/
 ```
 
 명령은 **두 곳**에서 실행한다. 각 블록 첫 줄 라벨을 보고 해당 위치에 붙여넣는다.
-- **Windows PowerShell(본 컴퓨터)**: terraform·eksctl·kubectl 전부. tfstate가 여기 있다. `aws`/`sed`/`jq` 불필요(값은 `terraform output`으로 읽는다).
+- **Windows PowerShell(본 컴퓨터)**: terraform·eksctl·kubectl·aws 전부. tfstate가 여기 있다. `sed`/`jq` 불필요(값은 `terraform output`으로 읽는다). aws CLI는 kubectl의 EKS 인증(`aws eks get-token`)에도 쓰인다.
 - **CloudShell(ap-northeast-2)**: 이미지 빌드/푸시만(STEP 4). 로컬에 Docker가 없어도 되는 유일한 이유.
 
-> PowerShell에서 `terraform`·`eksctl`·`kubectl`는 각 `.exe`가 PATH에 있어야 한다(설치 후 새 창).
+> PowerShell에서 `terraform`·`eksctl`·`kubectl`·`aws`는 각 `.exe`가 PATH에 있어야 한다(설치 후 새 창).
 
 ---
 
@@ -25,16 +25,16 @@ task-3/
 # ── Windows PowerShell ──
 cd task-3
 # terraform/terraform.tfvars 수정: player_number, (필요시) db_password
-# 리전·CIDR·앱 목록·DB 사양이 당일 과제와 다르면 terraform/locals.tf 한 파일만 수정
+# 앱 목록·이미지 태그가 당일 과제와 다르면 terraform/variables.tf의 apps·image_tag,
+# 리전·CIDR·DB 사양이 다르면 terraform/locals.tf 수정
 
-# 지급된 자격증명(aws CLI 미설치 → 환경변수로 주입). eksctl/kubectl도 이 값을 쓴다.
-$env:AWS_ACCESS_KEY_ID     = '<ACCESS_KEY>'
-$env:AWS_SECRET_ACCESS_KEY = '<SECRET_KEY>'
-$env:AWS_DEFAULT_REGION    = 'ap-northeast-2'
-$env:DB_PASSWORD           = 'password'   # tfvars의 db_password와 동일하게
+# 지급된 자격증명을 파일로 저장(전 창 공유). terraform/eksctl/kubectl도 이 값을 읽는다.
+aws configure   # 지급 키 입력, region: ap-northeast-2, output: json
+
+$env:DB_PASSWORD = 'password'   # tfvars의 db_password와 동일하게 (STEP 8 치환용)
 ```
 
-## STEP 1 — 선행 apply: 네트워크·노드롤·ECR (PowerShell, ~3분)
+## STEP 1 — 선행 apply: 네트워크·노드롤 (PowerShell, ~3분)
 
 리프 리소스만 지정 — VPC·서브넷·IGW·NAT·라우트·노드롤은 종속성으로 딸려 온다.
 
@@ -43,13 +43,13 @@ $env:DB_PASSWORD           = 'password'   # tfvars의 db_password와 동일하�
 terraform -chdir=terraform init
 terraform -chdir=terraform apply -auto-approve `
   -target=data.aws_caller_identity.current `
-  -target=aws_ecr_repository.app `
   -target=aws_vpc_endpoint.s3 `
   -target=aws_nat_gateway.this `
   -target=aws_route_table_association.public `
   -target=aws_route_table_association.private `
   -target=aws_iam_role_policy_attachment.node_minimal `
-  -target=aws_iam_role_policy_attachment.node_ecr_pull
+  -target=aws_iam_role_policy_attachment.node_ecr_pull `
+  -target=aws_ecr_repository.app
 ```
 
 ## STEP 2 — eksctl 클러스터 생성 (PowerShell, ~15분)
@@ -72,7 +72,7 @@ eksctl create cluster -f eksctl/cluster.rendered.yaml   # kubeconfig 자동 병�
 
 ## STEP 3 — 전체 terraform apply (새 PowerShell 창, ~20분)
 
-STEP 2와 병렬. **새 창이므로 STEP 0의 자격증명 4줄을 먼저 다시 실행**한 뒤:
+STEP 2와 병렬. 자격증명은 aws configure로 저장돼 전 창 공유 — **새 창에서는 `$env:DB_PASSWORD`만 다시 설정**한 뒤:
 
 ```powershell
 # ── Windows PowerShell (두 번째 창) ──
@@ -84,22 +84,105 @@ RDS Multi-AZ·CloudFront 배포가 오래 걸린다. CloudFront 도메인은 배
 
 ## STEP 4 — 이미지 빌드/푸시 (CloudShell, 바이너리 수령 즉시)
 
-**콘솔 우상단 리전이 ap-northeast-2인지 확인**하고 CloudShell을 연다.
+ECR 레포는 STEP 1 terraform이 생성했다 — 레포명 = `variables.tf`의 `apps` 맵 키 = k8s 이미지명.
+Dockerfile 수정(베이스 교체 등)이 필요하면 `app/Dockerfile` 주석을 참고해 직접 수정한다.
 
 ```bash
 # ── CloudShell(ap-northeast-2) ──
-# 준비: app/(Dockerfile)와 제공 바이너리를 CloudShell에 올린다.
-#   git clone <repo> && cd task-3
-#   제공 바이너리를 app/ 아래에 파일명 user·product·stress 로 복사.
+# 준비: git clone <repo> && cd task-3
+#       제공 바이너리를 app/ 아래에 파일명 user·product·stress 로 복사.
+ACCT=$(aws sts get-caller-identity --query Account --output text)
+REG=$ACCT.dkr.ecr.ap-northeast-2.amazonaws.com
+TAG=v1   # terraform의 image_tag 변수와 반드시 일치
 
-export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-REG=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com
-aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $REG
+aws ecr get-login-password | docker login --username AWS --password-stdin $REG
 
-# 앱별로 한 줄씩. 레포 이름은 terraform이 만든 이름(user/product/stress)과 정확히 일치.
-docker build --build-arg BINARY=user    -t $REG/user:v1    app/ && docker push $REG/user:v1
-docker build --build-arg BINARY=product -t $REG/product:v1 app/ && docker push $REG/product:v1
-docker build --build-arg BINARY=stress  -t $REG/stress:v1  app/ && docker push $REG/stress:v1
+# 3개 모두 빌드 — 아래 4a~4c 검증이 끝난 뒤 4d에서 push한다.
+# 당일 앱 목록이 다르면 이 목록만 바꾼다(terraform variables.tf의 apps 맵 키와 동일).
+for a in user product stress; do
+  docker build --build-arg BINARY=$a -t $REG/$a:$TAG app/ || echo "BUILD FAILED: $a"
+done
+```
+
+### 4a — 링크 방식 확인 (push 전)
+
+```bash
+# ── CloudShell ──
+file app/user app/product app/stress   # "dynamically linked" / "statically linked"
+```
+
+`app/Dockerfile`의 base는 glibc를 포함해 정적·동적 둘 다 돈다. 여기서 볼 것은 **혹시 static 베이스로 되돌렸는지**뿐 — 되돌린 상태에서 동적 링크면 `exec /app/server: no such file or directory`로 즉사한다(바이너리가 아니라 ELF 인터프리터가 없다는 뜻).
+
+### 4b — 스모크: 부팅·포트·healthcheck (push 전)
+
+`stress`는 DB·S3를 안 쓰므로 이걸로 검증이 끝난다.
+
+```bash
+# ── CloudShell ──
+docker run -d -p 8080:8080 --name t $REG/stress:$TAG
+sleep 2
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/healthcheck   # 200 기대
+docker logs t                                                        # 부팅 로그·에러 확인
+docker rm -f t
+```
+
+### 4c — 계약 테스트: user·product (push 전, ~3분)
+
+STEP 3 terraform이 도는 동안 진행 — 임계경로 밖이다. 로컬 mysql에 `db/01-schema.sql`을 그대로 먹여 앱을 붙인다.
+
+```bash
+# ── CloudShell ──
+docker run -d --name db -e MYSQL_ROOT_PASSWORD=pw -e MYSQL_DATABASE=dev \
+  public.ecr.aws/docker/library/mysql:8.0
+sleep 20   # mysqld 기동 대기
+docker exec -i db mysql -uroot -ppw dev < db/01-schema.sql
+
+docker run -d --link db --name t -p 8080:8080 \
+  -e MYSQL_HOST=db -e MYSQL_PORT=3306 -e MYSQL_DBNAME=dev \
+  -e MYSQL_USER=root -e MYSQL_PASSWORD=pw $REG/user:$TAG
+
+Q="requestid=999999999999&uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729"
+curl -s -o /dev/null -w '%{http_code} POST user\n' -X POST "localhost:8080/v1/user?$Q" \
+  -H 'Content-Type: application/json' \
+  -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","username":"t1","email":"t1@example.org"}'   # 201
+curl -s -o /dev/null -w '%{http_code} GET user\n' "localhost:8080/v1/user?email=t1@example.org&$Q"   # 200
+docker rm -f t
+```
+
+product는 S3까지 태워 **버킷 env 키·멀티파트 필드명·오브젝트 키**를 한 번에 확정한다 (STEP 3에서 버킷이 생긴 뒤. CloudShell에는 자격증명이 있다).
+
+```bash
+# ── CloudShell ── (STEP 3 완료 후)
+BUCKET=<STEP 3의 bucket_name>
+docker run -d --link db --name t -p 8080:8080 \
+  -e MYSQL_HOST=db -e MYSQL_PORT=3306 -e MYSQL_DBNAME=dev \
+  -e MYSQL_USER=root -e MYSQL_PASSWORD=pw \
+  -e S3_BUCKET=$BUCKET -e AWS_REGION=ap-northeast-2 $REG/product:$TAG
+
+curl -s -o /dev/null -w '%{http_code} POST product\n' -X POST "localhost:8080/v1/product?$Q" \
+  -H 'Content-Type: application/json' \
+  -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","id":"t1","name":"t1","price":1234}'   # 201
+head -c 1024 /dev/urandom > /tmp/t.jpg
+curl -s -o /dev/null -w '%{http_code} PUT product\n' -X PUT "localhost:8080/v1/product?$Q" \
+  -F "requestid=999999999999" -F "uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729" \
+  -F "id=t1" -F "image=@/tmp/t.jpg"      # 200. 400/415면 필드명이 틀린 것 → docker logs t 로 확인
+aws s3 ls s3://$BUCKET --recursive       # 실제 오브젝트 키 포맷 확인 → STEP 9의 /images/<key> 검증에 사용
+docker logs t                            # 버킷 env 키가 틀리면 여기서 S3 에러가 보인다
+docker rm -f t db
+```
+
+여기서 확정되는 것 — 안 하면 전부 STEP 9(≈T+45)에서 CloudFront·WAF·ALB·TGB·파드 5개 레이어 너머로 발견된다:
+- 앱이 `MYSQL_*` env를 실제로 읽는지 (과제지 표와 일치하나 미검증)
+- `/healthcheck`가 DB를 건드리는지 → **STEP 7↔8 병행 가능 여부를 결정한다**
+- product 버킷 env 키 (`ARCHITECTURE.md`가 "당일 확인 필수"로 남긴 미지수). 틀리면 `k8s/11-product.yaml`의 그 2줄만 고친다
+- PUT 멀티파트 필드명과 업로드 오브젝트 키 (STEP 9가 "바이너리로 확인 필수"로 남긴 미지수)
+
+### 4d — push
+
+```bash
+# ── CloudShell ──
+for a in user product stress; do docker push $REG/$a:$TAG; done
+aws ecr describe-images --repository-name user --query 'imageDetails[].imageTags' --output text   # TAG 확인
 ```
 
 ## STEP 5 — 클러스터 완료 후 노드풀 적용 (PowerShell)
@@ -125,17 +208,18 @@ terraform -chdir=terraform output -raw cloudfront_domain
 
 ## STEP 7 — DB 초기화 (PowerShell)
 
-[db/README.md](db/README.md) 런북을 실행한다. 직결 엔드포인트 사용(프록시 X).
-스키마 → dump 적재 → email 인덱스 → admin native 전환 → 검증 순.
+[db/README.md](db/README.md) 런북을 실행한다. 직결 엔드포인트 사용(프록시 X). **STEP 5 노드풀 Ready 필요** (mysql 클라이언트를 `kubectl run`으로 띄운다).
+스키마 → admin native 전환 → **여기서 STEP 8을 새 창에서 시작** → dump 적재 → email 인덱스 → 검증 순.
 
 ## STEP 8 — 앱 배포: placeholder 치환 후 apply (PowerShell)
+
+**STEP 7의 2번(admin native 전환)이 끝났으면 dump 적재와 병행한다** — 앱은 빈 테이블에도 정상 연결되고(스키마 존재·인증 완료) 데이터는 T+60 트래픽 전에만 있으면 된다. 병행하면 노드 생성·이미지 pull·파드 기동·TG 등록·ALB 헬스체크가 dump 적재 뒤에 쌓이지 않는다.
 
 env는 각 앱 매니페스트에 직접 들어있다. 한 파일씩 치환 후 apply.
 
 ```powershell
 # ── Windows PowerShell ──
-$acct   = terraform -chdir=terraform output -raw account_id
-$REG    = "$acct.dkr.ecr.ap-northeast-2.amazonaws.com"   # 이미지는 STEP 4(CloudShell)에서 push됨
+$img    = terraform -chdir=terraform output -json ecr_image_uris | ConvertFrom-Json   # 태그 포함 full URI
 $tg     = terraform -chdir=terraform output -json tg_arns | ConvertFrom-Json
 $proxy  = terraform -chdir=terraform output -raw db_proxy_endpoint
 $dbport = terraform -chdir=terraform output -raw db_port
@@ -143,7 +227,7 @@ $bucket = terraform -chdir=terraform output -raw bucket_name
 
 # user (DB만)
 $y = Get-Content k8s/10-user.yaml -Raw
-$y = $y.Replace('<ECR_URL>', "$REG/user")
+$y = $y.Replace('<IMAGE>', $img.user)
 $y = $y.Replace('<TG_ARN>', $tg.user)
 $y = $y.Replace('<PROXY_ENDPOINT>', $proxy)
 $y = $y.Replace('<DB_PORT>', $dbport)
@@ -152,7 +236,7 @@ $y | kubectl apply -f -
 
 # product (DB + S3)
 $y = Get-Content k8s/11-product.yaml -Raw
-$y = $y.Replace('<ECR_URL>', "$REG/product")
+$y = $y.Replace('<IMAGE>', $img.product)
 $y = $y.Replace('<TG_ARN>', $tg.product)
 $y = $y.Replace('<PROXY_ENDPOINT>', $proxy)
 $y = $y.Replace('<DB_PORT>', $dbport)
@@ -162,7 +246,7 @@ $y | kubectl apply -f -
 
 # stress (env 없음 — 이미지·TG만)
 $y = Get-Content k8s/12-stress.yaml -Raw
-$y = $y.Replace('<ECR_URL>', "$REG/stress")
+$y = $y.Replace('<IMAGE>', $img.stress)
 $y = $y.Replace('<TG_ARN>', $tg.stress)
 $y | kubectl apply -f -
 
@@ -210,7 +294,7 @@ c "$CF/v1/user?email=%27%20OR%201=1--&$Q"                                  # 403
 # 타깃 등록 상태
 kubectl get targetgroupbindings
 $tg = terraform -chdir=terraform output -json tg_arns | ConvertFrom-Json
-aws elbv2 describe-target-health --target-group-arn $tg.user   # aws는 CloudShell에서 확인해도 됨
+aws elbv2 describe-target-health --target-group-arn $tg.user
 ```
 
 ## STEP 10 — 운영 (PowerShell)

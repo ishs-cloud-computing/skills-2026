@@ -25,7 +25,7 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: user
-          image: <ECR_URL>:v1
+          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 8)
           ports:
             - containerPort: 8080
           # 채점은 블랙박스(응답코드/시간/비용)라 Secret/ConfigMap을 검사하지 않는다.
