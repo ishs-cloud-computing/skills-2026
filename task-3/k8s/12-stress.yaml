@@ -25,7 +25,7 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: stress
-          image: <ECR_URL>:v1
+          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 8)
           ports:
             - containerPort: 8080
           resources:

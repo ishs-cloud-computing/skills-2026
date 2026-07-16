@@ -22,7 +22,7 @@ user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 |---|---|
 | 단일 엔드포인트 | CloudFront (`terraform/cloudfront.tf`) |
 | `/images/<key>` 이미지 제공 | `/images/*` behavior + strip Function + OAC (`cloudfront.tf`, `s3.tf`) |
-| 비정상 요청 403 | WAF SQLi·KnownBadInputs block, 쿼리스트링 누락 룰 토글 (`waf.tf`) |
+| 비정상 요청 403 | WAF SQLi·KnownBadInputs block (`waf.tf`) |
 | API 외 경로 404 | ALB 리스너 기본액션 fixed-response 404 (`alb.tf`) |
 | EKS + EC2 t3.medium만 | NodePool instance-type 고정 (`k8s/01-nodepool.yaml`) |
 | 최소 리소스(비용 ratio) | HPA min 2 + Karpenter consolidation → 평시 노드 ~2대, 스파이크 최대 9대(cpu limit 18) |
@@ -74,12 +74,15 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 - **`ALTER TABLE user ADD INDEX idx_email (email)`은 필수** — GET /v1/user?email= 이 유일한 조회 패턴인데 스키마에 email 인덱스가 없다(풀스캔 = SLO 전멸). 과제지의 "테이블 구조 재설계가 필요할 수 있다"가 이것.
 - dump 적재는 프록시가 아닌 직결 엔드포인트로(대량 세션이 프록시에 피닝됨).
 - **프록시 클라이언트 인증 = MySQL Native** (`client_password_auth_type = MYSQL_NATIVE_PASSWORD`, `rds-proxy.tf`). 제공 앱은 수정 불가이고 TLS를 협상하지 않아 `require_tls=false`인데, MySQL 8.0 기본 `caching_sha2_password`는 평문 연결에서 password 교환이 실패한다 → 앱→프록시 인증을 native로 고정한다. 이에 맞춰 백엔드 `admin` 유저도 `mysql_native_password` 플러그인이어야 하므로 DB 초기화([db/README.md](db/README.md))에서 `ALTER USER ... IDENTIFIED WITH mysql_native_password`로 맞춘다. 엔진이 바뀌면 `client_password_auth_type`가 `locals.tf`의 `db_engine` 삼항으로 자동 파생(postgres → `POSTGRES_SCRAM_SHA_256`).
+- **DB 초기화 순서 = 스키마 → ALTER USER → dump → 인덱스.** 앞의 둘은 즉시 끝나면서 앱·프록시 연결의 하드 전제조건이고, dump 적재(50만행)만 느리다. 따라서 ALTER USER를 dump 뒤에 두면 빠른 블로커가 느린 작업을 기다리는 꼴이 된다. 스키마·인증이 끝난 시점에 앱 배포(README STEP 8)를 병행 시작하면 노드 생성·파드 기동·TG 등록이 dump 적재와 겹친다. dump→인덱스 순서는 유지 — `db/02-index.sql`의 근거(dump가 DROP/CREATE TABLE 포함 가능)와 InnoDB 벌크 적재 후 세컨더리 인덱스 생성이 더 빠르다는 점 모두 유효하다.
 
 ## 이미지 빌드는 CloudShell에서
 
 - 제공 바이너리 이미지 빌드/푸시(README STEP 4)는 **ap-northeast-2 CloudShell**에서 수행한다. 워크스테이션은 사설망(private subnet의 RDS 등)에 닿지 않고 로컬 Docker가 없을 수 있는 반면, CloudShell은 Docker 내장(2024-09부터 전 상용 리전) + 인터넷 + ECR 접근을 모두 제공해 in-region으로 push가 끝난다.
 - CloudShell은 x86_64 → 제공 바이너리(x86 AL2023 빌드)와 아키텍처가 일치한다. buildkit provenance 매니페스트를 피하려 `docker buildx --push` 대신 classic `docker build`+`docker push`를 쓴다.
 - terraform/eksctl/kubectl은 그대로 워크스테이션(본 컴퓨터)에서 실행한다. CloudShell로 옮기는 것은 이미지 빌드 단계 하나뿐이다.
+- **베이스는 `distroless/base`(glibc 포함), `static` 아님.** `static`은 ca-certificates·tzdata뿐이라 `CGO_ENABLED=0` 빌드 전용인데, 과제지는 바이너리가 AL2023 기본 빌드(cgo on)라고 명시한다 → Gin의 `net`·`os/user`가 cgo resolver를 끌어와 glibc에 동적 링크될 가능성이 높다. 불일치 시 `exec /app/server: no such file or directory`로 즉사하며, 이 메시지는 없는 것이 바이너리가 아니라 ELF 인터프리터라는 사실을 감춰 디버깅을 오도한다. `base`는 `static`의 상위집합(+glibc·libssl)이라 정적·동적 둘 다 돌므로 ~18MB로 이 분기를 산다.
+- **push 전에 앱을 검증한다(README STEP 4a–4c).** 제공 바이너리는 블랙박스인데 STEP 9의 CloudFront 스모크는 CF·WAF·ALB·TGB·파드 5개 레이어 너머라 앱 결함과 인프라 결함이 구분되지 않고, 발견 시점도 ≈T+45다. CloudShell엔 docker와 바이너리가 이미 있으므로 `file` + `docker run` + 로컬 mysql:8.0 컨테이너로 부팅·포트·healthcheck·env 키·PUT 멀티파트 필드명·S3 오브젝트 키를 push 전에 확정한다. STEP 3 apply가 도는 동안이라 임계경로 밖이다.
 
 ## WAF 운용 기준
 
@@ -111,7 +114,7 @@ NoUserAgent·SizeRestrictions 등이 정상 채점 트래픽을 오차단할 수
 
 ### ② API 추가/삭제 — 약 10분
 
-1. `locals.tf`의 `apps` 맵에 항목 추가/삭제 (path·priority) → `terraform apply` (~1분: ECR·TG·리스너 규칙)
+1. `variables.tf`의 `apps` 맵에 항목 추가/삭제 (path·priority) → `terraform apply` (~1분: ECR·TG·리스너 규칙)
 2. `k8s/1X-<app>.yaml` 복사 → 이름·라벨·이미지·TG placeholder 치환 (DB 안 쓰면 env 블록 제거, CPU 바운드면 stress 쪽 수치)
 3. 바이너리 빌드/푸시(README STEP 4) → 치환+apply(README STEP 8)
 
