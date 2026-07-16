@@ -165,6 +165,25 @@ data "aws_iam_policy_document" "kms_function" {
       identifiers = [aws_iam_role.book_function.arn]
     }
   }
+
+  # source_kms_key_arn(코드 zip at-rest)은 Lambda 서비스가 CreateFunction 시 암호화한다.
+  # Lambda 는 grant 를 추가하지 않으므로 키 정책이 서비스 principal 에 직접
+  # GenerateDataKey+Decrypt 를 허용해야 한다. EncryptionContext 로 본 함수에 한정.
+  statement {
+    sid       = "AllowLambdaServiceCodeEncryption"
+    effect    = "Allow"
+    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
+    resources = ["*"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+    condition {
+      test     = "StringLike"
+      variable = "kms:EncryptionContext:aws:lambda:FunctionArn"
+      values   = ["arn:aws:lambda:${var.region}:${local.account_id}:function:${var.lambda_function_name}"]
+    }
+  }
 }
 
 resource "aws_kms_key" "function" {

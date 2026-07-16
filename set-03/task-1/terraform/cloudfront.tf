@@ -30,6 +30,22 @@ resource "aws_cloudfront_origin_access_control" "lambda" {
   signing_protocol                  = "sigv4"
 }
 
+# Lambda Function URL(OAC) 전용 ORP
+# AllViewerExceptHostHeader 는 Authorization 을 전달 → OAC SigV4 서명과 충돌(403).
+# booking_id 만 있으면 되므로 QueryString 만 전달하고 헤더는 전달하지 않는다.
+resource "aws_cloudfront_origin_request_policy" "lambda_get" {
+  name = "${var.name_prefix}-lambda-orp"
+  query_strings_config {
+    query_string_behavior = "all"
+  }
+  headers_config {
+    header_behavior = "none"
+  }
+  cookies_config {
+    cookie_behavior = "none"
+  }
+}
+
 resource "aws_cloudfront_function" "booking_rewrite" {
   name    = "${var.name_prefix}-booking-rewrite"
   runtime = "cloudfront-js-2.0"
@@ -135,7 +151,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     allowed_methods          = ["GET", "HEAD"]
     cached_methods           = ["GET", "HEAD"]
     cache_policy_id          = local.cache_disabled
-    origin_request_policy_id = local.orp_all_viewer_except_host
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_get.id
   }
 
   restrictions {

@@ -6,7 +6,7 @@
 
 ### 0) [본 PC] 도구 준비 + 작업용 IAM 사용자 + 사전 변수
 
-필요 도구: AWS CLI v2 · Terraform · eksctl · jq (Docker 불필요 — 빌드는 일반 CloudShell).
+필요 도구: AWS CLI v2 · Terraform · eksctl · jq · gettext(envsubst) (Docker 불필요 — 빌드는 일반 CloudShell).
 
 ```bash
 # root 자격증명으로 1회만 실행
@@ -69,9 +69,8 @@ export LBC_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.lbc' ../outputs.json)
 export FLUENTBIT_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.fluentbit' ../outputs.json)
 export GRAFANA_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.grafana' ../outputs.json)
 
-python3 -c 'import os,sys;sys.stdout.write(os.path.expandvars(sys.stdin.read()))' \
-  < cluster.yaml > cluster.rendered.yaml
-grep '\${' cluster.rendered.yaml && echo "치환 누락!"   # 출력 없어야 함
+envsubst < cluster.yaml > cluster.rendered.yaml
+grep '\${[A-Z]' cluster.rendered.yaml && echo '치환 누락'   # 출력 없어야 함 (주석의 ${...} 는 제외)
 
 eksctl create cluster -f cluster.rendered.yaml   # 약 20분, 완료 시 자동 private 전환
 aws eks describe-cluster --name wsc2026-eks-cluster \
