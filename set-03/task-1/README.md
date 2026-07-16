@@ -21,12 +21,13 @@ k8s/
   ├─ app/         # SA, ConfigMap(book-config), Deployment, Service, PDB, Ingress(ALB)
   ├─ logging/     # Fluent Bit DaemonSet (logfmt → Reference02 JSON + log_to_metrics)
   └─ monitoring/  # kube-prometheus-stack values, PrometheusRule 6종, dashboard.json
-app/Dockerfile           # Book App 컨테이너 (alpine + book). book 바이너리는 빌드 시 shared 에서 복사
+app/                     # 배포파일 위치(book·index.html·main.jpeg) + Dockerfile. 런북 step 0 에서 복사
 README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7 명령 (CloudShell 단계는 본 문서 공통)
 ```
 
-> 제공된 배포파일(`book`, `index.html`, `main.jpeg`)은 repo 공용 `shared/provided/task-1/` 에 있다.
-> S3 정적 업로드(`s3.tf`)는 이 경로를 직접 읽고, App 이미지 빌드는 `book` 을 CloudShell 에 올려 쓴다.
+> 제공된 배포파일(`book`, `index.html`, `main.jpeg`)의 원본은 repo 공용 `shared/provided/task-1/` 에 있고
+> (수정 금지), 런북 step 0 에서 이를 이 과제의 `app/` 로 복사한다.
+> S3 정적 업로드(`s3.tf`)는 `app/` 를 직접 읽고, App 이미지 빌드도 `app/` 의 `book` 을 쓴다.
 
 ## 배포 순서
 
@@ -67,6 +68,9 @@ $env:AWS_DEFAULT_REGION = "ap-northeast-2"
 . .\.env.ps1
 aws sts get-caller-identity            # arn:...:user/wsc2026-admin 확인
 
+# 배포파일을 이 과제의 app/ 로 복사 — s3.tf 와 이미지 빌드가 app/ 를 직접 읽는다 (원본은 shared, 수정 금지)
+Copy-Item ..\..\shared\provided\task-1\* .\app\
+
 # 대회 당일 바뀌는 값은 tfvars 로 — 1·2차 apply 가 같은 값을 쓴다 (-var 재입력 금지)
 # player_number = 선수 비번호(S3 버킷 이름에 사용), bucket_suffix = 소문자 영문 4자리(예: abcd)
 # 주의: 한글 주석을 넣으면 PS5.1 이 CP949 로 저장해 terraform 이 invalid UTF-8 로 실패한다
@@ -100,7 +104,7 @@ aws s3 cp "$env:TEMP\wsc2026-cs.tgz" "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
 
 > **latest 태그 금지** — mark 3-1 이 이미지 태그 목록 `v1.0.0` 단독 출력을 요구한다.
 > 콘솔에서 **일반 CloudShell**(VPC environment 아님 — Docker·업로드 UI 지원, 홈 1GB 영속)을 열고,
-> **Actions → Upload file** 로 `app/Dockerfile` 과 `shared/provided/task-1/book` 두 파일을 올린다.
+> **Actions → Upload file** 로 `app/` 의 `Dockerfile` 과 `book` 두 파일을 올린다 (step 0 에서 복사됨).
 
 ```bash
 aws configure   # step 0 의 wsc2026-admin 키, region = ap-northeast-2 — 기본 신원(root)로는 ECR CMK 사용 불가

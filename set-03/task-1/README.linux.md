@@ -27,6 +27,9 @@ EOF
 source .env
 aws sts get-caller-identity            # arn:...:user/wsc2026-admin 확인
 
+# 배포파일을 이 과제의 app/ 로 복사 — s3.tf 와 이미지 빌드가 app/ 를 직접 읽는다 (원본은 shared, 수정 금지)
+cp ../../shared/provided/task-1/* app/
+
 # 대회 당일 바뀌는 값은 tfvars 로 — 1·2차 apply 가 같은 값을 쓴다
 cat > terraform/terraform.tfvars <<'EOF'
 player_number = "00"

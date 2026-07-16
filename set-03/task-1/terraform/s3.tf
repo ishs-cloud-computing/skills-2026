@@ -30,12 +30,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "static" {
   }
 }
 
-# 제공된 정적 파일을 static/ prefix 로 업로드. 같은 디렉토리의 book 바이너리는
-# App 컨테이너용이므로 제외한다. 객체별 SSE-KMS 를 명시해 mark 6-1 의
-# head-object SSEKMSKeyId 검사를 충족한다.
+# 제공된 정적 파일을 static/ prefix 로 업로드. 배포파일은 런북에서 app/ 로 복사되며
+# 같은 디렉토리의 컨테이너용 파일(book·Dockerfile·.dockerignore)은 제외한다. 객체별
+# SSE-KMS 를 명시해 mark 6-1 의 head-object SSEKMSKeyId 검사를 충족한다.
 locals {
-  provided_dir = "${path.module}/../../../shared/provided/task-1"
-  static_files = setsubtract(fileset(local.provided_dir, "**"), ["book"])
+  provided_dir = "${path.module}/../app"
+  static_files = setsubtract(fileset(local.provided_dir, "**"), ["book", "Dockerfile", ".dockerignore"])
   content_types = {
     html = "text/html"
     jpeg = "image/jpeg"
