@@ -41,15 +41,17 @@ $env:DB_PASSWORD = 'password'   # tfvars의 db_password와 동일하게 (STEP 8 
 ```powershell
 # ── Windows PowerShell ──
 terraform -chdir=terraform init
-terraform -chdir=terraform apply -auto-approve `
-  -target=data.aws_caller_identity.current `
-  -target=aws_vpc_endpoint.s3 `
-  -target=aws_nat_gateway.this `
-  -target=aws_route_table_association.public `
-  -target=aws_route_table_association.private `
-  -target=aws_iam_role_policy_attachment.node_minimal `
-  -target=aws_iam_role_policy_attachment.node_ecr_pull `
-  -target=aws_ecr_repository.app
+$targets = @(
+  "-target=aws_vpc_endpoint.s3"
+  "-target=aws_nat_gateway.this"
+  "-target=aws_route_table_association.public"
+  "-target=aws_route_table_association.private"
+  "-target=aws_iam_role_policy_attachment.node_minimal"
+  "-target=aws_iam_role_policy_attachment.node_ecr_pull"
+  "-target=aws_ecr_repository.app"
+)
+
+terraform -chdir=terraform apply -auto-approve @targets
 ```
 
 ## STEP 2 — eksctl 클러스터 생성 (PowerShell, ~15분)
