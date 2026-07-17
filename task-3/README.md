@@ -102,7 +102,7 @@ aws ecr get-login-password | docker login --username AWS --password-stdin $REG
 # 3개 모두 빌드 — 아래 4a~4c 검증이 끝난 뒤 4d에서 push한다.
 # 당일 앱 목록이 다르면 이 목록만 바꾼다(terraform variables.tf의 apps 맵 키와 동일).
 for a in user product stress; do
-  docker build --build-arg BINARY=$a -t $REG/$a:$TAG app/ || echo "BUILD FAILED: $a"
+  docker build --build-arg BINARY=$a -t $REG/$a:$TAG . || echo "BUILD FAILED: $a"
 done
 ```
 
@@ -122,10 +122,10 @@ file app/user app/product app/stress   # "dynamically linked" / "statically link
 ```bash
 # ── CloudShell ──
 docker run -d -p 8080:8080 --name test $REG/stress:$TAG
-sleep 2
+
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/healthcheck   # 200 기대
-docker logs t                                                        # 부팅 로그·에러 확인
-docker rm -f t
+docker logs test                                                      # 부팅 로그·에러 확인
+docker rm -f test
 ```
 
 ### 4c — 계약 테스트: user·product (push 전, ~3분)
@@ -148,7 +148,7 @@ curl -s -o /dev/null -w '%{http_code} POST user\n' -X POST "localhost:8080/v1/us
   -H 'Content-Type: application/json' \
   -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","username":"t1","email":"t1@example.org"}'   # 201
 curl -s -o /dev/null -w '%{http_code} GET user\n' "localhost:8080/v1/user?email=t1@example.org&$Q"   # 200
-docker rm -f t
+docker rm -f test
 ```
 
 product는 S3까지 태워 **버킷 env 키·멀티파트 필드명·오브젝트 키**를 한 번에 확정한다 (STEP 3에서 버킷이 생긴 뒤. CloudShell에는 자격증명이 있다).
