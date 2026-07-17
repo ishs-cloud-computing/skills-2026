@@ -29,6 +29,7 @@ resource "aws_security_group" "db" {
 # 프록시 인증 자격증명 (Secrets Manager 필수)
 resource "aws_secretsmanager_secret" "db" {
   name = "skills-db-credentials"
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "db" {

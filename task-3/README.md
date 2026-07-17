@@ -24,12 +24,12 @@ task-3/
 ```powershell
 # ── Windows PowerShell ──
 cd task-3
-# terraform/terraform.tfvars 수정: player_number, (필요시) db_password
+# terraform/terraform.tfvars 수정: player_number, db_password(default: password)
 # 앱 목록·이미지 태그가 당일 과제와 다르면 terraform/variables.tf의 apps·image_tag,
 # 리전·CIDR·DB 사양이 다르면 terraform/locals.tf 수정
 
-# 지급된 자격증명을 파일로 저장(전 창 공유). terraform/eksctl/kubectl도 이 값을 읽는다.
-aws configure   # 지급 키 입력, region: ap-northeast-2, output: json
+# AWSCLI 로그인
+aws configure   # region: ap-northeast-2
 
 $env:DB_PASSWORD = 'password'   # tfvars의 db_password와 동일하게 (STEP 8 치환용)
 ```
@@ -169,8 +169,8 @@ curl -s -o /dev/null -w '%{http_code} PUT product\n' -X PUT "localhost:8080/v1/p
   -F "requestid=999999999999" -F "uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729" \
   -F "id=t1" -F "image=@/tmp/t.jpg"      # 200. 400/415면 필드명이 틀린 것 → docker logs t 로 확인
 aws s3 ls s3://$BUCKET --recursive       # 실제 오브젝트 키 포맷 확인 → STEP 9의 /images/<key> 검증에 사용
-docker logs t                            # 버킷 env 키가 틀리면 여기서 S3 에러가 보인다
-docker rm -f t db
+docker logs test                         # 버킷 env 키가 틀리면 여기서 S3 에러가 보인다
+docker rm -f test db
 ```
 
 여기서 확정되는 것 — 안 하면 전부 STEP 9(≈T+45)에서 CloudFront·WAF·ALB·TGB·파드 5개 레이어 너머로 발견된다:
@@ -199,7 +199,7 @@ kubectl get nodeclass,nodepool   # Ready 확인
 
 ## STEP 6 — 엔드포인트 제출 (PowerShell)
 
-앱 배포 전에 미리 제출한다(조기 제출 = 채점 이득). STEP 3 apply가 CloudFront까지 끝났으면 값이 나온다.
+앱 배포 전에 미리 제출한다. STEP 3 apply가 CloudFront까지 끝났으면 값이 나온다.
 
 ```powershell
 # ── Windows PowerShell ──
