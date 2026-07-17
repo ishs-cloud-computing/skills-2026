@@ -121,7 +121,7 @@ file app/user app/product app/stress   # "dynamically linked" / "statically link
 
 ```bash
 # ── CloudShell ──
-docker run -d -p 8080:8080 --name t $REG/stress:$TAG
+docker run -d -p 8080:8080 --name test $REG/stress:$TAG
 sleep 2
 curl -s -o /dev/null -w '%{http_code}\n' localhost:8080/healthcheck   # 200 기대
 docker logs t                                                        # 부팅 로그·에러 확인
@@ -139,7 +139,7 @@ docker run -d --name db -e MYSQL_ROOT_PASSWORD=pw -e MYSQL_DATABASE=dev \
 sleep 20   # mysqld 기동 대기
 docker exec -i db mysql -uroot -ppw dev < db/01-schema.sql
 
-docker run -d --link db --name t -p 8080:8080 \
+docker run -d --link db --name test -p 8080:8080 \
   -e MYSQL_HOST=db -e MYSQL_PORT=3306 -e MYSQL_DBNAME=dev \
   -e MYSQL_USER=root -e MYSQL_PASSWORD=pw $REG/user:$TAG
 
@@ -156,7 +156,7 @@ product는 S3까지 태워 **버킷 env 키·멀티파트 필드명·오브젝�
 ```bash
 # ── CloudShell ── (STEP 3 완료 후)
 BUCKET=<STEP 3의 bucket_name>
-docker run -d --link db --name t -p 8080:8080 \
+docker run -d --link db --name test -p 8080:8080 \
   -e MYSQL_HOST=db -e MYSQL_PORT=3306 -e MYSQL_DBNAME=dev \
   -e MYSQL_USER=root -e MYSQL_PASSWORD=pw \
   -e S3_BUCKET=$BUCKET -e AWS_REGION=ap-northeast-2 $REG/product:$TAG
