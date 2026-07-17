@@ -61,7 +61,7 @@ terraform -chdir=terraform apply -auto-approve @targets
 ```powershell
 # ── Windows PowerShell ──
 $sn   = terraform -chdir=terraform output -json private_subnet_ids | ConvertFrom-Json
-$acct = terraform -chdir=terraform output -raw account_id
+$acct = aws sts get-caller-identity --query Account --output text
 
 $yaml = Get-Content eksctl/cluster.yaml -Raw
 $yaml = $yaml.Replace('subnet-REPLACE_A', $sn[0])
