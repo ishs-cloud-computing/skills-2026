@@ -1,0 +1,4 @@
+[tools]
+node = "24"
+terraform = "1"
+"aqua:terraform-docs/terraform-docs" = "latest"
