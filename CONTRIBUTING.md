@@ -1,16 +1,11 @@
-# Contributing Guide
+# 프로젝트 기여 가이드
 
 ## Index
 
-- [시작하기 전에](#시작하기-전에)
 - [기여하는 방법](#기여하는-방법)
 - [Issue 및 Pull Request 생성](#issue-및-pull-request-생성)
 - [Commit & Branch convention](#commit--branch-convention)
 - [AI Guideline](#ai-guideline)
-
-## 시작하기 전에
-
-- 과제지·채점지 PDF(`task.pdf`, `mark.pdf`)는 Git LFS로 관리됩니다. 클론 전에 [Git LFS](https://git-lfs.com)를 설치하고 `git lfs install`을 한 번 실행해야 실제 파일을 받을 수 있습니다 (미설치 시 포인터 텍스트만 받아집니다).
 
 ## 기여하는 방법
 
