@@ -1,117 +1,128 @@
 # CLAUDE.md
 
-2026 전국기능경기대회 클라우드컴퓨팅 직종의 사전 공개 과제(1·2과제)를 Terraform / eksctl / Kubernetes manifest로 관리하는 저장소. 대회 전 약 10세트가 공개되며 이 중에서 출제된다. 세트마다 사용 서비스 조합이 다르므로 구조만 통일하고 내용은 세트별로 채운다.
+Repository for managing pre-released tasks (Tasks 1 & 2) for the 2026 National Skills Competition Cloud Computing category using Terraform / eksctl / Kubernetes manifests. Around 10 sets are released prior to the competition, and the exam will be selected from these. Since each set uses a different combination of services, unify the directory structure across sets while filling in specific contents per set.
 
-## 대회 구조
+## Competition Structure
 
-- 대회에서는 AWS 계정이 지급되며 개인 계정을 사용하지 않는다. 각 세트는 별개이므로 세트 간 리소스 간섭(계정 전체를 스캔하는 채점 항목 포함)은 고려하지 않는다.
-- 1·2과제만 사전 공개되며 이 중에서 출제된다.
-- 1과제: 단일 과제. 보통 단일 리전 종합 인프라.
-- 2과제: 독립 모듈 여러 개로 구성. 모듈 수와 리전은 세트마다 다르다.
-- 각 세트의 구체적인 서비스 구성은 해당 세트의 README나 과제지를 참고한다.
+- AWS accounts are provided during the competition; personal accounts are not used. Each set is independent, so resource interference between sets (including grading items that scan the entire account) does not need to be considered.
+- Only Tasks 1 & 2 are released in advance, from which the actual exam will be drawn.
+- Task 1: A single task. Typically a comprehensive infrastructure in a single region.
+- Task 2: Composed of multiple independent modules. The number of modules and regions vary per set.
+- Refer to the README or task specifications of each set for specific service configurations.
 
-## 환경
+## Environment
 
 - OS: Windows 11
-- Docker, AWSCLI, Terraform, WSL 미설치
-- 재시동 시 파일 초기화
-- 학교 네트워크
+- Docker, AWS CLI, Terraform, and WSL are NOT installed.
+- Files are reset upon reboot.
+- School network environment.
 
-## 디렉토리 구조
+## Directory Structure
+
 
 ```
+
 skills-2026/
 ├── set-01/
 │   ├── task-1/
-│   │   ├── terraform/   # AWS 리소스
-│   │   ├── eksctl/      # 클러스터/노드그룹 (EKS 과제일 때만)
-│   │   ├── k8s/         # k8s 리소스 (번호 prefix로 apply 순서, 그룹용 서브디렉토리 허용)
-│   │   ├── app/         # 컨테이너 소스 (필요할 때만)
-│   │   ├── task.md / task.pdf   # 과제지
-│   │   ├── mark.md / mark.pdf   # 채점지
-│   │   └── mark.sh             # 채점 스크립트 (단일 과제 → 단일 파일)
+│   │   ├── terraform/   # AWS resources
+│   │   ├── eksctl/      # Cluster/nodegroup (EKS tasks only)
+│   │   ├── k8s/         # k8s resources (numeric prefixes enforce apply order; group subdirectories allowed)
+│   │   ├── app/         # Container source code (only when needed)
+│   │   ├── task.md / task.pdf   # Task specifications
+│   │   ├── mark.md / mark.pdf   # Grading criteria
+│   │   └── mark.sh             # Grading script (single task → single file)
 │   └── task-2/
-│       ├── module-N-<name>/   # 구현: 모듈별 terraform/ eksctl/ k8s/ app/ 중 필요한 것만 (이름은 서술형)
-│       ├── provided/          # 대회 제공 소스 (수정 금지). 세트마다 다르며 module1/ module2/ ... 로 모듈별 분리
-│       ├── mark/              # 모듈별 채점 스크립트 mark2-1.sh, mark2-2.sh ... (mark<과제번호>-<모듈번호>.sh)
+│       ├── module-N-/   # Implementation: include only necessary terraform/ eksctl/ k8s/ app/ per module (descriptive names)
+│       ├── provided/          # Competition-provided source files (DO NOT EDIT). Varies by set, separated by module (module1/, module2/, ...)
+│       ├── mark/              # Grading scripts per module: mark2-1.sh, mark2-2.sh ... (mark<task#>-<module#>.sh)
 │       ├── task.md / task.pdf · mark.md / mark.pdf
-│       └── ...                # 모듈 수는 세트마다 다름
-├── set-02/ ~ set-10/    # 동일 구조
+│       └── ...                # The number of modules varies per set
+├── set-02/ ~ set-10/    # Same structure
 ├── shared/
-│   ├── provided/         # 과제 배포파일
+│   ├── provided/         # Task distribution files
 │   └── scripts/
 └── .github/
+
 ```
 
-하위 디렉토리(`terraform/`, `eksctl/`, `k8s/`, `app/`)는 해당 과제에 필요한 것만 만든다. 모든 과제가 EKS나 컨테이너를 쓰는 것은 아니다.
+Create subdirectories (`terraform/`, `eksctl/`, `k8s/`, `app/`) only as needed for each task. Not all tasks use EKS or containers.
 
-## 파일 배치 규칙
+## File Placement Rules
 
-- `terraform/`: AWS 리소스. 리소스가 많으면 도메인별로 파일 분리.
-- `eksctl/`: EKS 클러스터/노드그룹 YAML. Terraform과 같은 IaC 레이어이므로 `k8s/`가 아니라 `terraform/`과 같은 레벨에 둔다.
-- `k8s/`: 클러스터 생성 후 `kubectl apply`할 리소스. apply가 알파벳 순이므로 의존 순서를 번호 prefix로 강제한다 (`00-namespace.yaml`, `01-configmap.yaml` ...). 도메인이 많으면 `app/`·`monitoring/`·`logging/` 같은 그룹용 서브디렉토리로 묶고, 번호 prefix는 순서 의존 파일에만 쓴다.
-- `app/`: ECR에 빌드/푸시할 컨테이너 소스.
-- `provided/` (task-2 전용): 대회가 세트별로 제공하는 소스. 모듈별 `module1/`·`module2/` ... 서브디렉토리에 원본 그대로 두고 수정하지 않는다. 구현 코드는 `module-N-<name>/`에 따로 작성한다.
+- `terraform/`: AWS resources. If there are many resources, separate files by domain.
+- `eksctl/`: EKS cluster/nodegroup YAML files. Since this is an IaC layer like Terraform, place it at the same level as `terraform/`, not inside `k8s/`.
+- `k8s/`: Resources to be applied via `kubectl apply` after cluster creation. Since application follows alphabetical order, force dependency order using numeric prefixes (`00-namespace.yaml`, `01-configmap.yaml`, etc.). If there are many domains, group them into subdirectories like `app/`, `monitoring/`, or `logging/`, and use numeric prefixes only on files with order dependencies.
+- `app/`: Container source code to build and push to ECR.
+- `provided/` (Task 2 only): Source files provided by the competition. Keep them unchanged in module subdirectories (`module1/`, `module2/`, ...). Write implementation code separately under `module-N-<name>/`.
 
-## 설계 규칙
+## Design Rules
 
-- **설계 순서**: 과제지/채점지로 요구사항↔리소스를 먼저 매핑한 뒤 의존성 순서로 쌓는다 — 네트워크(VPC·서브넷·SG) → IAM → 데이터/스토리지 → 컴퓨트(EKS·EC2) → 앱/k8s → 관측성. 채점 항목 단위로 리소스를 끊어 매핑이 깨지지 않게 한다.
-- **30% 변동 대비**: 대회 당일 공개 과제의 약 30%가 수정·추가될 수 있다. 값은 변수로, 반복은 모듈로 분리하고 리소스 경계를 명확히 해 일부 요구사항 변경이 전체 재작성으로 번지지 않게 설계한다. 이름·CIDR·리전·인스턴스 타입·개수 등 바뀌기 쉬운 축은 반드시 변수화한다(작업 규칙 5번과 연계).
+- **Design Sequence**: Map requirements ↔ resources using the task spec and grading sheet first, then stack them in dependency order — Network (VPC, Subnet, SG) → IAM → Data/Storage → Compute (EKS, EC2) → App/k8s → Observability. Break resources down into grading item units to prevent mapping breakage.
+- **Preparing for 30% Changes**: Around 30% of the pre-released tasks may be modified or added on the day of the competition. Separate values into variables and repeated elements into modules, keeping clear resource boundaries so that partial requirement changes do not force a complete rewrite. Variables must be used for frequently changing axes like names, CIDRs, regions, instance types, and counts (aligned with Work Rule #5).
 
-## 문서 규칙
+## Documentation Rules
 
-문서는 읽는 시점이 다른 두 독자를 분리한다.
+Separate documentation for two readers with different timing:
 
-- 루트 `README.md`: 10세트 인덱스 + 공통 워크플로만. 세트 고유 내용은 넣지 않는다.
-- 세트별 `set-XX/task-Y/README.md`: **Quick Start(런북) 전용**. 위→아래로 그대로 실행하는 순수 명령 위주로, 대회 중 손이 멈추지 않게 산문을 최소화한다. 한 줄 개요 + 디렉토리 구조 + 배포 순서까지.
-- 설계 근거·요구사항↔구현 매핑·주의/함정·검증 시드 등 "왜/검증"에 해당하는 설명은 README 하단 섹션으로 분리하되, 분량이 커지면 같은 디렉토리의 `ARCHITECTURE.md`로 떼어낸다. (파일을 떼면 README 런북과 sync가 깨지지 않게 주의.)
-- 요구사항↔구현 매핑 표는 채점지와 직결되므로 설명 영역(하단 섹션 또는 `ARCHITECTURE.md`)에 둔다.
+- Root `README.md`: Index for all 10 sets + common workflow only. Do not include set-specific content.
+- Set-specific `set-XX/task-Y/README.md`: **Quick Start (Runbook) only**. Pure execution commands from top to bottom, minimizing prose so work does not stall during the competition. Include a one-line overview, directory structure, and deployment steps.
+- Design rationale, requirements ↔ implementation mappings, traps/caveats, and verification seeds ("why/verification" explanations) should be separated into a section at the bottom of the README. If it grows too large, move it to `ARCHITECTURE.md` in the same directory. (If separated, ensure the README runbook and architecture docs stay in sync.)
+- Requirement ↔ implementation mapping tables directly relate to the grading sheet, so keep them in the explanation section (bottom of README or `ARCHITECTURE.md`).
 
-## Terraform 변수 규칙
+## Terraform Variable Rules
 
-- `variables.tf`에 기본값, 세트별 이름·CIDR·리전 값은 `terraform.tfvars`로 주입.
-- 리소스 이름은 과제지에 명시된 값과 정확히 일치시킨다 (이름 정확 일치 채점 항목이 많음).
+- Set default values in `variables.tf`, and inject set-specific names, CIDRs, and regions via `terraform.tfvars`.
+- Match resource names exactly with those specified in the task sheet (many grading items require exact name matches).
 
-## 상태·명령
+## State and Commands
 
-- Terraform state는 로컬(`*.tfstate`)이며 `.gitignore`로 제외된다. tfstate·`.terraform/`(프로바이더 바이너리 수백 MB)·`outputs.json`은 절대 커밋하지 않는다.
-- `apply`는 본 컴퓨터에서만 수행한다. bastion에는 프로바이더 대신 `terraform output -json > outputs.json`만 올려 `jq`로 값을 읽는다.
-- 세트별 상세 명령(init/plan/apply, `eksctl create`, `kubectl apply`, 채점 스크립트 실행)은 각 `set-XX/task-Y/README.md` 런북을 따른다.
+- Terraform state is stored locally (`*.tfstate`) and excluded via `.gitignore`. Never commit tfstate files, `.terraform/` directories (provider binaries weighing hundreds of MBs), or `outputs.json`.
+- Execute `apply` only on the local machine. Upload only `terraform output -json > outputs.json` to the bastion host and read values using `jq`.
+- Follow the runbook in each `set-XX/task-Y/README.md` for detailed set commands (init/plan/apply, `eksctl create`, `kubectl apply`, grading script execution).
 
-## 작업 규칙
+## Work Rules
 
-1. 과제 작업 시작·트러블슈팅·마무리 전 항상 task.md, mark.md, 채점 스크립트(task-1은 `mark.sh`, task-2는 `mark/markN.sh`)를 확인한다.
-2. 사용 SW는 작성 시점 최신 안정 버전으로 **고정**한다 (latest 금지). 예외:
-   - `eksctl`, `helm` 등 클러스터 관리 도구는 고정하지 않고 최신 안정 버전 사용.
-   - AL2023 등 보안이 중요한 항목은 latest 허용.
-   - 과제지/채점지에 명시된 경우 명시된 버전(또는 latest) 사용.
-   - EKS Addon 버전은 고정하지 않는다.
-3. 변경한 manifest/terraform은 관련 툴로 동작 여부와 채점 기준 충족을 검증한다.
-4. 채점은 채점 스크립트가 검사하는 정확한 형태를 기준으로 한다. 중복·불필요해 보여도 채점 대상 필드는 제거하지 않는다.
-5. 대회에서 바뀌기 쉬운 값(이름·CIDR·리전 등)은 변수로 선언해 쉽게 바꿀 수 있게 한다.
-6. bastion 또는 cloudshell 환경변수는 연결이 끊겨도 재접속 시 바로 쓰도록 bastion 및 local에 .env 파일로 준비한다. 
-7. `eksctl`·`helm`은 버전 간 기본값·스키마가 자주 바뀐다(옵션 deprecated, 기본값 변경). 옵션 사용 전 공식 문서로 현재 동작을 확인한다.
-8. manifest의 주석은 관련 근거 또는 설계 의도만 작성한다.
+1. Always check task.md, mark.md, and grading scripts (`mark.sh` for task-1, `mark/markN.sh` for task-2) before starting task work, troubleshooting, or finishing up.
+2. Fix used software versions to the latest stable release at the time of writing (do NOT use `latest`). Exceptions:
+   - Cluster management tools like `eksctl` and `helm` are not fixed; use the latest stable version.
+   - Security-critical components like AL2023 allow `latest`.
+   - Use specified versions (or `latest`) if explicitly required by task/grading specs.
+   - EKS Addon versions are not fixed.
+3. Verify modified manifests/terraform using relevant tools to ensure proper operation and fulfillment of grading criteria.
+4. Grading is based on the exact structure checked by grading scripts. Even if fields appear redundant or unnecessary, do not remove grading target fields.
+5. Declare values that easily change in competitions (names, CIDRs, regions, etc.) as variables to allow easy modification.
+6. Prepare `.env` files on both local and bastion machines so bastion or CloudShell environment variables can be immediately restored upon reconnection.
+7. `eksctl` and `helm` frequently change default values and schemas across versions (deprecated options, changed defaults). Check official documentation for current behavior before using options.
+8. Manifest comments should only contain design rationale or relevant justification.
 
-## 리뷰
+## Review
 
-작업 도중 간헐적으로 수행하는 점검. 마무리 작업과 달리 미완 상태에서도 돈다.
+Intermittent checks performed during work. Runs even in an incomplete state.
 
-- `terraform fmt`·`validate`·`plan`으로 의도치 않은 diff가 없는지 확인한다.
-- 현재 구현이 채점 스크립트 항목을 어디까지 커버하는지 대조하고, 빈 항목을 추적한다.
-- 하드코딩 점검: 이름·CIDR·리전·인스턴스 타입 등 바뀌기 쉬운 값이 변수로 빠졌는지 확인한다.
-- 보안 점검: 과도한 IAM 권한, `0.0.0.0/0` SG, 평문 시크릿이 없는지 확인한다.
-- 미사용·중복 리소스를 정리하고, README 런북 순서가 실제 배포 순서와 일치하는지 확인한다.
+- Run `terraform fmt`, `validate`, and `plan` to verify there are no unintended diffs.
+- Cross-reference current implementations against grading script items and track missing items.
+- Hardcoding check: Ensure easily changed values (names, CIDRs, regions, instance types) are extracted into variables.
+- Security check: Ensure there are no excessive IAM permissions, `0.0.0.0/0` SGs, or plaintext secrets.
+- Clean up unused/duplicate resources and ensure README runbook order matches actual deployment order.
 
-## 마무리 작업
+## Completion Tasks
 
-한 과제의 구현이 완료된 시점에 진행하는 검토 과정이다 (작업 규칙 1번 선행).
+The review process performed once implementation for a task is complete (Work Rule #1 must precede).
 
-1. 더 나은 방법이 존재하는지 검토한다.
-2. 관련 툴로 자료가 동작하는지, 채점 기준과 맞는지 확인한다.
+1. Review whether a better implementation method exists.
+2. Verify materials work using relevant tools and align with grading criteria.
+
+## Commits / Branches
+
+- Write commit messages in plain imperative mood without prefixes like `feat:` or `chore:`.
+- Separate branches by set and task units.
 
 
-## 커밋 / 브랜치
+## Language & Output Rules
+- Always respond and communicate in Korean.
 
-- 커밋 메시지는 평이한 명령형으로 작성하고 `feat:` / `chore:` 같은 prefix는 쓰지 않는다.
-- 세트·과제 단위로 브랜치를 분리한다.
+- User Documentation & Comments: All user-facing documents (README.md, ARCHITECTURE.md, etc.), task notes, and code/manifest comments MUST be written in Korean.
+
+- Code & Technical Names: Keep resource names, variable names, and code syntax in English as required by the specifications.  
+
