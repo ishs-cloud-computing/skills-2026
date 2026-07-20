@@ -3,6 +3,7 @@
 
 # 대회 제공 실행 바이너리
 shared/provided/task-1/book filter=lfs diff=lfs merge=lfs -text
+shared/provided/set-06-task-1/book-linux-amd64_v1.0.1 filter=lfs diff=lfs merge=lfs -text
 task-3/provided/user filter=lfs diff=lfs merge=lfs -text
 task-3/provided/product filter=lfs diff=lfs merge=lfs -text
 task-3/provided/stress filter=lfs diff=lfs merge=lfs -text
