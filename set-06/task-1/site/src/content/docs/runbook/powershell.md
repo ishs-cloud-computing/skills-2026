@@ -5,7 +5,7 @@ sidebar:
 ---
 
 EKS(Bottlerocket) 위 Book API + CloudFront 단일 엔드포인트(S3 정적 · ALB API · Lambda 조회 · Grafana).
-**NAT 없음 / Private Subnet 2개.** 설계 근거·함정은 [plan.md](plan.md), Linux/bash 런북은 [README.linux.md](README.linux.md) 참고.
+**NAT 없음 / Private Subnet 2개.** 설계 근거·함정은 [설계 문서](/design/01-review/), Linux/bash 런북은 [Linux / bash](/runbook/linux/) 참고.
 
 > 문서 사이트: <https://skills-2026-docs.netlify.app>
 
