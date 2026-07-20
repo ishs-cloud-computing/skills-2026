@@ -1,21 +1,28 @@
 # set-06 / task-1 설계 (Solution Architecture)
 
-EKS(Bottlerocket) 위에 Book API를 배포하고, CloudFront 단일 엔드포인트로 S3 정적 페이지 · ALB API · Lambda 조회 API · Grafana를 함께 서비스하는 과제. 전 리소스 `ap-northeast-2`. **NAT 없음 / Private Subnet 2개뿐**이라는 제약이 설계 전반을 지배한다.
+EKS(Bottlerocket) 위에 Book API를 배포하고, CloudFront 단일 엔드포인트로 S3 정적 페이지 · ALB API · Lambda 조회 API · Grafana를 함께 서비스하는 과제. 전 리소스 `ap-northeast-2`(WAF Web ACL만 AWS 제약상 예외, §3.10). **NAT 없음 / Private Subnet 2개뿐**이라는 제약이 설계 전반을 지배한다.
+
+## 0. 재검토 기록 (원본 PDF 재확인 + 실측)
+
+최초 설계 이후 `task.pdf`(다이어그램 이미지 포함)와 `mark.sh`를 다시 원본에서 읽고, 핵심 가정 2건을 실측·재검증해 아래와 같이 정정했다.
+
+1. **Lambda는 ALB가 아니라 CloudFront에서 직접 연결한다.** 문제지 1페이지 다이어그램을 실제로 렌더링해 확인한 결과, `Lambda` 아이콘은 `VPC` 박스 **밖**에 있고 화살표가 `CloudFront`에서 **직접** 내려와 `Lambda`로 들어간다(ALB·WAF 박스를 거치지 않음). 텍스트 근거도 있다 — "9. Load Balancing"이 명명한 Target Group은 `gj2026-book-tg`, `gj2026-grafana-tg` **딱 2개뿐**이며, Lambda용 3번째 Target Group 이름이 어디에도 없다. 이 과제는 리소스명을 전부 명시적으로 지정하는 방식이라, 이름이 없다는 것 자체가 "그 리소스가 없다"는 뜻이다. 최초 설계는 "Web ACL 1개로 CloudFront와 ALB를 동시에 커버할 수 없다"는 이유로 ALB Lambda 타깃그룹을 채택했는데, 이는 **WAF를 ALB(REGIONAL)에 붙인다는 전제 자체가 틀렸던 것** — WAF를 **CloudFront(CLOUDFRONT scope)에** 붙이면 Web ACL 1개가 엣지에서 `/v1/book`·`/reservation` 두 경로를 모두 검사하고, 그 뒤에 ALB든 Lambda Function URL이든 원하는 오리진으로 라우팅할 수 있다. §3.7·3.8·3.9·3.10 전면 수정.
+2. **Gateway Endpoint는 1-2 채점을 깨지 않는다 — 오히려 DynamoDB엔 그것뿐이다.** 최초 설계는 "Gateway Endpoint가 라우트 테이블에 prefix-list 라우트를 추가해 `Routes[].DestinationCidrBlock` 출력에 `None`이 섞인다"고 판단해 전부 Interface Endpoint로 우회했다(S3까지 포함). 실제로 `jmespath` 라이브러리로 그 정확한 쿼리를 재현해보면, Gateway Endpoint 라우트는 `DestinationCidrBlock` 키 자체가 없고(`DestinationPrefixListId`만 있음) — JMESPath 프로젝션은 **결과가 null인 원소를 배열에서 아예 제외**하므로 `Routes[].DestinationCidrBlock`은 로컬 라우트 `10.0.0.0/16` 하나만 반환한다(실측: `jmespath.search(...)` → `['10.0.0.0/16']`, `None` 없음). 즉 Gateway Endpoint를 추가해도 1-2 출력은 그대로 정확히 일치한다. 이건 단순 최적화가 아니라 **필수 정정**이다 — DynamoDB는 애초에 Interface Endpoint 자체가 존재하지 않는 서비스(Gateway 전용)라, 이전 설계의 "dynamodb(interface)"는 AWS에 존재하지 않는 리소스를 만들려 한 것이었다. §3.1 전면 수정.
 
 ```
 사용자 ──> CloudFront (gj2026-cdn, HTTP→HTTPS redirect)
+   │       └ WAF Web ACL(CLOUDFRONT scope) gj2026-waf-acl 연결 — 모든 behavior 공통
    ├─ Default        ──> S3 (OAC, gj2026-static-<비번호>)   [캐싱 O]
    │                     └ CloudFront Function(viewer-request): 확장자 없는 URI → /index.html
-   ├─ /v1/book*      ──┐
-   ├─ /reservation*  ──┤ VPC Origin (gj2026-alb-origin)      [캐싱 X, 쿼리스트링 전달]
-   └─ /grafana*      ──┘   └─> ALB gj2026-alb (internal, private subnet a/b)
-                              │   └ WAF REGIONAL gj2026-waf-acl 연결
-                              ├─ /v1/book*     → gj2026-book-tg      → EKS book Pod x2 (skills ns)
-                              ├─ /reservation* → gj2026-reservation-tg → Lambda gj2026-book-reservation
-                              └─ /grafana*     → gj2026-grafana-tg   → Grafana Pod (monitoring ns)
+   ├─ /v1/book*  ┐
+   ├─ /grafana*  ┘ VPC Origin (gj2026-alb-origin) [캐싱 X, 쿼리스트링 전달]
+   │                └─> ALB gj2026-alb (internal, private subnet a/b)
+   │                     ├─ /v1/book* → gj2026-book-tg    → EKS book Pod x2 (skills ns)
+   │                     └─ /grafana* → gj2026-grafana-tg → Grafana Pod (monitoring ns)
+   └─ /reservation*  ──> Lambda Function URL(OAC) → gj2026-book-reservation
 
 DynamoDB books (CMK alias/gj2026-db-key, GSI client_id-index)
-   ← book Pod: PutItem (IRSA)      ← Lambda: Scan/Query
+   ← book Pod: PutItem (IRSA, Gateway Endpoint 경유)   ← Lambda: Scan/Query(VPC 밖, 퍼블릭 엔드포인트)
    ← 그 외 모든 주체: 리소스 기반 정책으로 쓰기 Deny (채점 3-3)
 
 로그/메트릭: book access log → Fluent Bit(logging ns) → CloudWatch /eks/book-svc/access
@@ -28,7 +35,7 @@ DynamoDB books (CMK alias/gj2026-db-key, GSI client_id-index)
 | 채점 | 배점 | 구현 위치 | 핵심 판정 기준 |
 |---|---|---|---|
 | 1-1 VPC | 1.0 | `terraform/vpc.tf` | CIDR 10.0.0.0/16, 서브넷 **정확히 2개**(a=10.0.10.0/24, b=10.0.11.0/24) |
-| 1-2 Route Table | 1.0 | `terraform/vpc.tf` | private-rtb-a/b에 **local 라우트만**. Gateway Endpoint 금지 |
+| 1-2 Route Table | 1.0 | `terraform/vpc.tf` | private-rtb-a/b의 `Routes[].DestinationCidrBlock`이 `10.0.0.0/16` 하나만(Gateway Endpoint 라우트는 이 필드가 없어 무관, §0-2) |
 | 1-3 NAT Gateway | 1.0 | `terraform/vpc.tf` | 계정 내 NAT **0개**, IGW는 `gj2026-igw` 1개 |
 | 2-1 ECR Repository | 1.0 | `terraform/ecr.tf` | repository name `book` |
 | 2-2 ECR Image Size | 1.5 | `app/Dockerfile` + 런북 | `latest` 태그 이미지 `imageSizeInBytes` ≤ 3MB → **zstd 압축 필수** |
@@ -46,10 +53,10 @@ DynamoDB books (CMK alias/gj2026-db-key, GSI client_id-index)
 | 7-1 Lambda Config | 1.0 | `terraform/lambda.tf` | `gj2026-book-reservation` / `python3.14` / Active |
 | 8-1 S3 Static Content | 1.0 | `terraform/cloudfront.tf` + Function | `/` Miss, `/main.jpeg` Miss, `/index.html` **Hit** |
 | 8-2 ALB API | 1.5 | 전체 통합 | CF 경유 POST → `{"booking_id":"..."}` |
-| 8-3 Lambda API 1 | 1.5 | `terraform/lambda/index.py` | 전체 조회 JSON 배열 |
-| 8-4 Lambda API 2 | 1.5 | `terraform/lambda/index.py` | `?client_id=C001` GSI 조회 |
-| 9-1 HTTP Method | 1.5 | `terraform/waf.tf` | `/v1/book` GET → `Method Not Allowed` + 405 |
-| 9-2 Query String | 1.5 | `terraform/waf.tf` | 잘못된 `client_id` → `Access Denied` + 403 |
+| 8-3 Lambda API 1 | 1.5 | `terraform/lambda.tf`(Function URL) + `lambda/index.py` | 전체 조회 JSON 배열 |
+| 8-4 Lambda API 2 | 1.5 | 위와 동일 | `?client_id=C001` GSI 조회 |
+| 9-1 HTTP Method | 1.5 | `terraform/waf.tf`(CLOUDFRONT scope) | `/v1/book` GET → `Method Not Allowed` + 405 |
+| 9-2 Query String | 1.5 | `terraform/waf.tf`(CLOUDFRONT scope) | 잘못된 `client_id` → `Access Denied` + 403 |
 | 10-1 Fluent Bit | 1.5 | `k8s/logging/` | AZ별 로그 스트림 2개, 메시지가 **JSON**이고 `remote_addr` 필드 존재 |
 | 10-2 Grafana | 1.5 | `k8s/monitoring/` | `WSI Dashboard` / `Query Count Panel`에 `ALL`·`C001` 시리즈 |
 
@@ -61,16 +68,16 @@ set-06/task-1/
 │   ├── providers.tf      # provider 버전 고정, required_version
 │   ├── variables.tf      # 기본값
 │   ├── terraform.tfvars  # 비번호 등 세트 값 주입
-│   ├── vpc.tf            # VPC·Subnet·IGW·RT·Interface Endpoint·SG
+│   ├── vpc.tf            # VPC·Subnet·IGW·RT·Gateway Endpoint(s3/dynamodb)·Interface Endpoint·SG
 │   ├── kms.tf            # CMK 3종(db/s3/eks) + alias + 키 정책
 │   ├── ecr.tf            # book repository + pull-through cache rule(ecr-public)
 │   ├── dynamodb.tf       # 테이블·GSI·리소스 기반 정책
-│   ├── alb.tf            # ALB·TG 3종·Listener·Rule
-│   ├── lambda.tf         # 함수·권한·ALB 연동
-│   ├── lambda/index.py   # 조회 API + EMF 메트릭
+│   ├── alb.tf            # ALB·TG 2종(book/grafana)·Listener·Rule
+│   ├── lambda.tf         # 함수·Function URL·OAC·권한
+│   ├── lambda/index.py   # 조회 API + EMF 메트릭 (Function URL 이벤트 포맷)
 │   ├── s3.tf             # 버킷·BPA·OAC 정책·정적 객체 업로드
-│   ├── cloudfront.tf     # VPC Origin·Distribution·Function·캐시 정책
-│   ├── waf.tf            # Web ACL(REGIONAL) + custom response
+│   ├── cloudfront.tf     # VPC Origin·Lambda OAC Origin·Distribution·Function·캐시 정책
+│   ├── waf.tf            # Web ACL(CLOUDFRONT scope, us-east-1 provider) + custom response
 │   ├── iam.tf            # IRSA 역할(book/lambda/fluent-bit/grafana/LBC)
 │   └── outputs.tf        # CF 도메인·배포 ID·ECR URL·TG ARN·ENI IP 등
 ├── eksctl/
@@ -96,11 +103,11 @@ set-06/task-1/
 - Route Table `gj2026-private-rtb-a/b`: 라우트를 **하나도 추가하지 않는다**(local만 존재).
 - IGW `gj2026-igw`를 VPC에 attach하되 **어떤 라우트 테이블에도 연결하지 않는다**. CloudFront VPC Origin 전제 조건일 뿐 인터넷 경로는 만들지 않는다.
 - NAT Gateway 0개.
-- **Gateway Endpoint(S3·DynamoDB) 금지**: 라우트 테이블에 prefix-list 라우트가 추가되어 채점 1-2의 `Routes[].DestinationCidrBlock` 출력에 `None`이 섞인다. 전부 **Interface Endpoint**로 구성한다.
+- **Gateway Endpoint(S3·DynamoDB)를 rtb-a/b에 정상적으로 붙인다.** §0-2에서 실측 확인했듯 Gateway Endpoint의 prefix-list 라우트는 `DestinationCidrBlock` 키가 없어 채점 1-2가 쓰는 JMESPath 프로젝션(`Routes[].DestinationCidrBlock`)에서 자동으로 빠진다 — 즉 1-2 출력은 여전히 `10.0.0.0/16` 하나만 나온다. DynamoDB는 애초에 **Gateway 타입만 존재**하고 Interface 옵션 자체가 없으므로(공식적으로 지원 안 함), book Pod가 DynamoDB에 접근하려면 이 방법이 유일하다. S3도 표준 관행대로 Gateway로 되돌린다(ECR 레이어가 S3에서 오므로).
 - Interface Endpoint 목록(private DNS 활성, 두 서브넷 배치, SG는 VPC CIDR 443 허용):
-  `ecr.api`, `ecr.dkr`, `s3`(interface), `logs`, `monitoring`, `sts`, `ec2`, `elasticloadbalancing`, `dynamodb`(interface), `kms`, `eks`, `autoscaling`
-  - `s3` 인터페이스 엔드포인트는 ECR 레이어 다운로드에 필요. ECR 문서는 통상 **S3 Gateway** 엔드포인트를 요구하지만 이 과제에서는 라우트 추가가 곧 감점이므로 인터페이스로 대체하며, 이때 `private_dns_enabled = true` + `dns_options { private_dns_only_for_inbound_resolver_endpoint = false }` 를 설정해 `*.s3.ap-northeast-2.amazonaws.com` 이 엔드포인트로 해석되게 해야 한다. **이미지 pull이 실제로 되는지 클러스터에서 반드시 실측**(대체 수단이 없는 지점).
+  `ecr.api`, `ecr.dkr`, `logs`, `monitoring`, `sts`, `ec2`, `elasticloadbalancing`, `kms`, `eks`, `autoscaling`
   - `monitoring`은 Grafana CloudWatch 데이터소스가 사용.
+- Gateway Endpoint 2개(`s3`, `dynamodb`)는 `route_table_ids = [rtb-a, rtb-b]`로 명시 연결한다(연결 안 하면 애초에 라우팅이 안 되어 접근 자체가 실패).
 - SG 설계
   - `gj2026-alb-sg`: inbound 80 ← CloudFront VPC Origin (VPC Origin 사용 시 CloudFront가 관리하는 ENI에서 유입 → VPC CIDR 허용). outbound all.
   - `gj2026-endpoint-sg`: inbound 443 ← VPC CIDR.
@@ -300,11 +307,12 @@ Pod SG (`gj2026-book-pod-sg`) 규칙 — Terraform에서 생성:
 | 방향 | 포트 | 상대 | 이유 |
 |---|---|---|---|
 | ingress | 8080 | **ALB SG 참조** | ALB만 통과. nginx-test는 노드 primary ENI를 소스로 오므로 자동 차단 |
-| egress | 443 | endpoint SG | DynamoDB·STS·Logs 인터페이스 엔드포인트 |
+| egress | 443 | endpoint SG | STS·Logs 등 Interface 엔드포인트 |
+| egress | 443 | **DynamoDB prefix list**(`data.aws_prefix_list` service=dynamodb) | Gateway Endpoint는 ENI가 없어 SG가 아니라 **prefix-list 대상 egress 규칙**이 필요하다 |
 | egress | 53 (TCP/UDP) | 노드 SG / VPC CIDR | CoreDNS 조회 |
 
 - `POD_SECURITY_GROUP_ENFORCING_MODE`는 **기본값 strict 유지** — branch ENI SG만 평가되어 "Pod 트래픽을 노드 트래픽에서 완전히 분리"한다는 AWS 문서상의 용도와 정확히 일치한다.
-- strict 모드는 source NAT를 끄지만, 이 과제는 NAT 자체가 없고 모든 외부 통신이 VPC 엔드포인트 경유라 영향이 없다. 단 **egress 443을 endpoint SG로 열어주지 않으면 앱이 DynamoDB에 못 붙는다**(놓치기 쉬움).
+- strict 모드는 source NAT를 끄지만, 이 과제는 NAT 자체가 없고 모든 외부 통신이 VPC 엔드포인트 경유라 영향이 없다. 단 **DynamoDB prefix-list egress를 빠뜨리면 앱이 DynamoDB에 못 붙는다**(Gateway Endpoint는 SG가 없어 "endpoint SG" 참조로는 안 열린다 — 놓치기 쉬움).
 - `terminationGracePeriodSeconds`를 0으로 두지 않는다(branch ENI 정리 실패).
 - SG를 1개만 붙이므로 LBC의 backend SG 규칙 자동 관리와 충돌하지 않는다. TargetGroupBinding 사용 시에도 Pod SG를 직접 관리하는 편이 예측 가능하다.
 - **Fallback**: SGP가 동작하지 않으면 vpc-cni addon에 `{"enableNetworkPolicy":"true"}` 를 주고 ALB ENI IP `/32` 나열 NetworkPolicy로 전환(경기 당일 한정 임시 통과용).
@@ -312,39 +320,45 @@ Pod SG (`gj2026-book-pod-sg`) 규칙 — Terraform에서 생성:
 ### 3.7 ALB (alb.tf)
 
 - `gj2026-alb`, **internal**, private subnet a/b, HTTP:80 리스너.
-- Target Group 3종
+- Target Group **2종**(task.md 9번 항목이 이름을 딱 2개만 명시 — Lambda용 3번째 TG는 없다, §0-1):
   - `gj2026-book-tg`: type ip, 8080, health check `/health`
   - `gj2026-grafana-tg`: type ip, 3000, health check `/grafana/api/health`
-  - `gj2026-reservation-tg`: **type lambda**, `gj2026-book-reservation` 연결
+- 리스너 규칙: `/v1/book*`→book, `/grafana*`→grafana, default fixed-response 404.
+- WAF는 이 ALB에 붙이지 않는다 — CloudFront 엣지에 붙인다(§3.10).
 
-```hcl
-resource "aws_lb_target_group" "reservation" {
-  name        = "gj2026-reservation-tg"
-  target_type = "lambda"
-  health_check { enabled = false }   # AWS 기본은 비활성이나 Terraform 기본이 true라 명시 필요
-}
-resource "aws_lambda_permission" "alb" {
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.reservation.function_name
-  principal     = "elasticloadbalancing.amazonaws.com"
-  source_arn    = aws_lb_target_group.reservation.arn   # ALB ARN 아님, TG ARN
-}
-resource "aws_lb_target_group_attachment" "reservation" {
-  target_group_arn = aws_lb_target_group.reservation.arn
-  target_id        = aws_lambda_function.reservation.arn
-  depends_on       = [aws_lambda_permission.alb]        # 없으면 등록 실패
-}
-```
-
-- 리스너 규칙: `/v1/book*`→book, `/reservation*`→reservation(경로 `/reservation`, `/reservation*` 둘 다 등록), `/grafana*`→grafana, default fixed-response 404.
-- WAF Web ACL을 이 ALB에 연결(§3.10).
-
-Lambda를 **ALB 타깃**으로 붙이는 이유: WAF Web ACL을 1개만 만들라는 요구 + 전 리소스 서울 리전 제약. Lambda Function URL을 CloudFront 오리진으로 쓰면 `client_id` 검사(9-2)를 CLOUDFRONT scope Web ACL(us-east-1 필수)로 해야 해서 두 조건 모두 깨진다.
+Lambda는 **ALB 타깃그룹이 아니라 Function URL로 CloudFront에 직접 연결**한다(§3.8). 최초 설계는 "Web ACL 1개로 CloudFront·ALB를 동시에 커버할 수 없다"는 이유로 ALB 경유를 택했지만, 이는 WAF를 REGIONAL/ALB에 붙인다는 전제 자체가 원본 다이어그램·리소스명 목록과 맞지 않았다(§0-1). WAF를 CloudFront(CLOUDFRONT scope)에 붙이면 하나의 Web ACL이 엣지에서 모든 경로를 검사한 뒤 ALB든 Lambda든 원하는 오리진으로 보낼 수 있어, 굳이 Lambda를 ALB 뒤에 둘 필요가 없다.
 
 ### 3.8 Lambda (lambda.tf, lambda/index.py)
 
-- `gj2026-book-reservation`, runtime `python3.14`, VPC 밖(엔드포인트 불필요).
-- ALB 타깃 이벤트 포맷은 API Gateway와 다르다: `requestContext.elb`, `path`, `queryStringParameters`. 응답에 **`statusCode`가 없으면 502**. 응답은 `{statusCode, statusDescription, headers, body, isBase64Encoded}`.
+- `gj2026-book-reservation`, runtime `python3.14`, VPC 밖(엔드포인트 불필요 — VPC 설정을 하지 않은 Lambda는 AWS 백본을 통해 DynamoDB 퍼블릭 엔드포인트에 바로 접근하므로, book Pod와 달리 VPC Endpoint가 필요 없다. 다이어그램에서도 Lambda 아이콘이 VPC 박스 밖에 있는 것과 일치, §0-1).
+- **Function URL**로 CloudFront에 직접 연결한다(ALB 타깃그룹 아님, §3.7). `auth_type = "AWS_IAM"`(NONE이면 안 됨 — OAC 서명 검증이 IAM 인증 경로를 전제로 함).
+- Function URL 페이로드는 **API Gateway v2.0 포맷 고정**이다. ALB 타깃과 필드명이 다르므로 주의:
+
+```python
+def handler(event, context):
+    qs = event.get("queryStringParameters") or {}   # dict, 단일값 (ALB의 multiValue와 다름)
+    client_id = qs.get("client_id")
+    ...
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(items),
+    }
+```
+
+  `event['rawPath']`, `event['requestContext']['http']['method']` 등도 사용 가능하나 이 함수는 경로 분기가 없어 불필요. `statusCode` 누락 시 502.
+- **CloudFront OAC(Lambda 오리진 타입)**: `aws_cloudfront_origin_access_control`에 `origin_access_control_origin_type = "lambda"`. Lambda 리소스 정책에 `lambda:InvokeFunctionUrl`를 `cloudfront.amazonaws.com`에 허용하고 `AWS:SourceArn`=배포 ARN 조건을 건다.
+
+```hcl
+resource "aws_lambda_permission" "cf_oac" {
+  statement_id  = "AllowCloudFrontOAC"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.reservation.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.main.arn
+}
+```
+
 - `python3.14`는 정식 지원 런타임(deprecation 2029-06-30).
 - 로직
   - `client_id` 없음 → `Scan`(ProjectionExpression username,email,concert_name) → 배열 반환, 메트릭 차원 `ALL`
@@ -383,16 +397,18 @@ emit_query_count(client_id or "ALL")   # 미지정 조회는 "ALL"
 - 기본 암호화 SSE-KMS = `alias/gj2026-s3-key`, `bucket_key_enabled = true`.
 - 객체는 **루트에** `index.html`(`text/html`), `main.jpeg`(`image/jpeg`) 업로드. 채점 6-1이 `/`를 포함하지 않는 키만 나열하므로 접두사 디렉토리 금지.
 - Distribution `gj2026-cdn`(Name 태그 포함), 기본 인증서, HTTP→HTTPS `redirect-to-https`.
-- Origin 2개
+- **`web_acl_id`에 CLOUDFRONT scope Web ACL(§3.10)의 ARN을 직접 지정** — REGIONAL과 달리 별도 association 리소스가 없다.
+- Origin 3개
   - S3 origin: OAC(sigv4, always)
   - **VPC Origin `gj2026-alb-origin`**: `aws_cloudfront_vpc_origin`으로 internal ALB 연결, HTTP only 80
+  - **Lambda Function URL origin**: OAC(origin type `lambda`), HTTPS only, `custom_origin_config`(§3.8)
 - Behavior (전 behavior `viewer_protocol_policy = redirect-to-https`)
   | 경로 | Origin | 캐시 정책 | 오리진 요청 정책 | 비고 |
   |---|---|---|---|---|
   | Default | S3 | `CachingOptimized` `658327ea-f89d-4fab-a63d-7e88639e58f6` | — | **viewer-request Function은 여기에만** |
-  | `/v1/book*` | ALB | `CachingDisabled` `4135ea2d-6df8-44a3-9df3-4b5a84be39ad` | `AllViewerExceptHostHeader` `b689b0a8-53d0-40ab-baf2-68738e2966ac` | 전 메서드(POST) |
-  | `/reservation*` | ALB | 동일 | 동일 | 쿼리스트링 전달 |
-  | `/grafana*` | ALB | 동일 | 동일 | 전 메서드(로그인 POST) |
+  | `/v1/book*` | ALB(VPC Origin) | `CachingDisabled` `4135ea2d-6df8-44a3-9df3-4b5a84be39ad` | `AllViewerExceptHostHeader` `b689b0a8-53d0-40ab-baf2-68738e2966ac` | 전 메서드(POST) |
+  | `/grafana*` | ALB(VPC Origin) | 동일 | 동일 | 전 메서드(로그인 POST) |
+  | `/reservation*` | **Lambda Function URL** | 동일 | 동일 | 쿼리스트링 전달 |
 
   **`AllViewerExceptHostHeader`가 쿼리스트링을 전부 오리진에 전달한다. 빠뜨리면 WAF가 `client_id`를 보지 못해 9-2가 통째로 실패한다.**
 
@@ -437,14 +453,15 @@ function handler(event) {
 
 ### 3.10 WAF (waf.tf)
 
-REGIONAL scope Web ACL `gj2026-waf-acl` → ALB에 연결. 기본 동작 Allow.
+**`scope = "CLOUDFRONT"`**, CloudFront 배포(`gj2026-cdn`)에 직접 연결(`web_acl_id` 속성, §3.9). 기본 동작 Allow.
+
+- **CLOUDFRONT scope Web ACL은 반드시 `us-east-1`에서 생성해야 하는 AWS API 제약**이다 — CloudFront 자체가 리전이 없는 글로벌 리소스인 것과 같은 종류의 예외이며, ACM에서 CloudFront용 인증서를 반드시 us-east-1에 만드는 것과 동일한 패턴이다. `provider "aws" { alias = "us_east_1"  region = "us-east-1" }`를 만들고 `aws_wafv2_web_acl`에 `provider = aws.us_east_1`를 지정한다. "전 리소스 서울 리전" 원칙의 유일한 예외로 문서화해둔다.
+- 엣지에서 evaluate되므로 ALB(내부 오리진)나 Lambda Function URL 앞에 별도 REGIONAL Web ACL을 추가할 필요가 없다 — Web ACL 1개로 `/v1/book`·`/reservation` 두 경로 모두 커버(§0-1).
 
 | 우선순위 | 규칙 | 조건 | 동작 |
 |---|---|---|---|
 | 1 | `deny-non-post-on-api` | URI가 `/v1/book`로 시작 **AND** method ≠ POST | Block, 405, body `Method Not Allowed` |
 | 2 | `deny-invalid-client-id` | URI가 `/reservation`로 시작 **AND** 쿼리에 `client_id=` **존재** **AND** 정규식 불일치 | Block, 403, body `Access Denied` |
-
-**Web ACL 1개로 CloudFront와 ALB를 동시에 커버하는 것은 불가능하다** — AWS 문서상 CloudFront에 연결한 Web ACL은 다른 리소스 타입에 연결할 수 없다. 또 Lambda Function URL은 `AssociateWebACL` 대상에 없다. 따라서 §3.7의 "Lambda를 ALB 타깃으로" 설계가 요구사항(Web ACL 1개 + 전 리소스 서울)을 만족하는 **유일한 경로**다.
 
 - **method 규칙은 반드시 `/v1/book`로 스코프를 좁힌다.** ALB 전체에 걸면 Grafana GET(10-2)과 `/reservation` GET(8-3/8-4)이 함께 차단되어 4.5점이 날아간다. 이때 `scope_down_statement`는 managed rule group / rate-based 전용이므로 **`and_statement`** 로 조합해야 한다.
 - **정규식에 앵커(`^...$`)를 반드시 붙인다.** WAF 정규식은 PCRE **부분 매칭**이라 앵커가 없으면 `홍길동`의 URL 인코딩 `%ED%99%8D%EA%B8%B8%EB%8F%99` 안의 `B8`(문자+숫자)에 매칭되어 **통과해 버린다**.
@@ -685,7 +702,7 @@ kubectl apply -f app/ && helm upgrade --install grafana ... && helm upgrade --in
 
 ## 6. 함정·주의사항
 
-1. **서브넷·라우트 추가 금지**: 1-1은 VPC 내 전 서브넷을, 1-2는 라우트 목록을 정확 비교한다. Gateway Endpoint 하나만 붙여도 1-2가 깨진다.
+1. **서브넷 추가 금지**: 1-1은 VPC 내 전 서브넷을 나열해 정확 비교한다(3번째 서브넷을 만들면 즉시 오답). 단 Gateway Endpoint는 서브넷이 아니라 라우트만 추가하고 그 라우트는 1-2 쿼리에서 자동 제외되므로(§0-2) 안전하다.
 2. **NAT 0개**: 계정 전체 `describe-nat-gateways` 개수가 0이어야 한다. 임시로 만든 NAT를 남기면 실패.
 3. **ECR 이미지 3MB**: 기본 gzip으로 push하면 3.32MiB로 초과. zstd 압축 push가 유일한 통과 경로이며, 태그는 `latest`.
 4. **pull-through cache rule(`ecr-public`)**: 4-5 채점이 이 URL로 nginx를 pull 한다. 룰 누락 = 1.5점 손실.
@@ -707,13 +724,17 @@ kubectl apply -f app/ && helm upgrade --install grafana ... && helm upgrade --in
 20. **Grafana TG 이름은 Ingress로 못 만든다**: LBC가 이름을 강제 생성. Terraform TG + TargetGroupBinding 필수.
 21. **Grafana `securityContext` 472 변경 금지**: IRSA 토큰을 못 읽고 조용히 노드 role로 폴백한다.
 22. **PTC 첫 pull 워밍업**: 노드에 인터넷이 없으므로 인터넷 있는 CloudShell/로컬에서 미리 pull 해 캐시를 채운다. 노드 role에 `ecr:BatchImportUpstreamImage`, `ecr:CreateRepository` 필요.
+23. **Lambda는 ALB 타깃그룹이 아니다**: task.md가 Target Group 이름을 book/grafana 2개만 명시한다. Lambda는 Function URL + CloudFront OAC로 직접 연결한다(§0-1).
+24. **WAF는 CLOUDFRONT scope, us-east-1**: REGIONAL로 만들어 ALB에 붙이면 Lambda(`/reservation`) 요청은 검사하지 못한다. 반드시 CloudFront 배포에 `web_acl_id`로 직접 연결.
+25. **DynamoDB Gateway Endpoint 필수**: DynamoDB는 Interface Endpoint 자체가 없다(Gateway 전용). rtb-a/b에 연결해도 1-2는 깨지지 않는다(§0-2, jmespath 실측 확인).
+26. **Pod SG egress는 DynamoDB를 prefix-list로 열어야 한다**: Gateway Endpoint는 ENI가 없어 "endpoint SG" 참조로는 안 열린다.
 
 ## 6.2 문서로 확정 안 된 항목 (배포 후 실측)
 
 | 항목 | 검증 방법 |
 |---|---|
 | WAF 커스텀 응답 본문 후행 개행 | `curl -s -o /dev/null -w '%{size_download}\n' $CF/v1/book` → 18 / `?client_id=123abc` → 13 |
-| S3 **인터페이스** 엔드포인트만으로 ECR 레이어 pull | 노드에서 book 이미지 pull 성공 여부 (대체 수단 없음) |
+| CLOUDFRONT scope Web ACL이 Lambda Function URL 오리진 앞에서도 정상 evaluate되는지 | `?client_id=123abc`로 `/reservation` 호출 시 403 확인 |
 | 커스텀 노드명 + `provider-id` / CCM | `kubectl get nodes` 가 Ready + 이름 포맷 일치 |
 | zstd 이미지 노드 구동 | Pod Running 도달 |
 | Grafana sidecar 대시보드 JSON 래핑 형태 | UI에 `WSI Dashboard` 노출 확인 |
@@ -723,10 +744,10 @@ kubectl apply -f app/ && helm upgrade --install grafana ... && helm upgrade --in
 | 순위 | 항목 | 리스크 | 대응 |
 |---|---|---|---|
 | 1 | 커스텀 노드명 + `provider-id` / CCM 상호작용 | 노드가 NotReady에 머물 수 있음. 문서로 완전 확정 안 되는 지점 | 사전에 클러스터 1회 생성해 실측 |
-| 2 | S3 **인터페이스** 엔드포인트만으로 ECR 레이어 pull | 실패 시 대체 수단 없음(게이트웨이는 1-2 감점) | 사전 pull 검증 |
-| 3 | zstd 이미지 노드 구동 | 로컬 검증 불가 | 사전 배포 리허설 |
-| 4 | SGP strict + TargetGroupBinding 조합 | 타깃이 unhealthy로 남을 수 있음 | ALB SG→Pod SG 8080 규칙 실측 |
-| 5 | eksctl managed nodegroup의 `bottlerocket.settings` 반영 | 과거 user-data 미반영 버그 이력 | 생성 후 `kubectl get nodes` 즉시 확인, 실패 시 self-managed `nodeGroups`로 fallback |
+| 2 | zstd 이미지 노드 구동 | 로컬 검증 불가 | 사전 배포 리허설 |
+| 3 | SGP strict + TargetGroupBinding 조합 | 타깃이 unhealthy로 남을 수 있음 | ALB SG→Pod SG 8080 규칙 실측 |
+| 4 | eksctl managed nodegroup의 `bottlerocket.settings` 반영 | 과거 user-data 미반영 버그 이력 | 생성 후 `kubectl get nodes` 즉시 확인, 실패 시 self-managed `nodeGroups`로 fallback |
+| 5 | CLOUDFRONT scope Web ACL의 us-east-1 provider 설정 실수 | apply 시 리전 오류로 실패 | provider alias 명시, plan 단계에서 확인 |
 
 ## 7. 검증 시드
 
