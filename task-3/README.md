@@ -208,10 +208,10 @@ terraform -chdir=terraform output -raw cloudfront_domain
 
 채점 플랫폼에 **`https://<위 도메인>`** 제출 — 프로토콜 포함, 경로 금지.
 
-## STEP 7 — DB 초기화 (PowerShell)
+## STEP 7 — DB 초기화 (RDS 콘솔 → CloudShell)
 
-[db/README.md](db/README.md) 런북을 실행한다. 직결 엔드포인트 사용(프록시 X). **STEP 5 노드풀 Ready 필요** (mysql 클라이언트를 `kubectl run`으로 띄운다).
-스키마 → admin native 전환 → **여기서 STEP 8을 새 창에서 시작** → dump 적재 → email 인덱스 → 검증 순.
+[db/README.md](db/README.md) 런북을 실행한다. **RDS 콘솔 "Connect using CloudShell"** 버튼이 접속 명령을 자동 입력(엔드포인트·클라이언트 불필요, 인스턴스 직결이라 프록시 X) → password만 입력해 적재하므로 EKS 노드풀과 무관 — RDS가 생성된 STEP 3 apply 완료 후면 언제든 실행 가능.
+스키마 → admin native 전환 → **여기서 STEP 8을 시작** → dump 적재 → email 인덱스 → 검증 순.
 
 ## STEP 8 — 앱 배포: placeholder 치환 후 apply (PowerShell)
 
