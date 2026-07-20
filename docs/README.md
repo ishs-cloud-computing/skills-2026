@@ -1,12 +1,6 @@
-# Starlight Starter Kit: Basics
+# skills-2026 docs
 
-[![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
-
-```
-npm create astro@latest -- --template starlight
-```
-
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+> 작업 편의성을 위해 main에 병합되었지만 완성되지 않았습니다.
 
 ## 🚀 Project Structure
 
