@@ -1,10 +1,10 @@
 // set-06/task-1 설계 문서 사이트 (plan.md §8)
-// Vercel 배포 — 루트 도메인 서빙이라 base 불필요. site 는 첫 배포 후 실제 도메인으로 교체
+// Netlify 배포 — 루트 도메인 서빙이라 base 불필요. site 는 첫 배포 후 실제 도메인으로 교체
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://skills-2026-docs.vercel.app',
+  site: 'https://skills-2026-docs.netlify.app',
   integrations: [
     starlight({
       title: 'set-06 / task-1',
