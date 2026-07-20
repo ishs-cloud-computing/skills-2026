@@ -31,6 +31,11 @@ cd skills-2026
 mise install
 ```
 
+3. 로컬 문서 시작
+```bash
+mise docs
+```
+
 ## 진행 상황
 
 세트는 `set-01` ~ `set-10` 으로 구성된다.
