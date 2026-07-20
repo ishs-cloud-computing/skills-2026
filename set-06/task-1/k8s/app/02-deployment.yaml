@@ -1,0 +1,41 @@
+# plan.md §3.6 — envsubst 로 ${ACCOUNT_ID} 치환 후 apply (README 런북 6단계)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: book
+  namespace: skills
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: book
+  template:
+    metadata:
+      labels:
+        app: book
+    spec:
+      serviceAccountName: book-sa   # eksctl IRSA -> gj2026-book-app-role
+      nodeSelector:
+        role: app
+      tolerations:
+        - key: dedicated
+          value: app
+          effect: NoSchedule
+      # AZ 분산 — 고가용성 + 10-1 의 AZ별 로그 스트림 2개 확보에 직결
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: book
+      # SGP strict 모드에서 kubelet probe 는 노드 SG 개방을 강제해 4-5 를 깨뜨린다 —
+      # probe 없이 ALB 타깃그룹 헬스체크에 위임 (plan.md §3.6)
+      containers:
+        - name: book
+          image: ${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/book:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: book-config

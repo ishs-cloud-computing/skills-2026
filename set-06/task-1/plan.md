@@ -793,3 +793,13 @@ aws logs describe-log-streams --log-group-name /eks/book-svc/access             
 ```
 
 로컬 실측(동일 md5 바이너리를 set-08에서 확인): `GET /health`→200, 미정의 경로→404, DDB 미연결 POST→500, 액세스 로그는 위 §3.11 평문 형식.
+
+## 8. 문서 사이트 (Astro Starlight, GitHub Pages)
+
+경기 중 사용하는 실행용 런북(`README.md`, 미작성)과는 별개로, 이 설계 문서(`plan.md`)를 경기 후 열람·복기용으로 브라우저에서 보기 좋게 배포하는 부가 산출물. 대회 환경(오프라인, CloudShell)과는 무관하므로 배포 파이프라인·의존성이 여기에 영향을 주지 않는다.
+
+- **범위**: set-06/task-1 한정. 다른 세트·과제에는 적용하지 않는다(루트 README·공통 구조 변경 없음).
+- **위치**: `set-06/task-1/site/` — Astro + Starlight 프로젝트. `terraform/`·`eksctl/`·`k8s/` 등과 동급의 하위 디렉토리로 취급.
+- **콘텐츠 소스**: `plan.md`를 site의 content collection(`site/src/content/docs/`)으로 직접 편입한다. 별도 사본을 만들어 두 곳을 동기화하는 대신, `plan.md`의 각 절(§0 재검토 기록 · §1 매핑표 · §2 디렉토리 구조 · §3 도메인별 설계 · §4 변수 · §5 배포 순서 · §6 함정 · §7 검증 시드)을 Starlight 페이지 단위로 분할해 옮기고, 저장소 루트의 `plan.md`는 site 쪽으로의 이관 후 얇은 인덱스(또는 심볼릭 참조)로 남긴다. 표·코드 블록은 마크다운 그대로 이식 가능(Starlight가 GFM 지원).
+- **배포**: `.github/workflows/`에 `site/` 변경 시에만 트리거되는 워크플로 추가 — `astro build` → `actions/deploy-pages`로 GitHub Pages 배포. 다른 세트 작업과 트리거가 섞이지 않도록 `paths: ["set-06/task-1/site/**"]` 로 한정.
+- **미착수**: 실제 Astro 프로젝트 스캐폴딩·콘텐츠 이관·워크플로 작성은 아직 하지 않았다. 위 결정사항만 확정, 착수 시 `writing-plans`로 세부 구현 계획을 별도로 잡는다.

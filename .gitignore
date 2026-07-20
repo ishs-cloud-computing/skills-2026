@@ -14,3 +14,5 @@ __pycache__/
 **/lambda/sensor_consumer/*
 !**/lambda/sensor_consumer/index.py
 !**/lambda/sensor_consumer/requirements.txt
+**/lambda/index.zip
+**/*.rendered.yaml

@@ -1,0 +1,13 @@
+# TG 이름 gj2026-grafana-tg 는 Ingress(LBC 강제 명명)로 못 만든다 —
+# Terraform TG + TargetGroupBinding (plan.md §3.11)
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: grafana-tgb
+  namespace: monitoring
+spec:
+  serviceRef:
+    name: grafana
+    port: 3000
+  targetGroupARN: ${GRAFANA_TG_ARN}
+  targetType: ip

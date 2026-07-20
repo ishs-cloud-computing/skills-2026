@@ -1,0 +1,76 @@
+# plan.md §3.11 — aws-for-fluent-bit 차트 values (envsubst 후 helm -f)
+# DaemonSet 이름은 채점이 rollout restart 하는 aws-for-fluent-bit 그대로(release 이름으로 고정)
+image:
+  # PTC 경유 (public.ecr.aws/aws-observability) — 런북에서 사전 pull 로 캐시 워밍업
+  repository: ${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/ecr-public/aws-observability/aws-for-fluent-bit
+  # stable 태그는 EOL(2026-06-30)된 2.x 를 가리키므로 명시 고정
+  tag: "3.4.8"
+
+serviceAccount:
+  create: false
+  name: aws-for-fluent-bit   # eksctl IRSA -> gj2026-fluentbit-role
+
+# book Pod 가 app 노드에 있으므로 taint tolerate 필수
+tolerations:
+  - key: dedicated
+    value: app
+    effect: NoSchedule
+
+# 차트 기본 output 은 Match "*" 라 book.az.* 까지 잡아 중복 전송 — 비활성 (plan.md §3.11)
+cloudWatchLogs:
+  enabled: false
+firehose:
+  enabled: false
+kinesis:
+  enabled: false
+elasticsearch:
+  enabled: false
+
+# 평문 로그라 kubernetes 필터의 Merge_Log 가 할 일이 없음
+filter:
+  enabled: false
+
+# 정규식 파서 — 평문 액세스 로그를 JSON 구조화 (채점 10-1 의 jq .remote_addr)
+# user_agent 는 [^"]* 금지: Go %q 가 내부 따옴표를 \" 로 이스케이프해 매칭이 끊긴다
+# Time_Key 금지: CRI 타임스탬프를 부정확한 로컬 시각으로 덮어쓴다
+service:
+  extraParsers: |
+    [PARSER]
+        Name   book_access
+        Format regex
+        Regex  ^(?<ts>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) access method=(?<method>\S+) path=(?<path>\S+) status=(?<status>\d+) duration=(?<duration>\S+) remote_addr=(?<remote_addr>\S+) user_agent="(?<user_agent>.*)"$
+        Types  status:integer
+
+# rewrite_tag 로 AZ 스트림 2개를 구조적으로 보장 — log_stream_template 단일 output 은
+# 파싱 실패 레코드가 3번째 스트림을 만들어 채점(정확히 2개)을 깨뜨린다 (plan.md §3.11)
+additionalFilters: |
+  [FILTER]
+      Name          parser
+      Match         kube.*
+      Key_Name      log
+      Parser        book_access
+      Reserve_Data  On
+
+  [FILTER]
+      Name          rewrite_tag
+      Match         kube.*
+      Rule          $remote_addr ^10\.0\.10\. book.az.a false
+      Rule          $remote_addr ^10\.0\.11\. book.az.b false
+      Emitter_Name  book_az_router
+
+additionalOutputs: |
+  [OUTPUT]
+      Name              cloudwatch_logs
+      Match             book.az.a
+      region            ap-northeast-2
+      log_group_name    /eks/book-svc/access
+      log_stream_name   /book-svc/ap-northeast-2a
+      auto_create_group On
+
+  [OUTPUT]
+      Name              cloudwatch_logs
+      Match             book.az.b
+      region            ap-northeast-2
+      log_group_name    /eks/book-svc/access
+      log_stream_name   /book-svc/ap-northeast-2b
+      auto_create_group On
