@@ -2,3 +2,6 @@
 node = "24"
 terraform = "1"
 "aqua:terraform-docs/terraform-docs" = "latest"
+
+[tasks.docs]
+run = 'cd docs/ && npm run start'
