@@ -5,6 +5,7 @@
 outputs.json
 .env
 .env.ps1
+.env.sh
 **/terraform/build/
 crash.log
 crash.*.log
