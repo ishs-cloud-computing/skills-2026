@@ -83,6 +83,7 @@ t3.medium(현재) 기준값에서 타입이 바뀌면 아래 행을 그대로 �
 - terraform/eksctl/kubectl은 그대로 워크스테이션(본 컴퓨터)에서 실행한다. CloudShell로 옮기는 것은 이미지 빌드 단계 하나뿐이다.
 - **베이스는 `distroless/base`(glibc 포함), `static` 아님.** `static`은 ca-certificates·tzdata뿐이라 `CGO_ENABLED=0` 빌드 전용인데, 과제지는 바이너리가 AL2023 기본 빌드(cgo on)라고 명시한다 → Gin의 `net`·`os/user`가 cgo resolver를 끌어와 glibc에 동적 링크될 가능성이 높다. 불일치 시 `exec /app/server: no such file or directory`로 즉사하며, 이 메시지는 없는 것이 바이너리가 아니라 ELF 인터프리터라는 사실을 감춰 디버깅을 오도한다. `base`는 `static`의 상위집합(+glibc·libssl)이라 정적·동적 둘 다 돌므로 ~18MB로 이 분기를 산다.
 - **push 전에 앱을 검증한다(README STEP 4a–4c).** 제공 바이너리는 블랙박스인데 STEP 9의 CloudFront 스모크는 CF·WAF·ALB·TGB·파드 5개 레이어 너머라 앱 결함과 인프라 결함이 구분되지 않고, 발견 시점도 ≈T+45다. CloudShell엔 docker와 바이너리가 이미 있으므로 `file` + `docker run` + 로컬 mysql:8.0 컨테이너로 부팅·포트·healthcheck·env 키·PUT 멀티파트 필드명·S3 오브젝트 키를 push 전에 확정한다. STEP 3 apply가 도는 동안이라 임계경로 밖이다.
+- **DB 초기화(README STEP 7)도 CloudShell에서** — RDS 콘솔 "Connect using CloudShell"로 여는 **VPC 환경**이다(이미지 빌드용 일반 CloudShell과 별개). `kubectl run` mysql 파드 방식은 (a) 노드풀 Ready가 선행돼야 하고 (b) 파드 안 파괴 명령의 복구가 어렵다. RDS 콘솔 버튼은 VPC 네트워킹·엔드포인트·클라이언트를 한 번에 처리하고 접속 명령까지 자동 입력한다(엔드포인트 조회·클라이언트 설치 불필요, DB SG가 VPC CIDR 전체에 3306 허용 — `rds-proxy.tf`). 결과적으로 DB 초기화가 EKS와 분리돼 STEP 3(RDS 생성) 직후 실행 가능하다.
 
 ## WAF 운용 기준
 
@@ -110,7 +111,7 @@ NoUserAgent·SizeRestrictions 등이 정상 채점 트래픽을 오차단할 수
 2. `terraform -chdir=terraform apply` — DB·프록시만 재생성(engine_family·인증 타입·SG 포트 자동 파생), ALB·CloudFront·EKS는 no-op
 3. `k8s/10-user.yaml`·`k8s/11-product.yaml`의 env 키 이름을 새 과제지 환경변수 표에 맞게 수정 → 재적용(README STEP 8)
 4. `kubectl rollout restart deploy user product`
-5. DB 초기화([db/README.md](db/README.md))를 새 엔진 클라이언트 이미지로 (`public.ecr.aws/docker/library/postgres:17` + `psql`)
+5. DB 초기화([db/README.md](db/README.md))는 CloudShell에서 새 엔진 클라이언트로 (`sudo dnf install -y postgresql16` → `psql -h <endpoint> -U postgres`)
 
 ### ② API 추가/삭제 — 약 10분
 
