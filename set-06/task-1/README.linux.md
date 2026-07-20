@@ -1,28 +1,11 @@
----
-title: "런북 (Quick Start)"
-sidebar:
-  order: 0
----
+# set-06 / task-1 — 런북 (Linux / bash)
 
 EKS(Bottlerocket) 위 Book API + CloudFront 단일 엔드포인트(S3 정적 · ALB API · Lambda 조회 · Grafana).
-**NAT 없음 / Private Subnet 2개.** 설계 근거·함정은 [plan.md](plan.md) 참고.
+**NAT 없음 / Private Subnet 2개.** 설계 근거·함정은 [plan.md](plan.md), PowerShell 런북은 [README.md](README.md) 참고.
 
-## 디렉토리
+> 문서 사이트: <https://skills-2026-docs.netlify.app>
 
-```
-task-1/
-├── terraform/        # AWS 리소스 (WAF 만 us-east-1, 나머지 ap-northeast-2)
-│   └── lambda/       # 조회 API + EMF 메트릭
-├── eksctl/           # 클러스터 + Bottlerocket 노드그룹 2개
-│   └── bootstrap/    # 노드명 변경 스크립트 (bootstrap container user-data)
-├── k8s/              # apply 순서: 00-namespace → app/ → monitoring/ → logging/
-├── app/Dockerfile    # scratch + 제공 바이너리 (zstd push)
-└── plan.md           # 설계 문서 (요구사항↔채점 매핑, 함정 26개)
-```
-
-## 런북
-
-### 0. 사전 준비
+## 0. 사전 준비
 
 ```bash
 cd set-06/task-1/terraform
@@ -30,7 +13,7 @@ export AWS_REGION=ap-northeast-2
 # terraform.tfvars 의 bibunho 를 본인 비번호로 수정
 ```
 
-### 1. ECR 먼저 (이미지 push 가 EKS 보다 선행)
+## 1. ECR 먼저 (이미지 push 가 EKS 보다 선행)
 
 ```bash
 terraform init
@@ -41,7 +24,7 @@ export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export ECR=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com
 ```
 
-### 2. book 이미지 빌드·push (zstd — 채점 2-2 의 3MB 제한)
+## 2. book 이미지 빌드·push (zstd — 채점 2-2 의 3MB 제한)
 
 ```bash
 aws ecr get-login-password | docker login --username AWS --password-stdin $ECR
@@ -56,7 +39,7 @@ aws ecr describe-images --repository-name book \
   --query 'imageDetails[?imageTags[0]==`latest`].imageSizeInBytes' --output text
 ```
 
-### 3. 나머지 AWS 리소스 (CloudFront 배포 포함 — 최대 15분)
+## 3. 나머지 AWS 리소스 (CloudFront 배포 포함 — 최대 15분)
 
 ```bash
 terraform apply
@@ -78,7 +61,7 @@ export NODE_PTC_POLICY_ARN=$(jq -r .node_ptc_policy_arn.value outputs.json)
 export CF_DOMAIN=$(jq -r .cloudfront_domain.value outputs.json)
 ```
 
-### 4. 보조 이미지 push + PTC 워밍업 (인터넷 있는 로컬에서)
+## 4. 보조 이미지 push + PTC 워밍업 (인터넷 있는 로컬에서)
 
 ```bash
 # bootstrap container (노드 부팅 경로 — PTC 의존 금지)
@@ -99,7 +82,7 @@ docker pull $ECR/ecr-public/nginx/nginx:latest
 docker pull $ECR/ecr-public/aws-observability/aws-for-fluent-bit:3.4.8
 ```
 
-### 5. EKS 클러스터
+## 5. EKS 클러스터
 
 ```bash
 cd ../eksctl
@@ -112,7 +95,7 @@ aws eks update-kubeconfig --name gj2026-eks-cluster
 kubectl get nodes   # gj2026.i-xxxx.(addon|app).node 4개 — 실패 시 plan.md §3.5.1 fallback
 ```
 
-### 6. k8s 리소스
+## 6. k8s 리소스
 
 ```bash
 cd ../k8s
@@ -145,7 +128,7 @@ helm upgrade --install aws-for-fluent-bit eks/aws-for-fluent-bit \
   -n logging -f logging/fluent-bit-values.rendered.yaml
 ```
 
-### 7. 검증 (plan.md §7 전체 시드)
+## 7. 검증 (plan.md §7 전체 시드)
 
 ```bash
 CF=https://$CF_DOMAIN
@@ -158,7 +141,7 @@ curl -s -w " %{http_code}\n" $CF/v1/book                        # Method Not All
 curl -s -w " %{http_code}\n" "$CF/reservation?client_id=123abc" # Access Denied 403
 ```
 
-### 8. 채점 전 정리
+## 8. 채점 전 정리
 
 ```bash
 # DynamoDB 아이템 0개 — Deny 정책을 일시 해제해야 삭제 가능 (plan.md §3.4)

@@ -1,0 +1,29 @@
+plugins = []
+headers = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "C:\\Users\\kryuk\\practice\\set-06\\task-1\\site\\dist"
+publishOrigin = "config"
+commandOrigin = "config"
+base = "C:\\Users\\kryuk\\practice\\set-06\\task-1\\site"
+command = "npm run build"
+
+[build.environment]
+NODE_VERSION = "22"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]

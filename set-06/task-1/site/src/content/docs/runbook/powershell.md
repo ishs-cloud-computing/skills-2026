@@ -1,4 +1,8 @@
-# set-06 / task-1 — 런북 (PowerShell)
+---
+title: "PowerShell (기본)"
+sidebar:
+  order: 0
+---
 
 EKS(Bottlerocket) 위 Book API + CloudFront 단일 엔드포인트(S3 정적 · ALB API · Lambda 조회 · Grafana).
 **NAT 없음 / Private Subnet 2개.** 설계 근거·함정은 [plan.md](plan.md), Linux/bash 런북은 [README.linux.md](README.linux.md) 참고.

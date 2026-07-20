@@ -15,8 +15,9 @@ export default defineConfig({
         root: { label: '한국어', lang: 'ko' },
       },
       sidebar: [
-        // 파일 frontmatter 의 sidebar.order 로 정렬
-        { label: '문서', autogenerate: { directory: '.' } },
+        { label: '설계 개요', link: '/' },
+        { label: '런북', autogenerate: { directory: 'runbook' } },
+        { label: '설계', autogenerate: { directory: 'design' } },
       ],
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 4 },
     }),
