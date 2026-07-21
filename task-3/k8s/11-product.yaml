@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # product API: DB-IO 바운드 + S3 이미지 업로드 (Pod Identity → product-app-sa).
 apiVersion: apps/v1
 kind: Deployment

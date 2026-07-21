@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 비정상 요청(SQLi·헤더/프로토콜 변조 등 공격 페이로드) → 403 차단. WAF block 기본
 # 응답코드가 403이라 과제의 "비정상 요청은 403" 요구와 그대로 맞는다(채점 1번).
 #   block: SQLiRuleSet(SQL 인젝션), KnownBadInputsRuleSet(헤더/프로토콜 변조·log4j 등)

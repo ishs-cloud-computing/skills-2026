@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # stress API: CPU 바운드 (DB 미사용) — 노드 스케일아웃을 견인하는 워크로드.
 apiVersion: apps/v1
 kind: Deployment

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ALB를 Terraform이 소유 → CloudFront 주소가 EKS 준비와 무관하게 확정된다.
 # 파드 연결은 k8s TargetGroupBinding(Auto Mode 내장 컨트롤러)이 수행.
 

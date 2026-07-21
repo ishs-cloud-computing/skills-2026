@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 내장 NodePool을 모두 끄면 default NodeClass가 자동 생성되지 않으므로,
 # 커스텀 NodeClass가 참조할 노드 IAM 역할을 직접 만든다.
 data "aws_iam_policy_document" "automode_node_assume" {

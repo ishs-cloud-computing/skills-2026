@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 resource "aws_s3_bucket" "this" {
   bucket = "${var.player_number}-bucket"
 
