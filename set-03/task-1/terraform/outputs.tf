@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # terraform output -json > outputs.json 으로 내려 본 PC(eksctl 렌더)와
 # VPC CloudShell(jq)에서 소비한다.
 

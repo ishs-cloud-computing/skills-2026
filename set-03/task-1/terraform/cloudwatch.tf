@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudWatch Logs (요구사항 11)
 # - /wsc2026/eks/book-app : Fluent Bit 이 전송하는 앱 액세스 로그.

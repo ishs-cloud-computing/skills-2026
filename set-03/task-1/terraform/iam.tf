@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # IAM Roles
 # - EKS Pod Identity 역할 (trust: pods.eks.amazonaws.com, 본 클러스터 한정)

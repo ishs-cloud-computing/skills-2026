@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 variable "name_prefix" {
   description = "리소스 이름 공통 접두어 — 대회 당일 이름 변경 대비 (작업 규칙 5). k8s/eksctl 쪽 치환은 README 참고"
   type        = string

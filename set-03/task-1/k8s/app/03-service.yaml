@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Book App Service (요구사항 8)
 # - port 80 → 8080 (mark 11-1 이 http://<ClusterIP>/ 기본 포트 80 으로 트래픽 생성)
 # - trafficDistribution: PreferSameZone — 동일 AZ Pod 우선 라우팅으로 Cross-AZ 비용 절감 (k8s 1.33+ 명칭, 구 PreferClose)

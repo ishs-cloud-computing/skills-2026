@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Book App Deployment (요구사항 8)
 # - replicas 2 + AZ topologySpread (가용 영역 균등 분산, mark 5-2)
 # - workload 노드 전용 (nodeSelector + taint toleration, mark 5-4)

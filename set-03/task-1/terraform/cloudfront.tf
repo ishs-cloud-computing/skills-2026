@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudFront (요구사항 13) — 2차 apply (enable_cdn=true)
 # - wsc2026-cdn (Name 태그 — mark 9-1 이 태그로 검색)

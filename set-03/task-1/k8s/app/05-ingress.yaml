@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Ingress → AWS Load Balancer Controller 가 ALB(wsc2026-app-alb) 생성 (요구사항 12)
 # - internet-facing, 대상 Pod IP(8080)
 # - SG 는 Terraform 의 wsc2026-app-alb-sg 를 "단독" 지정:

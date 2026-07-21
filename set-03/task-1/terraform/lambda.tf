@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Lambda (요구사항 10)
 # - wsc2026-book-get-function : GET /v1/book?booking_id= → DynamoDB GSI 조회

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 data "aws_caller_identity" "current" {}
 
 # assumed-role 세션이면 기반 role ARN 을, IAM user 면 user ARN 을 돌려준다.

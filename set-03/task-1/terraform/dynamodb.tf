@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # DynamoDB (요구사항 5)
 # - wsc2026-book-table : PAY_PER_REQUEST, PK client_id, GSI booking_id-index

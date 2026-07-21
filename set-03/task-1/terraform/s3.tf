@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # S3 (요구사항 9)
 # - wsc2026-static-<영문4>-<비번호>-bucket : 정적 페이지 호스팅 원본

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Security Groups
 # - wsc2026-app-alb-sg         : CloudFront origin-facing prefix list → ALB(80).

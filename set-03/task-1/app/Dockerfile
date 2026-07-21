@@ -1,4 +1,7 @@
 # syntax=docker/dockerfile:1
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Book App Image (요구사항 4·6)
 # - 제공된 Go binary "book" (x86-64, TCP/8080) 배포.

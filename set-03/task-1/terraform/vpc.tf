@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC / Subnet / Routing (요구사항 3, Reference01)
 # - wsc2026-skills-vpc 192.168.0.0/16, 2 AZ(a,b)

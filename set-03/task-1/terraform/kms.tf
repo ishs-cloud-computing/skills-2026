@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # KMS Customer Managed Keys (요구사항 5·6·7·9·10)
 # - wsc2026-db-kms       : DynamoDB SSE

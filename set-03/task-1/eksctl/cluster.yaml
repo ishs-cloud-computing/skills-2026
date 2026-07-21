@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ===========================================================================
 # eksctl Cluster Manifest (요구사항 7)
 # 적용: 본 PC 에서 terraform outputs 로 ${...} 플레이스홀더를 치환해 렌더 후 create 한다.

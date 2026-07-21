@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC Endpoints
 # app(private) 서브넷에 AZ별 NAT 가 있으므로 Interface Endpoint 는 만들지 않는다
