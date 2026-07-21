@@ -7,6 +7,12 @@ EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / 
 > 요구사항↔구현 매핑은 [mapping.md](../../docs/src/content/docs/setlist/set-03/task-1/mapping.md),
 > 주의/함정은 [notes.md](../../docs/src/content/docs/setlist/set-03/task-1/notes.md).
 
+
+## NOTICE
+
+채점지의 5-5 항목이 클러스터를 `wsi2026-xxxxx` 형식으로 조회하는 오류를 발견 및 임의 수정하였습니다.  
+이와 관련한 사항은 마이스터넷에 질의한 상태입니다.
+
 ## 디렉토리 구조
 
 ```

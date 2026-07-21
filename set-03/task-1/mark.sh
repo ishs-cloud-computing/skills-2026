@@ -80,6 +80,7 @@ kubectl get pods -n wsc2026 -o custom-columns='NAME:.metadata.name,STATUS:.statu
 done
 echo
 
+# wsi-2026-xxx로 조회하는 오류를 발견 및 수정하였습니다.
 echo =====5-5=====
 PI_SA=$(aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026 --query 'associations[0].serviceAccount' --output text 2>/dev/null)
 PI_ROLE=$(aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026 --query 'associations[0].associationId' --output text 2>/dev/null)
