@@ -1,6 +1,6 @@
 # 2026 전국기능경기대회 클라우드컴퓨팅
 
-> maintainer: `zenru1023[at]gmail.com`
+![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 
 2026 전국기능경기대회 **클라우드컴퓨팅** 직종의 사전 공개 과제(1·2과제)를
 **Terraform / eksctl / Kubernetes manifest** 로 관리하는 저장소.
@@ -83,3 +83,11 @@ skills-2026/
 ```
 
 하위 디렉토리(`terraform/`, `eksctl/`, `k8s/`, `app/`)는 **해당 과제에 필요한 것만** 만든다.
+
+## Maintainer
+
+- 성준혁 ([@zenru1023](https://github.com/zenru1023))
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
