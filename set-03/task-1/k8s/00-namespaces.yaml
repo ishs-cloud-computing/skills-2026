@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# 애플리케이션(wsc2026, 요구사항 8) / 관측성(observability, 요구사항 11) 네임스페이스
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wsc2026
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability

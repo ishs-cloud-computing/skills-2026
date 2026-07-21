@@ -14,3 +14,7 @@ __pycache__/
 **/lambda/sensor_consumer/*
 !**/lambda/sensor_consumer/index.py
 !**/lambda/sensor_consumer/requirements.txt
+# set-03/task-1: 배포파일은 런북에서 shared/provided/task-1 → app/ 로 복사 (원본은 shared, 복사본 커밋 금지)
+set-03/task-1/app/book
+set-03/task-1/app/index.html
+set-03/task-1/app/main.jpeg

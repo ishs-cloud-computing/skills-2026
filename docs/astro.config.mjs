@@ -38,6 +38,12 @@ export default defineConfig({
 								{ label: "2과제", items: [{ autogenerate: { directory: "setlist/set-02/task-2" } }] },
 							],
 						},
+						{
+							label: "3세트",
+							items: [
+								{ label: "1과제", items: [{ autogenerate: { directory: "setlist/set-03/task-1" } }] },
+							],
+						},
 					],
 				},
 				{

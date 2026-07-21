@@ -1,0 +1,244 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# ---------------------------------------------------------------------------
+# Fluent Bit (요구사항 11)
+# - DaemonSet(모든 노드), ns observability(mark 11-1 이 이 ns 에서 Running 카운트),
+#   SA fluent-bit(Pod Identity → wsc2026-fluentbit-role)
+# - wsc2026 네임스페이스 Book App stdout 액세스 로그(logfmt) 수집:
+#     · /health 로그 제외, 실제 API 요청 로그만 (요구사항 11)
+#     · CloudWatch Logs 로는 Reference02 형식 문자열로 전송
+#       예) INFO  {"level":"INFO","path":"/v1/book","status":"200","duration":"75.9ms","method":"POST"}
+#     · log_to_metrics 필터로 요청수/에러수/응답시간 Prometheus 메트릭 생성
+#       (앱이 /metrics 를 노출하지 않으므로 트래픽 패널·HighErrorRate/HighLatency
+#        알람의 유일한 소스) → :2021 prometheus_exporter → PodMonitor 스크레이프
+# - Log Group: /wsc2026/eks/book-app (Terraform 선생성, auto_create_group=false)
+# 생성되는 메트릭 이름(log_to_metrics 기본 prefix):
+#   log_metric_counter_wsc2026_requests_total / log_metric_counter_wsc2026_errors_total
+#   log_metric_histogram_wsc2026_request_duration_seconds_{bucket,sum,count}
+#   → 배포 후 curl :2021/metrics 로 실명 확인 (README 검증 스텝)
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluent-bit
+  namespace: observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: observability
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Parsers_File  parsers.conf
+
+    # wsc2026 네임스페이스 컨테이너 로그만 수집 (<pod>_wsc2026_<container>-<id>.log)
+    [INPUT]
+        Name              tail
+        Tag               app.access
+        Path              /var/log/containers/*_wsc2026_*.log
+        Parser            cri
+        Refresh_Interval  5
+        Mem_Buf_Limit     10MB
+        Skip_Long_Lines   On
+
+    # Book App 액세스 로그(logfmt)에서 method/path/status/duration 추출
+    [FILTER]
+        Name         parser
+        Match        app.access
+        Key_Name     log
+        Parser       bookaccess
+        Reserve_Data Off
+
+    # /health·비액세스 라인 드롭, status→level 유도, duration→초 단위 float 변환
+    [FILTER]
+        Name    lua
+        Match   app.access
+        script  prepare.lua
+        call    prepare
+
+    # ---- 로그 기반 메트릭 (Prometheus) ----
+    [FILTER]
+        Name               log_to_metrics
+        Match              app.access
+        Tag                app.metrics
+        Metric_mode        counter
+        Metric_name        wsc2026_requests_total
+        Metric_description Total API requests parsed from book app access logs
+        Label_field        method
+        Label_field        path
+        Label_field        status
+
+    [FILTER]
+        Name               log_to_metrics
+        Match              app.access
+        Tag                app.metrics
+        Metric_mode        counter
+        Metric_name        wsc2026_errors_total
+        Metric_description 4xx/5xx API requests parsed from book app access logs
+        Regex              status ^[45]
+
+    [FILTER]
+        Name               log_to_metrics
+        Match              app.access
+        Tag                app.metrics
+        Metric_mode        histogram
+        Metric_name        wsc2026_request_duration_seconds
+        Metric_description API request duration parsed from book app access logs
+        Value_field        duration_seconds
+
+    # ---- CloudWatch 전송용: Reference02 형식 문자열 조립 ----
+    [FILTER]
+        Name    lua
+        Match   app.access
+        script  format.lua
+        call    format
+
+    [OUTPUT]
+        Name              cloudwatch_logs
+        Match             app.access
+        region            ap-northeast-2
+        log_group_name    /wsc2026/eks/book-app
+        log_stream_prefix book-app-
+        log_key           log
+        auto_create_group false
+
+    [OUTPUT]
+        Name   prometheus_exporter
+        Match  app.metrics
+        host   0.0.0.0
+        port   2021
+
+  parsers.conf: |
+    [PARSER]
+        Name   cri
+        Format regex
+        Regex  ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<log>.*)$
+        Time_Key time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+
+    # 예: 2026/07/03 10:44:11 access method=POST path=/v1/book status=200 duration=89.800097ms remote_addr=10.0.0.1:1234 user_agent="curl"
+    [PARSER]
+        Name   bookaccess
+        Format regex
+        Regex  ^\S+ \S+ access method=(?<method>\S+) path=(?<path>\S+) status=(?<status>\d+) duration=(?<duration>\S+)
+
+  prepare.lua: |
+    -- Go duration 문자열("136.048µs", "89.8ms", "1.5s", "1m30s")을 초 단위 float 로
+    local function duration_to_seconds(str)
+        if str == nil then return 0 end
+        local m, s = string.match(str, "^(%d+)m([%d%.]+)s$")
+        if m then return tonumber(m) * 60 + tonumber(s) end
+        local units = { ns = 1e-9, ["µs"] = 1e-6, us = 1e-6, ms = 1e-3, s = 1 }
+        local num, unit = string.match(str, "^([%d%.]+)(%a*s)$")
+        if num == nil then
+            num, unit = string.match(str, "^([%d%.]+)(µs)$")
+        end
+        if num and units[unit] then return tonumber(num) * units[unit] end
+        return 0
+    end
+
+    function prepare(tag, ts, record)
+        -- 액세스 라인이 아니면(파서 미매칭) 드롭
+        if record["method"] == nil or record["path"] == nil then
+            return -1, 0, 0
+        end
+        -- /health 로그 제외 (요구사항 11)
+        if record["path"] == "/health" then
+            return -1, 0, 0
+        end
+        record["duration_seconds"] = duration_to_seconds(record["duration"])
+        local code = tonumber(record["status"]) or 0
+        if code >= 500 then
+            record["level"] = "ERROR"
+        elseif code >= 400 then
+            record["level"] = "WARN"
+        else
+            record["level"] = "INFO"
+        end
+        return 1, ts, record
+    end
+
+  format.lua: |
+    -- Reference02 형식: LEVEL(5자 패딩) + 공백 + 키 순서 고정 JSON 문자열
+    function format(tag, ts, record)
+        local line = string.format(
+            '%-5s {"level":"%s","path":"%s","status":"%s","duration":"%s","method":"%s"}',
+            record["level"], record["level"], record["path"],
+            record["status"], record["duration"], record["method"])
+        return 1, ts, { log = line }
+    end
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: observability
+  labels:
+    app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      serviceAccountName: fluent-bit
+      # 모든 노드(addon/workload)에서 수집 — workload taint 포함
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: fluent-bit
+          image: public.ecr.aws/aws-observability/aws-for-fluent-bit:3.4.3
+          ports:
+            - name: metrics
+              containerPort: 2021
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 50m
+              memory: 100Mi
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc/
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: fluent-bit-config
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+---
+# Prometheus(kube-prometheus-stack)가 fluent-bit 의 로그 기반 메트릭을 스크레이프
+# (podMonitorSelectorNilUsesHelmValues=false 라 release 라벨 불필요)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: fluent-bit
+  namespace: observability
+  labels:
+    app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

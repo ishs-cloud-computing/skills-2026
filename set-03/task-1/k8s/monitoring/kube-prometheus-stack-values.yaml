@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# ---------------------------------------------------------------------------
+# Helm values: prometheus-community/kube-prometheus-stack (요구사항 11)
+# release name: monitoring / namespace: observability
+# - Prometheus(보존 7일) + Alertmanager + node-exporter(DaemonSet) + kube-state-metrics + Grafana
+# - DaemonSet 제외 컴포넌트는 Addon NodeGroup(wsc2026/node=addon)에 배치 (요구사항 7)
+# - Grafana: admin / Skills$#$@!, Service type LoadBalancer 로 외부 노출,
+#   datasource 이름은 mark 11-2 와 정확 일치(prometheus/alertmanager/cloudwatch)
+# 설치:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+#     -n observability -f kube-prometheus-stack-values.yaml
+# ---------------------------------------------------------------------------
+
+# 기본 번들 알람 비활성 — Reference02 의 6개 알람만 운용 (prometheus-rules.yaml)
+defaultRules:
+  create: false
+
+# EKS 관리형 Control Plane 은 해당 메트릭을 노출하지 않으므로 수집 비활성
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheusOperator:
+  nodeSelector:
+    wsc2026/node: addon
+  admissionWebhooks:
+    patch:
+      nodeSelector:
+        wsc2026/node: addon
+
+prometheus:
+  prometheusSpec:
+    nodeSelector:
+      wsc2026/node: addon
+    # 데이터 보존 7일 (요구사항 11). 스토리지는 emptyDir(EBS CSI 불필요).
+    retention: 7d
+    # PodMonitor(fluent-bit)/PrometheusRule 을 release 라벨 없이도 선택
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+# 알람 체계 (요구사항 11) — 룰은 prometheus-rules.yaml
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    nodeSelector:
+      wsc2026/node: addon
+    # 내부 도메인 변경(요구사항 7)과 일치 — cluster.peer DNS 에 사용
+    clusterDomain: wsc2026.skills.local
+
+# 노드 수준 메트릭 수집 — DaemonSet, 전 노드(workload taint 포함)
+prometheus-node-exporter:
+  tolerations:
+    - operator: Exists
+
+kube-state-metrics:
+  nodeSelector:
+    wsc2026/node: addon
+  # 대시보드 상단 nodegroup 필터 변수용 노드 라벨 노출
+  metricLabelsAllowlist:
+    - nodes=[eks.amazonaws.com/nodegroup,wsc2026/node]
+
+# ----- Grafana (요구사항 11) -----
+grafana:
+  nodeSelector:
+    wsc2026/node: addon
+  adminUser: admin
+  adminPassword: "Skills$#$@!"
+  # Pod Identity(wsc2026-grafana-role) 연결용 SA 이름 고정 (eksctl association 과 일치)
+  serviceAccount:
+    name: monitoring-grafana
+  # 외부 브라우저 접근: LBC 가 internet-facing NLB 생성 (mark 11-1: type=LoadBalancer, 포트 80)
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 3000
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: external
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: observability
+    datasources:
+      defaultDatasourceEnabled: false
+  # mark 11-2: 이름·타입 정확 일치 — prometheus / alertmanager / cloudwatch
+  additionalDataSources:
+    - name: prometheus
+      type: prometheus
+      uid: prometheus
+      access: proxy
+      url: http://prometheus-operated.observability.svc:9090
+      isDefault: true
+    - name: alertmanager
+      type: alertmanager
+      uid: alertmanager
+      access: proxy
+      url: http://alertmanager-operated.observability.svc:9093
+      jsonData:
+        implementation: prometheus
+    - name: cloudwatch
+      type: cloudwatch
+      uid: cloudwatch
+      access: proxy
+      jsonData:
+        authType: default
+        defaultRegion: ap-northeast-2
