@@ -1,6 +1,6 @@
 ---
-title: Overview
-description: skills-2026 docs overview
+title: 개요
+description: skills-2026 문서 개요
 ---
 
 ## skills-2026

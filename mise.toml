@@ -4,4 +4,7 @@ terraform = "1"
 "aqua:terraform-docs/terraform-docs" = "latest"
 
 [tasks.docs]
+run = 'cd docs/ && npm run build && npm run preview'
+
+[tasks.dev]
 run = 'cd docs/ && npm run start'
