@@ -342,10 +342,10 @@ wsc2026-book-deploy-7b88597d86-z8nkt: PASS
 **1) 명령어 입력**
 
 ```bash
-PI_SA=$(aws eks list-pod-identity-associations --cluster-name wsi2026-cluster --namespace wsc2026 --query 'associations[0].serviceAccount' --output text 2>/dev/null)
-PI_ROLE=$(aws eks list-pod-identity-associations --cluster-name wsi2026-cluster --namespace wsc2026 --query 'associations[0].associationId' --output text 2>/dev/null)
+PI_SA=$(aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026 --query 'associations[0].serviceAccount' --output text 2>/dev/null)
+PI_ROLE=$(aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026 --query 'associations[0].associationId' --output text 2>/dev/null)
 [ "$PI_SA" = "wsc2026-book-sa" ] && echo "Pod Identity SA: PASS ($PI_SA)" || echo "Pod Identity SA: FAIL ($PI_SA)"
-ROLE_NAME=$(aws eks describe-pod-identity-association --cluster-name wsi2026-cluster --association-id "$PI_ROLE" --query 'association.roleArn' --output text 2>/dev/null | awk -F/ '{print $NF}')
+ROLE_NAME=$(aws eks describe-pod-identity-association --cluster-name wsc2026-eks-cluster --association-id "$PI_ROLE" --query 'association.roleArn' --output text 2>/dev/null | awk -F/ '{print $NF}')
 MANAGED_ACTIONS=$(aws iam list-attached-role-policies --role-name "$ROLE_NAME" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null | tr '\t' '\n' | while read arn; do
   VERSION=$(aws iam get-policy --policy-arn "$arn" --query 'Policy.DefaultVersionId' --output text 2>/dev/null)
   aws iam get-policy-version --policy-arn "$arn" --version-id "$VERSION" --query 'PolicyVersion.Document.Statement[].Action' --output text 2>/dev/null

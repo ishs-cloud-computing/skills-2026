@@ -74,3 +74,14 @@ resource "aws_lambda_permission" "cloudfront" {
   source_arn             = aws_cloudfront_distribution.cdn[0].arn
   function_url_auth_type = "AWS_IAM"
 }
+
+# OAC 문서는 InvokeFunctionUrl 과 함께 InvokeFunction 도 부여하도록 안내
+resource "aws_lambda_permission" "cloudfront_invoke" {
+  count = var.enable_cdn ? 1 : 0
+
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.book_get.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.cdn[0].arn
+}
