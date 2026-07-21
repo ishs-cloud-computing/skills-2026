@@ -10,8 +10,9 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_dynamodb_table" "book" {
-  name                        = var.table_name
-  billing_mode                = "PAY_PER_REQUEST"
+  name         = var.table_name
+  billing_mode = "PAY_PER_REQUEST"
+  # 테이블 레벨 key_schema 는 provider 6.55 기준 미지원 (GSI 만 지원) → hash_key 유지
   hash_key                    = "client_id"
   deletion_protection_enabled = true
 
@@ -26,8 +27,11 @@ resource "aws_dynamodb_table" "book" {
 
   # booking_id 를 이용한 효율적 조회 (Lambda GET)
   global_secondary_index {
-    name            = "booking_id-index"
-    hash_key        = "booking_id"
+    name = "booking_id-index"
+    key_schema {
+      attribute_name = "booking_id"
+      key_type       = "HASH"
+    }
     projection_type = "ALL"
   }
 

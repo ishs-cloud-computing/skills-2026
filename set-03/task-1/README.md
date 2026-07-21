@@ -10,7 +10,7 @@ kubectl/helm 작업과 채점은 **CloudShell VPC environment(`mark-sg`)** 에�
 
 ```
 terraform/   # AWS 인프라 (VPC, KMS×5, DynamoDB, ECR, S3, Lambda, CloudFront, WAF, IAM)
-  ├─ versions.tf variables.tf terraform.tfvars data.tf
+  ├─ providers.tf variables.tf terraform.tfvars data.tf
   ├─ vpc.tf security.tf endpoints.tf kms.tf
   ├─ dynamodb.tf ecr.tf s3.tf lambda.tf lambda/index.py
   ├─ cloudfront.tf waf.tf cloudwatch.tf
