@@ -26,7 +26,7 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: product
-          image: <ECR_URL>:v1
+          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 8)
           ports:
             - containerPort: 8080
           # <>는 README STEP 8에서 치환. DB 키는 과제지 표와 일치.

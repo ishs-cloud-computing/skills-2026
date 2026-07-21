@@ -10,7 +10,7 @@ PowerShell 판과의 차이는 문법뿐이다.
 
 ```
 task-3/
-├── terraform/   # VPC·RDS(+Proxy)·S3·ECR·ALB·CloudFront·WAF·노드 IAM
+├── terraform/   # VPC·ECR·RDS(+Proxy)·S3·ALB·CloudFront·WAF·노드 IAM
 ├── eksctl/      # Auto Mode 클러스터 (+ metrics-server, cloudwatch addon)
 ├── k8s/         # NodeClass/NodePool, 앱별 Deploy+Svc+TGB+HPA+PDB
 ├── db/          # DB 초기화 SQL + 런북 (STEP 7에서 진입 → db/README.linux.md)
@@ -29,16 +29,16 @@ task-3/
 # ── 로컬 bash ──
 cd task-3
 # terraform/terraform.tfvars 수정: player_number, (필요시) db_password
-# 리전·CIDR·앱 목록·DB 사양이 당일 과제와 다르면 terraform/locals.tf 한 파일만 수정
+# 앱 목록·이미지 태그가 당일 과제와 다르면 terraform/variables.tf의 apps·image_tag,
+# 리전·CIDR·DB 사양이 다르면 terraform/locals.tf 수정
 
-# 지급된 자격증명(환경변수로 주입). eksctl/kubectl도 이 값을 쓴다.
-export AWS_ACCESS_KEY_ID='<ACCESS_KEY>'
-export AWS_SECRET_ACCESS_KEY='<SECRET_KEY>'
-export AWS_DEFAULT_REGION='ap-northeast-2'
-export DB_PASSWORD='password'   # tfvars의 db_password와 동일하게
+# 지급된 자격증명을 파일로 저장(전 터미널 공유). terraform/eksctl/kubectl도 이 값을 읽는다.
+aws configure   # 지급 키 입력, region: ap-northeast-2, output: json
+
+export DB_PASSWORD='password'   # tfvars의 db_password와 동일하게 (STEP 8 치환용)
 ```
 
-## STEP 1 — 선행 apply: 네트워크·노드롤·ECR (로컬 bash, ~3분)
+## STEP 1 — 선행 apply: 네트워크·노드롤 (로컬 bash, ~3분)
 
 리프 리소스만 지정 — VPC·서브넷·IGW·NAT·라우트·노드롤은 종속성으로 딸려 온다.
 
@@ -47,13 +47,13 @@ export DB_PASSWORD='password'   # tfvars의 db_password와 동일하게
 terraform -chdir=terraform init
 terraform -chdir=terraform apply -auto-approve \
   -target=data.aws_caller_identity.current \
-  -target=aws_ecr_repository.app \
   -target=aws_vpc_endpoint.s3 \
   -target=aws_nat_gateway.this \
   -target=aws_route_table_association.public \
   -target=aws_route_table_association.private \
   -target=aws_iam_role_policy_attachment.node_minimal \
-  -target=aws_iam_role_policy_attachment.node_ecr_pull
+  -target=aws_iam_role_policy_attachment.node_ecr_pull \
+  -target=aws_ecr_repository.app
 ```
 
 ## STEP 2 — eksctl 클러스터 생성 (로컬 bash, ~15분)
@@ -78,7 +78,7 @@ eksctl create cluster -f eksctl/cluster.rendered.yaml   # kubeconfig 자동 병�
 
 ## STEP 3 — 전체 terraform apply (새 터미널, ~20분)
 
-STEP 2와 병렬. **새 터미널이므로 STEP 0의 자격증명 4줄을 먼저 다시 실행**한 뒤:
+STEP 2와 병렬. 자격증명은 aws configure로 저장돼 전 터미널 공유 — **새 터미널에서는 `DB_PASSWORD`만 다시 export**한 뒤:
 
 ```bash
 # ── 로컬 bash (두 번째 터미널) ──
@@ -90,21 +90,8 @@ RDS Multi-AZ·CloudFront 배포가 오래 걸린다. CloudFront 도메인은 배
 
 ## STEP 4 — 이미지 빌드/푸시 (CloudShell, 바이너리 수령 즉시)
 
-PowerShell 판과 동일 — 이 스텝은 원래 CloudShell bash다. [README.md](README.md#step-4) STEP 4 그대로.
-
-```bash
-# ── CloudShell(ap-northeast-2) ──
-#   git clone <repo> && cd task-3
-#   제공 바이너리를 app/ 아래에 파일명 user·product·stress 로 복사.
-
-export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-REG=$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com
-aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $REG
-
-docker build --build-arg BINARY=user    -t $REG/user:v1    app/ && docker push $REG/user:v1
-docker build --build-arg BINARY=product -t $REG/product:v1 app/ && docker push $REG/product:v1
-docker build --build-arg BINARY=stress  -t $REG/stress:v1  app/ && docker push $REG/stress:v1
-```
+PowerShell 판과 동일 — 이 스텝은 원래 CloudShell이다. [README.md](README.md#step-4) STEP 4의 bash 블록 그대로 실행한다.
+ECR 레포는 STEP 1 terraform이 생성했다(레포명 = `apps` 맵 키). Dockerfile 수정이 필요하면 `app/Dockerfile` 주석 참고.
 
 ## STEP 5 — 클러스터 완료 후 노드풀 적용 (로컬 bash)
 
@@ -127,11 +114,14 @@ terraform -chdir=terraform output -raw cloudfront_domain
 
 채점 플랫폼에 **`https://<위 도메인>`** 제출 — 프로토콜 포함, 경로 금지.
 
-## STEP 7 — DB 초기화 (로컬 bash)
+## STEP 7 — DB 초기화 (RDS 콘솔 → CloudShell)
 
-[db/README.linux.md](db/README.linux.md) 런북을 실행한다. 직결 엔드포인트 사용(프록시 X).
+[db/README.linux.md](db/README.linux.md) 런북을 실행한다. **RDS 콘솔 "Connect using CloudShell"** 버튼이 접속 명령을 자동 입력(엔드포인트·클라이언트 불필요, 인스턴스 직결이라 프록시 X) → password만 입력해 적재하므로 EKS 노드풀과 무관 — RDS가 생성된 STEP 3 apply 완료 후면 언제든 실행 가능.
+스키마 → admin native 전환 → **여기서 STEP 8을 시작** → dump 적재 → email 인덱스 → 검증 순.
 
 ## STEP 8 — 앱 배포: placeholder 치환 후 apply (로컬 bash)
+
+**STEP 7의 2번(admin native 전환)이 끝났으면 dump 적재와 병행한다** — 앱은 빈 테이블에도 정상 연결되고(스키마 존재·인증 완료) 데이터는 T+60 트래픽 전에만 있으면 된다. 병행하면 노드 생성·이미지 pull·파드 기동·TG 등록·ALB 헬스체크가 dump 적재 뒤에 쌓이지 않는다.
 
 env는 각 앱 매니페스트에 직접 들어있다. 한 파일씩 치환 후 apply.
 
@@ -139,17 +129,18 @@ sed 구분자로 `#`를 쓴다(URL·ARN에 없음). DB_PASSWORD에 `#`가 들어
 
 ```bash
 # ── 로컬 bash ──
-acct=$(terraform -chdir=terraform output -raw account_id)
-REG="$acct.dkr.ecr.ap-northeast-2.amazonaws.com"   # 이미지는 STEP 4(CloudShell)에서 push됨
 proxy=$(terraform -chdir=terraform output -raw db_proxy_endpoint)
 dbport=$(terraform -chdir=terraform output -raw db_port)
 bucket=$(terraform -chdir=terraform output -raw bucket_name)
+img_user=$(terraform    -chdir=terraform output -json ecr_image_uris | jq -r '.user')      # 태그 포함 full URI
+img_product=$(terraform -chdir=terraform output -json ecr_image_uris | jq -r '.product')
+img_stress=$(terraform  -chdir=terraform output -json ecr_image_uris | jq -r '.stress')
 tg_user=$(terraform    -chdir=terraform output -json tg_arns | jq -r '.user')
 tg_product=$(terraform -chdir=terraform output -json tg_arns | jq -r '.product')
 tg_stress=$(terraform  -chdir=terraform output -json tg_arns | jq -r '.stress')
 
 # user (DB만)
-sed -e "s#<ECR_URL>#$REG/user#" \
+sed -e "s#<IMAGE>#$img_user#" \
     -e "s#<TG_ARN>#$tg_user#" \
     -e "s#<PROXY_ENDPOINT>#$proxy#" \
     -e "s#<DB_PORT>#$dbport#" \
@@ -157,7 +148,7 @@ sed -e "s#<ECR_URL>#$REG/user#" \
     k8s/10-user.yaml | kubectl apply -f -
 
 # product (DB + S3)
-sed -e "s#<ECR_URL>#$REG/product#" \
+sed -e "s#<IMAGE>#$img_product#" \
     -e "s#<TG_ARN>#$tg_product#" \
     -e "s#<PROXY_ENDPOINT>#$proxy#" \
     -e "s#<DB_PORT>#$dbport#" \
@@ -166,7 +157,7 @@ sed -e "s#<ECR_URL>#$REG/product#" \
     k8s/11-product.yaml | kubectl apply -f -
 
 # stress (env 없음 — 이미지·TG만)
-sed -e "s#<ECR_URL>#$REG/stress#" \
+sed -e "s#<IMAGE>#$img_stress#" \
     -e "s#<TG_ARN>#$tg_stress#" \
     k8s/12-stress.yaml | kubectl apply -f -
 

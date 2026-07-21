@@ -1,16 +1,12 @@
-# Contributing Guide
+# 프로젝트 기여 가이드
 
 ## Index
 
-- [시작하기 전에](#시작하기-전에)
 - [기여하는 방법](#기여하는-방법)
 - [Issue 및 Pull Request 생성](#issue-및-pull-request-생성)
 - [Commit & Branch convention](#commit--branch-convention)
 - [AI Guideline](#ai-guideline)
-
-## 시작하기 전에
-
-- 과제지·채점지 PDF(`task.pdf`, `mark.pdf`)는 Git LFS로 관리됩니다. 클론 전에 [Git LFS](https://git-lfs.com)를 설치하고 `git lfs install`을 한 번 실행해야 실제 파일을 받을 수 있습니다 (미설치 시 포인터 텍스트만 받아집니다).
+- [라이선스 및 기여자 표기](#라이선스-및-기여자-표기)
 
 ## 기여하는 방법
 
@@ -51,3 +47,20 @@ Terraform 코드를 포함해 AI 도구 (Claude 등) 활용을 환영하지만, 
 - 과제의 내용을 이해하여야 합니다.
 - AI가 생성한 서비스를 이해할 수 있어야 합니다.
 - 실제 apply 후 채점 결과를 검증해야합니다.
+
+## 라이선스 및 기여자 표기
+
+이 저장소에 기여하면, 귀하의 기여물이 **Apache License 2.0**으로 배포되는 데
+동의하는 것으로 간주됩니다. 한번 이 라이선스로
+기여한 코드는 철회할 수 없으며, 기여자가 동아리를 떠나더라도 저장소는 유지됩니다.
+
+- 새 소스 파일에는 상단에 SPDX 헤더를 넣어주세요:
+
+```
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+```
+
+- 기존 파일의 저작권·라이선스 표기는 삭제하지 마세요.
+- 첫 기여 시 `AUTHORS` 파일에 본인을 추가해주세요.
+- **본인이 작성하지 않은 코드**는 반입 전 라이선스 호환성을 확인하고, 원저작자 표기를 유지하세요. 호환되는 서드파티 코드를 포함할 경우 루트의 `NOTICE` 파일에 attribution을 추가합니다.
