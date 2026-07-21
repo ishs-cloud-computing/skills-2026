@@ -57,8 +57,8 @@ Terraform 코드를 포함해 AI 도구 (Claude 등) 활용을 환영하지만, 
 - 새 소스 파일에는 상단에 SPDX 헤더를 넣어주세요:
 
 ```
-  # SPDX-License-Identifier: Apache-2.0
-  # Copyright 2026 The ISHS Cloud Computing Authors
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
 ```
 
 - 기존 파일의 저작권·라이선스 표기는 삭제하지 마세요.
