@@ -13,14 +13,14 @@ export default defineConfig({
 				'@fontsource/ibm-plex-mono/700.css',
 				'@fontsource/ibm-plex-mono/400-italic.css',
 				'@fontsource/ibm-plex-mono/700-italic.css',
-				'./src/styles/custom.css'
+				'./src/styles/font.css'
 			],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/ishs-cloud-computing/skills-2026' }],
 			sidebar: [
 				{
-					label: "Overview",
+					label: "Home",
 					"items": [
-						{ label: 'skills-2026', slug:'guides/example' },
+						{ label: 'Overview', slug:'overview' },
 					],
 				},
 				{
