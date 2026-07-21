@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 단일 엔드포인트: CloudFront
 #   기본 동작        → internet-facing ALB   : /v1/* API + 미지정 경로(ALB 404)
 #   /images/*        → S3(OAC)               : 정적 이미지 캐싱

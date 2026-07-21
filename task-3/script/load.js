@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The ISHS Cloud Computing Authors
+
 // 대회 전 연습용 부하 스크립트. 당일 런북(README)에는 포함되지 않는다.
 //
 //   BASE_URL=https://<cloudfront_domain> VUS=20 DURATION=2m k6 run load.js

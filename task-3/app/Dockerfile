@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 앱 3개(user/product/stress) 모두 "바이너리 하나를 :8080로 실행" 구조가 동일 →
 # BINARY 인자로 어느 바이너리를 넣을지만 바꾼다. 당일 특정 앱만 빌드가 달라지면
 # 이 파일을 복사해 그 앱 전용으로 수정한다 (README STEP 4가 3개를 루프로 빌드).

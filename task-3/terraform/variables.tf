@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 실행별 입력 + 당일 변경 1순위 값(앱 목록·이미지 태그)만 변수로 둔다.
 # 나머지 과제 상수(이름·CIDR·DB 사양)는 locals.tf.
 variable "player_number" {

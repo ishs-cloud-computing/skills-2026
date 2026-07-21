@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # user API: DB-IO 바운드. 당일 API가 바뀌면 이 파일을 복사해 이름·이미지·env만 수정.
 apiVersion: apps/v1
 kind: Deployment

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 과제 상수 모음. 당일 과제 ~30% 변경(이름·CIDR·DB 사양 등)은 이 파일에서 수정한다.
 # 앱 목록·이미지 태그와 실행별 입력(비번호·DB 비밀번호)은 variables.tf에 있다.
 locals {

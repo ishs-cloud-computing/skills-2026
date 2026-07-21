@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # RDS Proxy: 스파이크로 API 파드가 늘어도 커넥션을 풀링/멀티플렉싱해
 # RDS max_connections 고갈을 막는다. JSON 응답이 요청 uuid를 echo해 CloudFront
 # 캐시가 불가 → 모든 읽기가 DB로 내려오므로 프록시가 병목 방어의 핵심이다.
@@ -28,7 +31,7 @@ resource "aws_security_group" "db" {
 
 # 프록시 인증 자격증명 (Secrets Manager 필수)
 resource "aws_secretsmanager_secret" "db" {
-  name = "skills-db-credentials"
+  name                    = "skills-db-credentials"
   recovery_window_in_days = 0
 }
 
