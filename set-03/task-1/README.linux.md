@@ -1,12 +1,12 @@
 # 본 PC 가 Linux 일 때의 런북 (set-03 / task-1)
 
-[README.md](README.md) 의 **본 PC(PowerShell) 단계(0·1·3·7)만** bash 로 옮긴 것.
-명령만 나열한다 — 각 단계의 설명·주의는 README.md 를 따르고,
-**CloudShell 단계(2·4·5·6·8·9)는 README.md 와 완전히 동일**하다.
+[README.md](README.md) 의 본 PC 단계(0·1·3·7)를 bash 로 옮긴 것. CloudShell 단계(2·4·5·6·8·9)는
+README.md 와 동일. 설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
+주의는 [notes.md](../../docs/src/content/docs/setlist/set-03/task-1/notes.md).
 
 ### 0) [본 PC] 도구 준비 + 작업용 IAM 사용자 + 사전 변수
 
-필요 도구: AWS CLI v2 · Terraform · eksctl · jq · gettext(envsubst) (Docker 불필요 — 빌드는 일반 CloudShell).
+필요 도구: AWS CLI v2 · Terraform · eksctl · jq · gettext(envsubst) (Docker 불필요).
 
 ```bash
 # root 자격증명으로 1회만 실행
@@ -48,7 +48,7 @@ terraform output -json > ../outputs.json
 # S3 릴레이 (VPC CloudShell 은 업로드 UI 없음. _transfer/ 는 채점 전 삭제 — README step 9)
 BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
 aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
-tar czf /tmp/wsc2026-cs.tgz -C .. k8s mark.sh
+tar czf /tmp/wsc2026-cs.tgz -C .. k8s
 aws s3 cp /tmp/wsc2026-cs.tgz "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
 ```
 
@@ -89,4 +89,4 @@ terraform apply -var="enable_cdn=true"
 terraform output -raw cloudfront_domain
 ```
 
-### 8~9) → README.md step 8·9 (VPC CloudShell — E2E 검증, 정리 + 채점)
+### 8~9) → README.md step 8·9 (VPC CloudShell — E2E 검증, 정리)

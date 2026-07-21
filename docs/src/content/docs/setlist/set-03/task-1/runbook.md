@@ -1,11 +1,16 @@
-# 2026 전국기능경기대회 클라우드컴퓨팅 제1과제 (set-03) — 런북
+---
+title: 배포 런북
+description: set-03 1과제 인프라를 위→아래로 실행하는 순수 명령 런북 (PowerShell 7 기준)
+sidebar:
+  order: 2
+---
 
 EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / Kubernetes manifest** 로 배포한다.
-본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
+위→아래로 그대로 실행한다. 본 PC 가 Linux 면 저장소 `set-03/task-1/README.linux.md` 를 쓴다
+(CloudShell 단계는 공통).
 
-> 설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
-> 요구사항↔구현 매핑은 [mapping.md](../../docs/src/content/docs/setlist/set-03/task-1/mapping.md),
-> 주의/함정은 [notes.md](../../docs/src/content/docs/setlist/set-03/task-1/notes.md).
+> 각 단계가 왜 이렇게 짜였는지는 [설계 근거](../deployment/), 채점 항목 대조는
+> [요구사항 ↔ 구현 매핑](../mapping/), 함정은 [주의 · 알려진 한계](../notes/).
 
 ## 디렉토리 구조
 

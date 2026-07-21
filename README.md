@@ -33,6 +33,9 @@ mise install
 
 3. 로컬 문서 시작
 ```bash
+cd docs/
+npm install
+cd ..
 mise docs
 ```
 
