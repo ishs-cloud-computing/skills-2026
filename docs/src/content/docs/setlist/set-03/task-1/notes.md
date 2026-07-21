@@ -12,10 +12,10 @@ sidebar:
   manifest 를 `grep -rl wsc2026 eksctl k8s app | xargs sed -i 's/wsc2026/<새접두어>/g'` 로 함께
   치환해야 일관된다. 네트워크(`-skills-*`)·클러스터·테이블·ECR·Lambda·버킷 이름은 별도 변수라
   tfvars 에서 개별 변경 대상이다.
-- **mark 5-5 스크립트 오타**: `aws eks list-pod-identity-associations --cluster-name wsi2026-cluster` —
-  실제 클러스터는 `wsc2026-eks-cluster` 이므로 스크립트 그대로는 항상 FAIL 이다. 구현은 실제 클러스터에
-  정상 구성되어 있으며(`aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026` 로 확인),
-  채점 시 이의제기 근거로 사용한다.
+- **mark 5-5 항목 오타(발견·수정 완료)**: 채점지 5-5 가 클러스터를 `wsi2026-xxxxx` 형식으로 조회하는
+  오류가 있어 저장소 `mark.sh` 를 올바른 `wsc2026-eks-cluster` 로 수정했다. 구현은 실제 클러스터에
+  정상 구성돼 있다(`aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026` 로 확인).
+  관련 사항은 마이스터넷에 질의한 상태다.
 - **11-4 HighLatency 실발화 불가**: 제공 book 바이너리에 `/delay` 엔드포인트가 없다(로컬 실측 — 404, µs 응답).
   채점 스크립트의 latency-gen 으로는 평균 응답 3초 초과를 만들 수 없다. 룰은 사양(3s/1m)대로 구현했고,
   대회 당일 바이너리에 /delay 가 있으면 그대로 동작한다. 나머지 알람(PodHighCPU/PodHighMemory/PodNotReady/
