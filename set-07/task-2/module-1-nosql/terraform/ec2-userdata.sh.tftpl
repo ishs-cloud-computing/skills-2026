@@ -1,0 +1,35 @@
+#!/bin/bash
+# set -e 는 빼둔다: dnf/pip 가 한 번 실패해도 systemd 설정까지 진행되어야
+# Restart=always 로 복구 기회가 남는다 (cloud-final 조기 종료 방지).
+set -uxo pipefail
+
+dnf -y install python3 python3-pip || true
+
+mkdir -p /opt/app
+base64 -d > /opt/app/app.py <<'B64'
+${app_b64}
+B64
+base64 -d > /opt/app/requirements.txt <<'B64'
+${req_b64}
+B64
+
+# PEP 668(externally-managed) 환경 대비: 일반 설치 실패 시 --break-system-packages 로 재시도
+python3 -m pip install -r /opt/app/requirements.txt \
+  || python3 -m pip install --break-system-packages -r /opt/app/requirements.txt
+
+cat > /etc/systemd/system/bigbae-app.service <<'UNIT'
+[Unit]
+Description=bigbae nosql reservation app
+After=network.target
+[Service]
+Environment=AWS_REGION=${aws_region}
+Environment=TABLE_NAME=${table_name}
+Environment=GSI_NAME=${gsi_name}
+ExecStart=/usr/bin/python3 /opt/app/app.py
+Restart=always
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now bigbae-app
