@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# skillsmkt 는 eksctl IRSA(SA 생성) 시점에 이미 만들어지지만, apply 순서 독립성을 위해
+# 선언해 둔다 (idempotent). keda 네임스페이스는 helm --create-namespace 가 만든다.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: skillsmkt

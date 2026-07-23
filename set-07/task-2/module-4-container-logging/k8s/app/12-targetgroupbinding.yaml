@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# TargetGroupBinding (AWS LB Controller CRD): o11y-app-tg(IP TG)에 log-generator
+# Pod IP 를 등록한다. o11y-app-alb -> o11y-app-tg -> Pod:8080 (채점 4-2 healthy).
+# <APP_TG_ARN> 은 terraform output app_target_group_arn 으로 치환 (README).
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: log-generator-tgb
+  namespace: o11y
+spec:
+  serviceRef:
+    name: log-generator
+    port: 8080
+  targetGroupARN: "<APP_TG_ARN>"
+  targetType: ip

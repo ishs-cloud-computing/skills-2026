@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# TargetGroupBinding: o11y-grafana-tg(IP TG)에 Grafana Pod IP(:3000) 등록.
+# o11y-grafana-alb -> o11y-grafana-tg -> Grafana Pod (채점 4-2 healthy).
+# <GRAFANA_TG_ARN> 은 terraform output grafana_target_group_arn 으로 치환 (README).
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: o11y-grafana-tgb
+  namespace: monitoring
+spec:
+  serviceRef:
+    name: o11y-grafana
+    port: 80
+  targetGroupARN: "<GRAFANA_TG_ARN>"
+  targetType: ip

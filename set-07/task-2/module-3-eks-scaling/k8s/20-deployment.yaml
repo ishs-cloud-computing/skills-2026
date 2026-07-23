@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# ---------------------------------------------------------------------------
+# order-processor (과제지 3-3, 채점 3-3)
+# - 초기 replicas 1, requests CPU 500m / Mem 512Mi, port 8080
+# - env 는 리터럴 3개만 (채점이 name=value 형태로 정확 비교):
+#   <ECR_IMAGE>, <SQS_URL> 은 apply 시 outputs.json 값으로 sed 치환 (README)
+# - skm-app-nodepool 에서만 구동: nodeSelector(karpenter.sh/nodepool) +
+#   NodePool taint(dedicated=app) toleration. addon NG 는 taint 로 배제된다.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-processor
+  namespace: skillsmkt
+  labels:
+    app: order-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-processor
+  template:
+    metadata:
+      labels:
+        app: order-processor
+    spec:
+      serviceAccountName: order-processor-sa
+      nodeSelector:
+        karpenter.sh/nodepool: skm-app-nodepool
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: app
+          effect: NoSchedule
+      containers:
+        - name: order-processor
+          image: "<ECR_IMAGE>"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+          env:
+            - name: AWS_REGION
+              value: "ap-northeast-2"
+            - name: SQS_QUEUE_URL
+              value: "<SQS_URL>"
+            - name: PROCESSING_TIME
+              value: "3"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10

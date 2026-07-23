@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# ---------------------------------------------------------------------------
+# Helm values: grafana/grafana (과제지 4-5, 채점 4-3/4-6)
+# - Admin: skills<선수등번호> / GoodJob!Skills<선수등번호>^^ (배포 시 __NM__ 치환)
+# - fullnameOverride 로 Deployment/Service 이름 = o11y-grafana (채점 4-3)
+# - 외부 노출은 o11y-grafana-alb + TargetGroupBinding (30-grafana-targetgroupbinding.yaml)
+# - Loki DataSource(uid: loki) 등록 + Log Overview 대시보드 ConfigMap 로드
+#
+# 설치 (README):
+#   sed "s/__NM__/<선수등번호>/g" grafana-values.yaml > grafana-values.rendered.yaml
+#   kubectl -n monitoring create configmap o11y-dashboard --from-file=dashboard.json=dashboard.json
+#   helm upgrade --install o11y-grafana grafana/grafana -n monitoring \
+#     --version 10.5.15 -f grafana-values.rendered.yaml
+# ---------------------------------------------------------------------------
+fullnameOverride: o11y-grafana
+
+adminUser: "skills__NM__"
+adminPassword: "GoodJob!Skills__NM__^^"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://o11y-loki.monitoring.svc.cluster.local:3100
+        isDefault: true
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: o11y
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/o11y
+
+dashboardsConfigMaps:
+  o11y: o11y-dashboard

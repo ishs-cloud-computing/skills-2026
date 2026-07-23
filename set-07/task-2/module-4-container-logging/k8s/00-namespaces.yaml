@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# o11y: 로그 생성 앱 / monitoring: OTel Collector + Loki + Grafana (과제지 4)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: o11y
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring

@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# ---------------------------------------------------------------------------
+# OTel Collector DaemonSet (과제지 4-3, 채점 4-3: ds o11y-otel DESIRED=READY)
+# - helm 차트는 DaemonSet 이름에 접미사를 붙여 o11y-otel 정확 일치가 불가 → raw manifest
+# - contrib 이미지 고정 (filelog/k8sattributes 는 contrib 배포판에 포함)
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: o11y-otel
+  namespace: monitoring
+  labels:
+    app: o11y-otel
+spec:
+  selector:
+    matchLabels:
+      app: o11y-otel
+  template:
+    metadata:
+      labels:
+        app: o11y-otel
+    spec:
+      serviceAccountName: o11y-otel
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.156.0
+          args: ["--config=/etc/otel/config.yaml"]
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+            limits:
+              memory: 500Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: o11y-otel-config
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
