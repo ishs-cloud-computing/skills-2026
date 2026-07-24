@@ -1,6 +1,6 @@
 # 본 PC 가 Linux 일 때의 런북 (module-3-eks-scaling)
 
-[README.md](README.md) 의 본 PC 단계를 bash 로 옮긴 것. bastion/CloudShell 단계는 README.md 와 동일.
+[README.md](README.md) 의 본 PC 단계를 bash 로 옮긴 것. CloudShell 단계는 README.md 와 동일.
 
 ```bash
 # ===== 본 PC =====
@@ -8,10 +8,12 @@ cd terraform
 terraform init
 terraform apply -auto-approve
 terraform output -json > outputs.json
+cd ..
 
-# bastion 전송 (terraform/ 는 보내지 않음 — provider 수백 MB. 비밀번호 Skill53##)
-BIP=$(terraform output -raw bastion_public_ip)
-ssh ec2-user@"$BIP" "mkdir -p ~/module-3"
-rsync -az ../eksctl ../k8s ../../mark ../../provided/Module3-EKS-Scaling outputs.json "ec2-user@${BIP}:~/module-3/"
-ssh ec2-user@"$BIP"
+# CloudShell 반입용 zip (terraform/ 는 넣지 않음 — provider 수백 MB).
+# 여러 상위 경로를 한 zip 최상위에 평평하게 담기 위해 staging 후 압축한다.
+rm -rf /tmp/m3 && mkdir -p /tmp/m3
+cp -r eksctl k8s ../mark ../provided/Module3-EKS-Scaling terraform/outputs.json /tmp/m3/
+(cd /tmp/m3 && zip -r ~/module-3.zip .)
+# → CloudShell(ap-northeast-2) 접속 후 Actions → Upload file 로 ~/module-3.zip 업로드
 ```

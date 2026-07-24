@@ -3,7 +3,7 @@
 
 # ---------------------------------------------------------------------------
 # VPC (과제지 3. EKS Scaling - VPC 자유 구성)
-# - public  : IGW 직접 인터넷 (Bastion, NAT GW 배치)
+# - public  : IGW 직접 인터넷 (NAT GW 배치)
 # - private : NAT 경유 아웃바운드 (EKS NodeGroup / Karpenter 노드 배치)
 # Karpenter 의 서브넷 자동 디스커버리를 위해 private 서브넷에
 # karpenter.sh/discovery=<cluster_name> 태그를 부여한다 (k8s EC2NodeClass 참조).

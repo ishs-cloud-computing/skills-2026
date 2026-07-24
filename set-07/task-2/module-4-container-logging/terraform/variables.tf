@@ -64,16 +64,3 @@ variable "ecr_repo_name" {
   type        = string
   default     = "o11y-log-generator"
 }
-
-variable "bastion_instance_type" {
-  description = "Bastion 인스턴스 타입 (docker 빌드 겸용이라 t3.medium)"
-  type        = string
-  default     = "t3.medium"
-}
-
-variable "ssh_password" {
-  description = "Bastion SSH 패스워드 (rsync 파일 전송용)"
-  type        = string
-  default     = "Skill53##"
-  sensitive   = true
-}

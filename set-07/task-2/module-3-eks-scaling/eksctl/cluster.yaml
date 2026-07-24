@@ -5,8 +5,8 @@
 # eksctl Cluster Manifest — EKS Scaling (과제지 3, 채점 3-2)
 # 적용: outputs.json 값을 env 로 export → envsubst 치환 → eksctl create (README 참조)
 #
-# 반드시 `aws configure` 에 선수 IAM 키를 넣은 뒤 생성한다.
-# 클러스터 생성자 = 채점 CloudShell 신원이 되어야 `kubectl-connect` 가 동작한다.
+# 채점과 동일한 CloudShell 에서 생성한다. 생성자 신원 = 채점 신원이 자동 일치하므로
+# 별도 자격증명 정렬(aws configure) 이 필요 없다.
 # ===========================================================================
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
@@ -42,12 +42,8 @@ vpc:
       skm-subnet-priv-c:
         id: "${PRIV_SUBNET_C}"
         az: ap-northeast-2c
-  # 채점(mark3.sh)이 CloudShell 에서 kubectl-connect 로 접속하므로 public 엔드포인트 필수.
-  # private 도 함께 켜면 VPC 내부(bastion/노드)는 private IP 로 해석되는데, public 서브넷의
-  # bastion 은 cluster SG 에 미허용 → extraCIDRs 로 cluster SG ingress 443 에 명시 허용한다.
-  extraCIDRs:
-    - 10.73.0.0/24
-    - 10.73.1.0/24
+  # 채점(mark3.sh)·운영을 CloudShell 에서 kubectl 로 하므로 public 엔드포인트 필수.
+  # private 는 노드 조인용 — 노드 SG 는 eksctl 이 cluster SG 에 자동 등록한다.
   clusterEndpoints:
     publicAccess: true
     privateAccess: true

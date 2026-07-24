@@ -1,13 +1,13 @@
 # Module 4 — Container Logging (ap-northeast-1)
 
-EKS 1.35 + OTel Collector(DaemonSet) → Loki(OTLP) → Grafana 로그 파이프라인, 앱/Grafana 는 이름 고정 ALB+TargetGroupBinding 으로 노출. terraform 은 본 PC, 클러스터/헬름/이미지 빌드는 bastion 에서 한다.
-본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다 (bastion/CloudShell 단계는 공통).
+EKS 1.35 + OTel Collector(DaemonSet) → Loki(OTLP) → Grafana 로그 파이프라인, 앱/Grafana 는 이름 고정 ALB+TargetGroupBinding 으로 노출. terraform 은 본 PC, 클러스터/헬름/이미지 빌드는 CloudShell 에서 한다(CloudShell 에 Docker 내장).
+본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다 (CloudShell 단계는 공통).
 
 ## 디렉토리 구조
 
 ```
 module-4-container-logging/
-├── terraform/            # VPC, Bastion(docker), ALB/TG(이름 고정), ECR, LBC IAM
+├── terraform/            # VPC, ALB/TG(이름 고정), ECR, LBC IAM
 ├── eksctl/cluster.yaml   # o11y-cluster 1.35, NG 2/2/2 Multi-AZ, KST, EBS CSI, LBC IRSA
 ├── app/Dockerfile        # 자체 작성 (제공 Dockerfile 은 flask 미설치로 기동 불가)
 └── k8s/
@@ -29,45 +29,52 @@ terraform init
 terraform apply -auto-approve
 terraform output -json > outputs.json
 
-# bastion 전송 (terraform/ 는 보내지 않음 — provider 수백 MB. 비밀번호 Skill53##)
-$BIP = terraform output -raw bastion_public_ip
-ssh ec2-user@$BIP "mkdir -p ~/module-4"
-scp -r ..\eksctl ..\k8s ..\app ..\..\mark ..\..\provided\Module4-Container-Logging outputs.json "ec2-user@${BIP}:~/module-4/"
-ssh ec2-user@$BIP
+# CloudShell 반입용 zip (terraform/ 는 넣지 않음 — provider 수백 MB)
+Compress-Archive -Force -DestinationPath ..\module-4.zip `
+  -Path ..\eksctl, ..\k8s, ..\app, ..\..\mark, ..\..\provided\Module4-Container-Logging, outputs.json
+# → CloudShell(ap-northeast-1) 접속 후 Actions → Upload file 로 module-4.zip 업로드
 ```
 
 ```bash
-# ===== 이하 bastion 에서 실행 =====
-cd ~/module-4
+# ===== 이하 CloudShell (ap-northeast-1) 에서 실행 =====
+# 채점과 같은 셸이므로 클러스터 생성자 신원 = 채점 신원이 자동 일치한다 (aws configure 불필요).
 
-# 1) 자격증명 — 반드시 선수 IAM 키 입력. 클러스터 생성자 = 채점 CloudShell 신원 (module-3 과 동일 이유)
-aws configure        # region: ap-northeast-1
+# 0) 반입 파일 풀기
+mkdir -p ~/module-4 && cd ~/module-4
+unzip -o ~/module-4.zip     # eksctl/ k8s/ app/ mark/ Module4-Container-Logging/ outputs.json
 
-# 2) 환경 변수 (재접속 대비 .bashrc 영구화 — 작업규칙 6)
+# 1) 툴 설치 — kubectl·aws·docker 는 CloudShell 기본. eksctl·helm 만 ~/bin 에.
+mkdir -p ~/bin
+grep -qxF 'export PATH=$HOME/bin:$PATH' ~/.bashrc || echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc
+export PATH=$HOME/bin:$PATH
+curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C ~/bin
+curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | HELM_INSTALL_DIR=$HOME/bin USE_SUDO=false bash
+
+# 2) 환경 변수 (재접속 대비 ~/.bashrc 영구화 — 작업규칙 6, CloudShell $HOME 영속)
 cat > ~/.o11y-env <<EOF
 export AWS_DEFAULT_REGION=ap-northeast-1
 export NUM=<선수등번호>
-export ACCOUNT_ID=$(jq -r '.account_id.value' outputs.json)
-export VPC_ID=$(jq -r '.vpc_id.value' outputs.json)
-export PRIV_SUBNET_A=$(jq -r '.private_subnet_ids.value["o11y-subnet-priv-a"]' outputs.json)
-export PRIV_SUBNET_C=$(jq -r '.private_subnet_ids.value["o11y-subnet-priv-c"]' outputs.json)
-export NODE_EXTRA_SG_ID=$(jq -r '.node_extra_sg_id.value' outputs.json)
-export APP_TG_ARN=$(jq -r '.app_target_group_arn.value' outputs.json)
-export GRAFANA_TG_ARN=$(jq -r '.grafana_target_group_arn.value' outputs.json)
-export APP_ALB=$(jq -r '.app_alb_dns.value' outputs.json)
-export GRAFANA_ALB=$(jq -r '.grafana_alb_dns.value' outputs.json)
-export ECR=$(jq -r '.ecr_repository_url.value' outputs.json)
+export ACCOUNT_ID=$(jq -r '.account_id.value' ~/module-4/outputs.json)
+export VPC_ID=$(jq -r '.vpc_id.value' ~/module-4/outputs.json)
+export PRIV_SUBNET_A=$(jq -r '.private_subnet_ids.value["o11y-subnet-priv-a"]' ~/module-4/outputs.json)
+export PRIV_SUBNET_C=$(jq -r '.private_subnet_ids.value["o11y-subnet-priv-c"]' ~/module-4/outputs.json)
+export NODE_EXTRA_SG_ID=$(jq -r '.node_extra_sg_id.value' ~/module-4/outputs.json)
+export APP_TG_ARN=$(jq -r '.app_target_group_arn.value' ~/module-4/outputs.json)
+export GRAFANA_TG_ARN=$(jq -r '.grafana_target_group_arn.value' ~/module-4/outputs.json)
+export APP_ALB=$(jq -r '.app_alb_dns.value' ~/module-4/outputs.json)
+export GRAFANA_ALB=$(jq -r '.grafana_alb_dns.value' ~/module-4/outputs.json)
+export ECR=$(jq -r '.ecr_repository_url.value' ~/module-4/outputs.json)
 EOF
 grep -qxF 'source ~/.o11y-env' ~/.bashrc || echo 'source ~/.o11y-env' >> ~/.bashrc
 source ~/.o11y-env
 
-# 3) EKS 클러스터 (~20분)
-cd eksctl
+# 3) EKS 클러스터 (~20분 — 브라우저 탭 유지)
+cd ~/module-4/eksctl
 envsubst < cluster.yaml > cluster.rendered.yaml
 eksctl create cluster -f cluster.rendered.yaml
 kubectl get nodes -o wide     # 2대, AZ 가 a/c 로 나뉘어야 함 (Multi-AZ, 채점 4-1)
 
-# 4) 앱 이미지 빌드/푸시 (제공 app.py + 자체 Dockerfile)
+# 4) 앱 이미지 빌드/푸시 (제공 app.py + 자체 Dockerfile, CloudShell 내장 Docker)
 mkdir -p /tmp/o11y-build
 cp ~/module-4/Module4-Container-Logging/app.py ~/module-4/app/Dockerfile /tmp/o11y-build/
 cd /tmp/o11y-build
@@ -124,12 +131,9 @@ curl -s -G http://localhost:3100/loki/api/v1/query_range \
 kill %1                                                  # {"ts":...,"level":"ERROR",...} 출력 확인
 echo "Grafana: http://$GRAFANA_ALB (skills$NUM / GoodJob!Skills$NUM^^)"
 # 브라우저에서 Log Overview 대시보드 3패널 (No Data 없음, 범례 INFO/WARN/ERROR) 확인
-```
 
-```bash
-# ===== CloudShell (ap-northeast-1) =====
-# Actions → Upload file 로 ../mark/mark4.sh 업로드 후
-bash mark4.sh        # 4-1 이 update-kubeconfig 를 자체 수행
+# ===== 채점 (같은 CloudShell) =====
+bash ~/module-4/mark/mark4.sh        # 4-1 이 update-kubeconfig 를 자체 수행
 # 4-5 는 스크립트 하단 주석 블록을 수동 실행, 4-6 은 Grafana 웹 접속 수동 채점
 ```
 
@@ -147,8 +151,10 @@ bash mark4.sh        # 4-1 이 update-kubeconfig 를 자체 수행
 ## 주의 / 검증 포인트
 
 - **이름 정확 일치**: `o11y-cluster`, `o11y-app-alb`/`o11y-app-tg`, `o11y-grafana-alb`/`o11y-grafana-tg`, `log-generator`(o11y), `o11y-otel`/`o11y-loki`/`o11y-grafana`(monitoring).
+- **클러스터는 채점과 같은 CloudShell 에서 생성**한다 — 생성자 신원 = 채점 신원이 자동 일치.
 - ALB/TG 이름은 채점이 "이름"으로 조회하므로 LBC Ingress(이름 지정 불가)가 아니라 terraform ALB + TargetGroupBinding 으로 만든다. TGB 는 LBC 설치(5) 이후에만 apply 가능하다.
 - 제공 Dockerfile 은 flask 를 설치하지 않아 그대로 빌드하면 Pod 가 CrashLoop 된다 — 반드시 `app/Dockerfile` 로 빌드한다 (제공 `app.py` 는 수정 금지).
 - 채점 4-5 의 LogQL 라벨은 `k8s_namespace_name` (OTLP 리소스 속성 승격), level 값은 대문자 `ERROR` 다. OTel 이 본문을 가공하면 `| json` 파싱이 깨지므로 filelog 의 `container` 파서 외 본문 변형을 추가하지 않는다.
 - Grafana 범례가 `{level="ERROR"}` 형태로 보이면 4-6 오답 — 대시보드 쿼리는 `sum by (level)` + `legendFormat {{level}}` 을 유지한다. 채점 전 `/log` 를 각 레벨로 한 번씩 호출해 3패널 모두 데이터가 있게 한다 (No Data 패널 = 오답).
-- mark4.sh 는 `rm -rf ~/.aws` 를 수행하므로 반드시 CloudShell 에서 실행한다. bastion 에서 돌리면 선수 자격증명 설정이 지워진다.
+- `mark4.sh` 는 `rm -rf ~/.aws` 를 수행하지만 CloudShell 자격증명은 관리형 세션(`~/.aws` 아님)이라 무해하다. `~/bin`·`~/.o11y-env` 도 영향 없다.
+- **CloudShell 세션**은 브라우저 탭에 묶인다 — `eksctl create`(~20분) 중 탭을 닫지 않는다. 재접속 후엔 `source ~/.o11y-env` 만 하면 된다.

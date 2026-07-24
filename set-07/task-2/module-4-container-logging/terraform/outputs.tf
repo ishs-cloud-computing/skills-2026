@@ -13,11 +13,6 @@ output "vpc_id" {
   value = aws_vpc.this.id
 }
 
-output "public_subnet_cidrs" {
-  description = "eksctl extraCIDRs 용 (bastion -> private API 443 허용)"
-  value       = [for k in local.public_subnet_keys : var.subnets[k].cidr]
-}
-
 output "private_subnet_ids" {
   description = "EKS NodeGroup 이 사용할 private 서브넷"
   value       = { for k in local.private_subnet_keys : k => aws_subnet.this[k].id }
@@ -52,8 +47,4 @@ output "ecr_repository_url" {
 
 output "lbc_policy_arn" {
   value = aws_iam_policy.lbc.arn
-}
-
-output "bastion_public_ip" {
-  value = aws_eip.bastion.public_ip
 }

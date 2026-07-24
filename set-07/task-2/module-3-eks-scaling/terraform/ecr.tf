@@ -3,7 +3,7 @@
 
 # ---------------------------------------------------------------------------
 # ECR (과제지 3. EKS Scaling - 3. Application)
-# - 제공 app.py/Dockerfile(수정 금지)을 bastion 에서 빌드해 푸시한다 (README).
+# - 제공 app.py/Dockerfile(수정 금지)을 CloudShell 에서 빌드해 푸시한다 (README).
 # ---------------------------------------------------------------------------
 
 resource "aws_ecr_repository" "app" {
