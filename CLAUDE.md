@@ -19,31 +19,12 @@
 
 ## 디렉토리 구조
 
-```
-skills-2026/
-├── set-01/
-│   ├── task-1/
-│   │   ├── terraform/   # AWS 리소스
-│   │   ├── eksctl/      # 클러스터/노드그룹 (EKS 과제일 때만)
-│   │   ├── k8s/         # k8s 리소스 (번호 prefix로 apply 순서, 그룹용 서브디렉토리 허용)
-│   │   ├── app/         # 컨테이너 소스 (필요할 때만)
-│   │   ├── task.md / task.pdf   # 과제지
-│   │   ├── mark.md / mark.pdf   # 채점지
-│   │   └── mark.sh             # 채점 스크립트 (단일 과제 → 단일 파일)
-│   └── task-2/
-│       ├── module-N-<name>/   # 구현: 모듈별 terraform/ eksctl/ k8s/ app/ 중 필요한 것만 (이름은 서술형)
-│       ├── provided/          # 대회 제공 소스 (수정 금지). 세트마다 다르며 module1/ module2/ ... 로 모듈별 분리
-│       ├── mark/              # 모듈별 채점 스크립트 mark2-1.sh, mark2-2.sh ... (mark<과제번호>-<모듈번호>.sh)
-│       ├── task.md / task.pdf · mark.md / mark.pdf
-│       └── ...                # 모듈 수는 세트마다 다름
-├── set-02/ ~ set-10/    # 동일 구조
-├── shared/
-│   ├── provided/         # 과제 배포파일
-│   └── scripts/
-└── .github/
-```
+새 세트는 `_template/`을 `set-XX/`로 복사해서 시작한다.
 
-하위 디렉토리(`terraform/`, `eksctl/`, `k8s/`, `app/`)는 해당 과제에 필요한 것만 만든다. 모든 과제가 EKS나 컨테이너를 쓰는 것은 아니다.
+- task-1: 안 쓰는 하위 디렉토리(`terraform`·`eksctl`·`k8s`·`app`)는 지운다.
+- task-2: 모듈 4개 고정. `module-N/`을 `module-N-<name>/`으로 개명하고 안 쓰는 하위만 지운다.
+- `eksctl/`은 `terraform/`과 같은 레벨. `k8s/`는 apply 순서를 번호 prefix로 강제.
+- `provided/`는 대회 제공 원본, 수정 금지.
 
 ## 파일 배치 규칙
 
