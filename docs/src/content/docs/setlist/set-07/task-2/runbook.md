@@ -36,3 +36,37 @@ bash mark/mark1.sh
 cd set-07/task-2/module-1-nosql/terraform
 terraform destroy -auto-approve
 ```
+
+## 모듈 2 — CDN Function (us-east-1)
+
+### 1) [본 PC·PowerShell] 배포 (distribution 배포 대기 포함 ~5-7분)
+
+```powershell
+cd set-07/task-2/module-2-cdn-function/terraform
+terraform init
+terraform apply -auto-approve
+```
+
+### 2) [본 PC·PowerShell] A/B 동작 검증
+
+```powershell
+$URL = terraform output -raw landing_url
+# 쿠키 강제: 해당 버전 본문 + Set-Cookie 없음이 기대 출력
+curl.exe -si -b "x-sp-ab=a" $URL | Select-String "version-badge|set-cookie"
+curl.exe -si -b "x-sp-ab=b" $URL | Select-String "version-badge|set-cookie"
+# 첫 방문: Set-Cookie x-sp-ab=<a|b>; Path=/; Max-Age=86400 + 해당 버전 본문이 기대 출력
+curl.exe -si $URL | Select-String "version-badge|set-cookie"
+```
+
+### 3) [CloudShell] 셀프 채점 (2-6-A 는 KVS 전파 대기로 최대 ~2분)
+
+```bash
+bash mark/mark2.sh
+```
+
+### Teardown [본 PC·PowerShell]
+
+```powershell
+cd set-07/task-2/module-2-cdn-function/terraform
+terraform destroy -auto-approve
+```

@@ -5,7 +5,7 @@
 | 모듈 | 주제 | 리전 | 핵심 서비스 | 채점 |
 |------|------|------|-------------|------|
 | [module-1-nosql](module-1-nosql/) | NoSQL | ap-southeast-1 | DynamoDB(Streams·GSI) + Lambda + EC2 | CloudShell |
-| module-2 (미착수) | CDN Function | us-east-1 | S3 + CloudFront Functions + KVS | - |
+| [module-2-cdn-function](module-2-cdn-function/) | CDN Function | us-east-1 | S3 + CloudFront Functions + KVS | CloudShell |
 | module-3 (미착수) | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | - |
 | module-4 (미착수) | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | - |
 

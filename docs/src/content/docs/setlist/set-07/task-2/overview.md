@@ -15,7 +15,7 @@ sidebar:
 | 모듈 | 주제 | 리전 | 핵심 서비스 | 상태 |
 |------|------|------|-------------|------|
 | 1 | NoSQL | ap-southeast-1 | DynamoDB(Streams·GSI) + Lambda + EC2 | 구현 완료 |
-| 2 | CDN Function | us-east-1 | S3 + CloudFront Functions + KVS | 미착수 |
+| 2 | CDN Function | us-east-1 | S3 + CloudFront Functions + KVS | 구현 완료 |
 | 3 | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | 미착수 |
 | 4 | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | 미착수 |
 
@@ -26,3 +26,12 @@ BigBae Trains 기차 티켓 예매 시스템. Terraform 단일 apply로 끝난�
 - **DynamoDB**: 예약 테이블(`train_id`/`seat_id`, Streams NEW_AND_OLD_IMAGES, PITR, sparse GSI `gsi-user-reservations`) + 감사 테이블(`event_id`)
 - **Lambda**: Streams 트리거로 예약 변경을 감사 테이블에 적재 (`python3.13`, 지급 `lambda.py` 무수정)
 - **EC2**: 지급 Flask 앱(`app.py`)을 systemd로 :8080 서빙, 조건부 쓰기(409)와 GSI 조회 API 제공
+
+## 모듈 2 — CDN Function 한눈에
+
+SkillsPhone 랜딩 페이지의 엣지 A/B 테스팅. Terraform 단일 apply로 끝난다 (서버·컨테이너 없음).
+
+- **S3**: 지급 `index_a/b.html`을 `version-a/`·`version-b/` 경로에 호스팅, Public Access 전면 차단 + OAC 정책
+- **KeyValueStore**: 노출 비율(`weight=0.3`)과 버전별 경로를 보관 — 비율 변경이 코드 재배포 없이 반영되는 지점
+- **CloudFront Functions**(js-2.0, LIVE): viewer-request가 쿠키/무작위로 버전을 배정해 URI 재작성, viewer-response가 첫 배정에만 `x-sp-ab` 쿠키 발급
+- **Distribution**: redirect-to-https, 커스텀 캐시 정책(쿠키 `x-sp-ab` 캐시 키 포함, TTL 0/300/3600) + 커스텀 Security Header 정책
