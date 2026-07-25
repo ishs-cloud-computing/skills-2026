@@ -28,11 +28,10 @@
 
 ## 파일 배치 규칙
 
-- `terraform/`: AWS 리소스. 리소스가 많으면 도메인별로 파일 분리.
-- `eksctl/`: EKS 클러스터/노드그룹 YAML. Terraform과 같은 IaC 레이어이므로 `k8s/`가 아니라 `terraform/`과 같은 레벨에 둔다.
-- `k8s/`: 클러스터 생성 후 `kubectl apply`할 리소스. apply가 알파벳 순이므로 의존 순서를 번호 prefix로 강제한다 (`00-namespace.yaml`, `01-configmap.yaml` ...). 도메인이 많으면 `app/`·`monitoring/`·`logging/` 같은 그룹용 서브디렉토리로 묶고, 번호 prefix는 순서 의존 파일에만 쓴다.
-- `app/`: ECR에 빌드/푸시할 컨테이너 소스.
-- `provided/` (task-2 전용): 대회가 세트별로 제공하는 소스. 모듈별 `module1/`·`module2/` ... 서브디렉토리에 원본 그대로 두고 수정하지 않는다. 구현 코드는 `module-N-<name>/`에 따로 작성한다.
+`_template/`이 구조를 보여준다. 코드에서 안 드러나는 규칙만:
+
+- `k8s/`: apply가 알파벳 순이라 순서 의존 파일에 번호 prefix (`00-namespace.yaml`). 도메인이 많으면 `app/`·`monitoring/`·`logging/` 서브디렉토리로 묶고, 번호는 순서 의존 파일에만.
+- `provided/` (task-2): 원본 그대로, 수정 금지. 구현은 `module-N-<name>/`에 따로.
 
 ## 설계 규칙
 
@@ -41,9 +40,12 @@
 
 ## 문서 규칙
 
-- 과제별 README.md에는 실행 방법만을 작성한다.
-- linux용 런북을 작성한다.
-- 이 외의 문서는 `docs/`내에 작성한다.
+과제 문서는 세 곳으로 나눈다. 무엇을 어디에 쓸지 헷갈리면 이 기준을 따른다.
+
+- **README.md (런북/How-to)**: 실행·배포·teardown 절차만. 명령형 단계. "왜"를 쓰지 않는다.
+- **NOTES.md (개발자용)**: 함정·기각한 대안·삽질·실측 소요시간. 발행하지 않는다.
+- **`docs/` (Explanation)**: 왜 이 아키텍처인가. 설계 이유·트레이드오프. 사이트로 발행된다.
+- 작성 규칙은 `docs/CONTRIBUTING.md`(Diátaxis). 한 문서에 종류를 섞지 않는다.
 
 ## Terraform 변수 규칙
 
@@ -58,18 +60,25 @@
 
 ## 작업 규칙
 
-1. 과제 작업 시작·트러블슈팅·마무리 전 항상 task.md, mark.md, 채점 스크립트(task-1은 `mark.sh`, task-2는 `mark/markN.sh`)를 확인한다.
-2. 사용 SW는 작성 시점 최신 안정 버전으로 **고정**한다 (latest 금지). 예외:
-   - `eksctl`, `helm` 등 클러스터 관리 도구는 고정하지 않고 최신 안정 버전 사용.
-   - AL2023 등 보안이 중요한 항목은 latest 허용.
-   - 과제지/채점지에 명시된 경우 명시된 버전(또는 latest) 사용.
-   - EKS Addon 버전은 고정하지 않는다.
+1. 과제 작업 시작·트러블슈팅·마무리 전 항상 task.md, mark.md, 채점 스크립트, 그리고 `NOTES.md`를 확인한다. NOTES.md 결정 로그의 기각안을 먼저 봐 이미 실패한 접근을 반복하지 않는다.
+2. 도구 버전은 `.mise.toml`에 고정한다. 예외(고정 안 함): eksctl·helm·EKS Addon은 최신 안정 버전. AL2023 등 보안 항목과 과제지 명시 버전.
 3. 변경한 manifest/terraform은 관련 툴로 동작 여부와 채점 기준 충족을 검증한다.
 4. 채점은 채점 스크립트가 검사하는 정확한 형태를 기준으로 한다. 중복·불필요해 보여도 채점 대상 필드는 제거하지 않는다.
 5. 대회에서 바뀌기 쉬운 값(이름·CIDR·리전 등)은 변수로 선언해 쉽게 바꿀 수 있게 한다.
 6. bastion 또는 cloudshell 환경변수는 연결이 끊겨도 재접속 시 바로 쓰도록 bastion 및 local에 .env 파일로 준비한다. 
 7. `eksctl`·`helm`은 버전 간 기본값·스키마가 자주 바뀐다(옵션 deprecated, 기본값 변경). 옵션 사용 전 공식 문서로 현재 동작을 확인한다.
 8. manifest의 주석은 관련 근거 또는 설계 의도만 작성한다.
+
+## 협업
+
+- 브랜치명: `set-09/task-1`, `fix-describe` 형식. 병합은 squash merge.
+- 커밋 메시지: 영어 명령형.
+- 새 소스 파일 상단에 SPDX 헤더:
+
+```
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+```
 
 ## 리뷰
 
