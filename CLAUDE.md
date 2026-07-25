@@ -60,8 +60,6 @@ skills-2026/
 
 ## 문서 규칙
 
-`docs/CONTRIBUTING.md`을 무조건 확인 후 작업한다.
-
 - 과제별 README.md에는 실행 방법만을 작성한다.
 - linux용 런북을 작성한다.
 - 이 외의 문서는 `docs/`내에 작성한다.
