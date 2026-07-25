@@ -22,9 +22,8 @@ sidebar:
 
 ## 머신 분할
 
-- **본 PC (PowerShell 7)**: 모듈별 `terraform apply`. Linux 면 각 모듈의 `README.linux.md`.
-- **bastion (모듈 3·4, terraform 이 생성)**: eksctl 클러스터 생성, docker 이미지 빌드(대회 PC 에 Docker 없음), helm/kubectl.
-- **CloudShell (모듈별 리전)**: `mark/markN.sh` 셀프 채점. 채점지 기준 실행 위치와 동일.
+- **본 PC (PowerShell 7)**: 모듈별 `terraform apply`. 모듈 3 은 `eksctl`·helm·kubectl 도 본 PC 에서 한다(장시간 `eksctl create` 를 CloudShell 유휴 회수에서 보호). Linux 면 각 모듈의 `README.linux.md`.
+- **CloudShell (모듈별 리전)**: docker 이미지 빌드(대회 PC 에 Docker 없음)와 `mark/markN.sh` 셀프 채점. 모듈 4 는 `eksctl`·helm·kubectl 도 CloudShell 에서 한다.
 
 ## 사용 버전 (작성 시점 최신 안정, 고정)
 

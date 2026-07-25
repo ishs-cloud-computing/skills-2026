@@ -7,13 +7,13 @@ sidebar:
 
 ## 클러스터 엔드포인트를 public+private 로 연 이유 (모듈 3·4)
 
-채점 스크립트가 **CloudShell** 에서 `kubectl-connect`(= update-kubeconfig 후 kubectl)로 접속한다.
-private-only 클러스터(set-05 방식)면 채점 셸이 API 서버에 닿지 못한다. public 을 열되 private 도
-함께 켜서 노드/bastion 통신은 VPC 내부로 유지한다. bastion(public 서브넷)은 private IP 로 해석된
-API 에 접근해야 하므로 `vpc.extraCIDRs` 로 public 서브넷 CIDR 를 cluster SG 443 에 허용한다.
+채점 스크립트가 **CloudShell** 에서 update-kubeconfig 후 kubectl 로 접속한다. private-only
+클러스터(set-05 방식)면 채점 셸이 API 서버에 닿지 못한다. 모듈 3 은 본 PC 의 kubectl 도 같은
+public 엔드포인트로 접속한다. public 을 열되 private 도 함께 켜서 노드 조인 통신은 VPC 내부로 유지한다.
 
-같은 이유로 **클러스터 생성 전 bastion 에서 `aws configure` 로 선수 IAM 키를 넣는다**.
-EKS 는 생성자 신원에 자동 admin 권한을 주므로, 생성자 = CloudShell 신원이면 별도 access entry 가 필요 없다.
+EKS 는 생성자 신원에 자동 admin 을 주므로 생성자 신원이 곧 채점 셸의 kubectl 권한이다. task-2 는
+공통 root 신원이라 본 PC(모듈 3)·CloudShell(모듈 4) 어디서 생성해도 채점 셸과 일치해 별도
+access entry 가 필요 없다.
 
 ## ALB 를 terraform + TargetGroupBinding 으로 만든 이유 (모듈 4)
 

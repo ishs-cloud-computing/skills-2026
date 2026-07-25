@@ -3,10 +3,11 @@
 
 # ===========================================================================
 # eksctl Cluster Manifest — EKS Scaling (과제지 3, 채점 3-2)
-# 적용: outputs.json 값을 env 로 export → envsubst 치환 → eksctl create (README 참조)
+# 적용: outputs.json 값으로 아래 치환 토큰을 채운 뒤 eksctl create (README 참조)
 #
-# 채점과 동일한 CloudShell 에서 생성한다. 생성자 신원 = 채점 신원이 자동 일치하므로
-# 별도 자격증명 정렬(aws configure) 이 필요 없다.
+# 본 PC 에서 생성한다 (~20분, CloudShell 은 키보드 유휴 시 세션이 회수되어 장시간
+# create 가 죽는다 — README 참조). task-2 는 공통 root 신원이므로 본 PC 생성자 =
+# CloudShell 채점자 ARN 이 일치해 별도 access-entry 정렬이 필요 없다.
 # ===========================================================================
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
@@ -42,7 +43,7 @@ vpc:
       skm-subnet-priv-c:
         id: "${PRIV_SUBNET_C}"
         az: ap-northeast-2c
-  # 채점(mark3.sh)·운영을 CloudShell 에서 kubectl 로 하므로 public 엔드포인트 필수.
+  # 본 PC(helm/kubectl)·CloudShell(채점) 모두 VPC 밖에서 접근하므로 public 엔드포인트 필수.
   # private 는 노드 조인용 — 노드 SG 는 eksctl 이 cluster SG 에 자동 등록한다.
   clusterEndpoints:
     publicAccess: true

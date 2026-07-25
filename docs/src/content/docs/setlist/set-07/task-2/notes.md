@@ -14,8 +14,8 @@ sidebar:
   이름이 바뀌면 JS 도 함께 수정해야 한다.
 - **제공 Dockerfile 결함(모듈 4)**: flask 미설치 + requirements.txt 없음. 자체 `app/Dockerfile` 로
   빌드한다. 대회 당일 제공본이 수정되어 있으면 제공본을 우선 사용한다(작업규칙 2 예외).
-- **mark1/2/4 는 `rm -rf ~/.aws` 수행**: CloudShell 전용으로 실행한다. bastion 에서 돌리면 선수
-  자격증명 설정이 지워진다(인스턴스 프로파일로 폴백은 되지만 kubectl 인증이 깨질 수 있다).
+- **mark1/2/4 는 `rm -rf ~/.aws` 수행**: CloudShell 에서 실행한다. CloudShell 자격증명은 콘솔
+  세션 기반이라 삭제와 무관하다. mark3 은 이 삭제를 하지 않아 클러스터 접근이 유지된다.
 - **KVS weight drift(모듈 2)**: 채점 2-6 이 weight 를 바꿨다가 0.3 으로 복원한다. 채점 후
   `terraform plan` 에 drift 가 보이면 복원 실패 → 재-apply. `keys_exclusive` 리소스라 선언값으로 수렴한다.
 - **KEDA 차트 tolerations 스키마(작업규칙 7)**: addon 노드가 taint 되어 있어 KEDA Pod 에
