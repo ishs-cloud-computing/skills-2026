@@ -32,4 +32,4 @@ sidebar:
 | 11-1 | observability 에 fluent-bit/prometheus/grafana Running, Grafana LB | `k8s/logging/fluent-bit.yaml`, kps values |
 | 11-2 | datasource 3개 이름·타입, 대시보드 wsc2026-grafana-dashboard | kps values, `dashboard.json` |
 | 11-3 | 대시보드 Row 5종 + 로그 형식 | `dashboard.json`, fluent-bit `format.lua` |
-| 11-4 | 알람 5종 Firing | `prometheus-rules.yaml` + log_to_metrics ([주의 · 알려진 한계](../notes/) 참조) |
+| 11-4 | 알람 5종 Firing | `prometheus-rules.yaml` + log_to_metrics (HighLatency 실발화 불가 — `NOTES.md`) |

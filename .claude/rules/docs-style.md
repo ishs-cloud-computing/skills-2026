@@ -1,6 +1,7 @@
 ---
 paths:
   - "docs/**/*.md"
+  - "docs/**/*.mdx"
   - "set-*/task-*/**/*.md"
 ---
 

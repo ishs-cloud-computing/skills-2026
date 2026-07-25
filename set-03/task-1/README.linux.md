@@ -1,8 +1,8 @@
 # 본 PC 가 Linux 일 때의 런북 (set-03 / task-1)
 
-[README.md](README.md) 의 본 PC 단계(0·1·3·7)를 bash 로 옮긴 것. CloudShell 단계(2·4·5·6·8·9)는
+[README.md](README.md) 의 본 PC 단계(0·1·3·7·10)를 bash 로 옮긴 것. CloudShell 단계(2·4·5·6·8·9)는
 README.md 와 동일. 설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
-주의는 [notes.md](../../docs/src/content/docs/setlist/set-03/task-1/notes.md).
+주의/함정·설계 이력은 [NOTES.md](NOTES.md).
 
 ### 0) [본 PC] 도구 준비 + 작업용 IAM 사용자 + 사전 변수
 
@@ -90,3 +90,21 @@ terraform output -raw cloudfront_domain
 ```
 
 ### 8~9) → README.md step 8·9 (VPC CloudShell — E2E 검증, 정리)
+
+### 10) 전체 destroy (채점 종료 후)
+
+10-1(ingress 삭제)은 README.md step 10 과 같다. 본 PC 명령만 bash 로 옮긴다.
+
+```bash
+cd ../eksctl                                     # step 7 이후 cwd = terraform
+eksctl delete cluster -f cluster.rendered.yaml
+
+# dynamodb.tf 는 고치지 않는다 (mark 2-1 검사 대상)
+aws dynamodb update-table --table-name wsc2026-book-table --no-deletion-protection-enabled
+
+# force_destroy 미설정 — 객체가 남으면 destroy 가 실패한다
+BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
+aws s3 rm "s3://$BUCKET" --recursive
+
+cd ../terraform && terraform destroy   # enable_cdn 기본값(false) → data.aws_lb 조회 생략
+```
