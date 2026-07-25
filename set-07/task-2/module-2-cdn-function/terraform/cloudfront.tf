@@ -9,7 +9,7 @@
 # ---------------------------------------------------------------------------
 
 resource "aws_cloudfront_origin_access_control" "landing" {
-  name                              = "skillsphone-cdn-ab-oac"
+  name                              = var.oac_name
   description                       = "OAC for landing bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"

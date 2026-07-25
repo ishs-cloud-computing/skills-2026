@@ -7,7 +7,7 @@
 # ===== 본 PC =====
 # 0) 툴: eksctl·helm·kubectl 이 있어야 한다 (없으면 각 공식 설치).
 
-# 1) terraform
+# 1) terraform — apply 전 이름 대조는 README.md 의 1) 단계와 동일하다.
 cd terraform
 terraform init
 terraform apply -auto-approve
@@ -16,9 +16,15 @@ cd ..
 
 # 2) cluster.yaml 치환 → cluster.rendered.yaml
 export ACCOUNT_ID=$(jq -r '.account_id.value' terraform/outputs.json)
+export REGION=$(jq -r '.region.value' terraform/outputs.json)
+export CLUSTER_NAME=$(jq -r '.cluster_name.value' terraform/outputs.json)
 export VPC_ID=$(jq -r '.vpc_id.value' terraform/outputs.json)
 export PRIV_SUBNET_A=$(jq -r '.private_subnet_ids.value["skm-subnet-priv-a"]' terraform/outputs.json)
 export PRIV_SUBNET_C=$(jq -r '.private_subnet_ids.value["skm-subnet-priv-c"]' terraform/outputs.json)
+export KARPENTER_NODE_ROLE=$(jq -r '.karpenter_node_role_name.value' terraform/outputs.json)
+export KEDA_POLICY_ARN=$(jq -r '.keda_policy_arn.value' terraform/outputs.json)
+export KARPENTER_POLICY_ARN=$(jq -r '.karpenter_controller_policy_arn.value' terraform/outputs.json)
+export APP_SQS_POLICY_ARN=$(jq -r '.app_sqs_policy_arn.value' terraform/outputs.json)
 export SQS_URL=$(jq -r '.sqs_queue_url.value' terraform/outputs.json)
 export ECR=$(jq -r '.ecr_repository_url.value' terraform/outputs.json)
 envsubst < eksctl/cluster.yaml > eksctl/cluster.rendered.yaml
@@ -39,7 +45,7 @@ helm upgrade --install keda kedacore/keda -n keda --create-namespace --version 2
 # 5) Karpenter 1.14.0
 helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter -n kube-system --version 1.14.0 \
   --set serviceAccount.create=false --set serviceAccount.name=karpenter \
-  --set settings.clusterName=skm-eks-cluster \
+  --set settings.clusterName="$CLUSTER_NAME" \
   --set settings.interruptionQueue="" \
   --set replicas=1 \
   --set controller.resources.requests.cpu=0.5 \
@@ -47,9 +53,9 @@ helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter -n kub
 
 # 6) k8s 오브젝트 (이미지(CloudShell B)가 미리 push 돼 있어야 함)
 kubectl apply -f k8s/00-namespace.yaml
-kubectl apply -f k8s/10-karpenter-nodepool.yaml
-sed -e "s|<ECR_IMAGE>|$ECR:v1.0.0|g" -e "s|<SQS_URL>|$SQS_URL|g" k8s/20-deployment.yaml | kubectl apply -f -
-sed "s|<SQS_URL>|$SQS_URL|g" k8s/30-keda-scaledobject.yaml | kubectl apply -f -
+sed -e "s|<CLUSTER_NAME>|$CLUSTER_NAME|g" -e "s|<KARPENTER_NODE_ROLE>|$KARPENTER_NODE_ROLE|g" k8s/10-karpenter-nodepool.yaml | kubectl apply -f -
+sed -e "s|<ECR_IMAGE>|$ECR:v1.0.0|g" -e "s|<SQS_URL>|$SQS_URL|g" -e "s|<AWS_REGION>|$REGION|g" k8s/20-deployment.yaml | kubectl apply -f -
+sed -e "s|<SQS_URL>|$SQS_URL|g" -e "s|<AWS_REGION>|$REGION|g" k8s/30-keda-scaledobject.yaml | kubectl apply -f -
 
 # 7) 검증
 kubectl get nodes -l karpenter.sh/nodepool=skm-app-nodepool

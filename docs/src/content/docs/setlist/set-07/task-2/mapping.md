@@ -37,8 +37,8 @@ sidebar:
 | 3-1 | 큐 URL | `module-3-eks-scaling/terraform/sqs.tf` |
 | 3-2 | 클러스터 1.35 ACTIVE + NG t3.medium 1/1/1 + 노드 Name 태그 | `eksctl/cluster.yaml` (`instanceName`) |
 | 3-3 | Pod 의 노드 nodepool 라벨 + replicas/port/requests + env 3종 | `k8s/20-deployment.yaml` |
-| 3-4 | keda-operator Pod(keda ns) + order-scaler 1/5/aws-sqs-queue/5 | README 5) helm + `k8s/30-keda-scaledobject.yaml` |
-| 3-5 | karpenter Pod(kube-system) + consolidation/타입/taint/NodeClass | README 6) helm + `k8s/10-karpenter-nodepool.yaml` |
+| 3-4 | keda-operator Pod(keda ns) + order-scaler 1/5/aws-sqs-queue/5 | README 4) helm + `k8s/30-keda-scaledobject.yaml` |
+| 3-5 | karpenter Pod(kube-system) + consolidation/타입/taint/NodeClass | README 5) helm + `k8s/10-karpenter-nodepool.yaml` |
 | 3-6 | 100건 주입 → Ready Pod ≥5, App 노드 ≥2 | `20`+`10` 리소스 계산 (실배포 검증) |
 | 3-7 | purge → Pod 1, 노드 1 | `30` scaleDown 30s + `10` consolidate 60s (실배포 검증) |
 

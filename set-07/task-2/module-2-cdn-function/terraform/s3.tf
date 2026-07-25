@@ -3,10 +3,8 @@
 
 # ---------------------------------------------------------------------------
 # S3 (과제지 2. CDN Function - 1. CDN 구성, 채점 2-1)
-# - skillsphone-landing-ab-<ACCOUNT_ID>: Public Access 전부 차단, OAC 로만 접근
-# - 제공 index_a/index_b.html 을 version-a/, version-b/ 아래에 업로드 (수정 금지)
-# - 버킷 정책은 단일 Statement (채점 2-1 이 Statement[0] 의
-#   Principal.Service / AWS:SourceArn 조건을 검사한다)
+# 버킷 정책은 Statement 1개만 둔다 — 채점 2-1 이 Statement[0] 의 Principal.Service 와
+# AWS:SourceArn 조건만 검사하므로 Statement 가 늘면 검사 대상이 어긋난다.
 # ---------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "landing" {

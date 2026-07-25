@@ -13,6 +13,12 @@ variable "cluster_name" {
   default     = "skm-eks-cluster"
 }
 
+variable "name_prefix" {
+  description = "네트워크 리소스(VPC·IGW·RTB·NAT) 이름 접두어. 채점 대상이 아니므로 한 곳에서 바꾼다."
+  type        = string
+  default     = "skm"
+}
+
 variable "vpc_cidr" {
   description = "skm VPC CIDR (과제지: VPC 자유 구성)"
   type        = string

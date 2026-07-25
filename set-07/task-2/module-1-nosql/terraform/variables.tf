@@ -7,6 +7,18 @@ variable "region" {
   default     = "ap-southeast-1"
 }
 
+variable "name_prefix" {
+  description = "네트워크 리소스(VPC·IGW·서브넷·RTB) 이름 접두어. 채점 대상이 아니므로 한 곳에서 바꾼다."
+  type        = string
+  default     = "bigbae-nosql"
+}
+
+variable "availability_zone" {
+  description = "앱 EC2 배치 AZ"
+  type        = string
+  default     = "ap-southeast-1a"
+}
+
 variable "vpc_cidr" {
   description = "앱 EC2 용 VPC CIDR"
   type        = string

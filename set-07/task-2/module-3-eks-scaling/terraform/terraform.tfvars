@@ -5,6 +5,7 @@
 # 값은 variables.tf default 와 동일 — 대회 당일 이름/CIDR 변경 시 이 파일만 수정한다.
 region        = "ap-northeast-2"
 cluster_name  = "skm-eks-cluster"
+name_prefix   = "skm"
 vpc_cidr      = "10.73.0.0/16"
 queue_name    = "skm-order-queue"
 ecr_repo_name = "skm-order-processor"

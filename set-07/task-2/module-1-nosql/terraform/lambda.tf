@@ -3,8 +3,8 @@
 
 # ---------------------------------------------------------------------------
 # Lambda (과제지 1. NoSQL - 3. Streams 처리 구성, 채점 1-3/1-6)
-# - 제공 lambda.py 를 수정 없이 그대로 패키징 (zip 엔트리 lambda.py → handler lambda.handler)
-# - python3.13 / timeout 30s / trigger = 예약 테이블 DynamoDB Streams
+# 제공 lambda.py 를 수정 없이 패키징한다. zip 엔트리 이름이 lambda.py 이므로 handler 가
+# lambda.handler 다 — 제공 파일명이 바뀌면 handler 도 같이 바꿔야 한다.
 # ---------------------------------------------------------------------------
 
 data "archive_file" "lambda" {

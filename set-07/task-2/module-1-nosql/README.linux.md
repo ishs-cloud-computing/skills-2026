@@ -4,6 +4,7 @@
 
 ```bash
 # ===== 본 PC =====
+# apply 전 이름 대조는 README.md 의 0) 단계와 동일하다.
 cd terraform
 terraform init
 terraform apply -auto-approve        # 약 2분. EC2 userdata(pip 설치) 완료까지 +2~3분 대기

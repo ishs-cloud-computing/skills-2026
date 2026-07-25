@@ -38,6 +38,18 @@ variable "cache_policy_name" {
   default     = "skillsphone-cdn-ab-cache-policy"
 }
 
+variable "response_headers_policy_name" {
+  description = "커스텀 Security Header 정책 이름"
+  type        = string
+  default     = "skillsphone-cdn-ab-security-headers-policy"
+}
+
+variable "oac_name" {
+  description = "S3 origin 용 OAC 이름 (채점 대상 아님)"
+  type        = string
+  default     = "skillsphone-cdn-ab-oac"
+}
+
 variable "distribution_comment" {
   description = "배포 식별용 Comment (채점이 Comment 로 배포를 찾는다)"
   type        = string

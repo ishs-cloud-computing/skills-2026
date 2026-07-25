@@ -3,14 +3,9 @@
 
 # ---------------------------------------------------------------------------
 # Karpenter EC2NodeClass / NodePool (과제지 3-5, 채점 3-5~3-7)
-# - NodePool skm-app-nodepool / NodeClass skm-app-nodeclass (이름 정확 일치)
-# - 허용 인스턴스: t3.small, t3.medium (채점은 sort join "t3.medium,t3.small")
-# - taint dedicated=app:NoSchedule → App(toleration 보유)·DaemonSet 외 워크로드 배제
-#   (채점 3-5: taints length >= 1)
-# - Consolidation: WhenEmptyOrUnderutilized / 60s (유휴 노드 60초 후 반환)
-# - subnet: karpenter.sh/discovery 태그(terraform private 서브넷)로 디스커버리
-# - securityGroup: 클러스터 SG(aws:eks:cluster-name 태그)로 디스커버리
-# - role: terraform 가 만든 KarpenterNodeRole-skm-eks-cluster
+# taint dedicated=app:NoSchedule 로 App(toleration 보유)·DaemonSet 외 워크로드를 배제한다.
+# 서브넷·SG 는 terraform 이 붙인 karpenter.sh/discovery·aws:eks:cluster-name 태그로 찾는다.
+# <CLUSTER_NAME> / <KARPENTER_NODE_ROLE> 는 outputs.json 치환 토큰 (README 참조).
 # ---------------------------------------------------------------------------
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
@@ -20,13 +15,13 @@ spec:
   amiFamily: AL2023
   amiSelectorTerms:
     - alias: al2023@latest
-  role: "KarpenterNodeRole-skm-eks-cluster"
+  role: "<KARPENTER_NODE_ROLE>"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "skm-eks-cluster"
+        karpenter.sh/discovery: "<CLUSTER_NAME>"
   securityGroupSelectorTerms:
     - tags:
-        aws:eks:cluster-name: "skm-eks-cluster"
+        aws:eks:cluster-name: "<CLUSTER_NAME>"
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool

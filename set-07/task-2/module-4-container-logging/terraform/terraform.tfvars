@@ -5,6 +5,7 @@
 # 값은 variables.tf default 와 동일 — 대회 당일 이름/CIDR 변경 시 이 파일만 수정한다.
 region           = "ap-northeast-1"
 cluster_name     = "o11y-cluster"
+name_prefix      = "o11y"
 vpc_cidr         = "10.74.0.0/16"
 app_alb_name     = "o11y-app-alb"
 app_tg_name      = "o11y-app-tg"

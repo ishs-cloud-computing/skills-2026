@@ -2,14 +2,13 @@
 # Copyright 2026 The ISHS Cloud Computing Authors
 
 # ---------------------------------------------------------------------------
-# IAM (유의사항 11: 최소 권한)
-# - o11y-lbc-policy : AWS Load Balancer Controller 공식 IAM 정책
-#   (iam/lbc-policy.json, 컨트롤러 v3.4.2 릴리스 문서 기준 — lbc-policy.version)
-#   eksctl IRSA 가 kube-system/aws-load-balancer-controller SA 에 attach 한다.
-# - EBS CSI 는 eksctl addon 의 wellKnownPolicies 가 역할을 만든다 (cluster.yaml).
+# AWS Load Balancer Controller 정책은 upstream 원본을 그대로 쓴다.
+# 버전은 iam/lbc-policy.version 으로 고정한다. 직접 좁히면 ALB 생성이 조용히 실패하므로
+# 유의사항 11(최소 권한)과의 관계는 NOTES.md 결정 로그를 따른다.
+# EBS CSI 는 eksctl addon 의 wellKnownPolicies 가 역할을 만든다 (cluster.yaml).
 # ---------------------------------------------------------------------------
 
 resource "aws_iam_policy" "lbc" {
-  name   = "o11y-lbc-policy"
+  name   = "${var.name_prefix}-lbc-policy"
   policy = file("${path.module}/iam/lbc-policy.json")
 }

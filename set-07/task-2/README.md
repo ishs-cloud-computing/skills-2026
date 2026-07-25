@@ -11,15 +11,16 @@
 
 ## 공통 워크플로
 
-1. `terraform apply` 는 **본 PC** 에서만 한다 (모듈별 `terraform/`).
-2. 모듈 3·4 는 bastion(terraform 이 생성, docker/eksctl/helm 설치됨)에서 클러스터 생성·이미지 빌드·kubectl 작업을 한다. bastion 에는 `outputs.json` 만 넘기고 tfstate/`.terraform/` 은 넘기지 않는다.
-3. 모듈 3·4 의 `eksctl create cluster` 전 bastion 에서 `aws configure` 로 **선수 IAM 키**를 넣는다 — 클러스터 생성자 = 채점 CloudShell 신원이어야 `kubectl-connect` 가 동작한다.
-4. 셀프 채점은 각 모듈 리전의 **CloudShell** 에서 `mark/markN.sh` 로 한다. mark1/2/4 는 `rm -rf ~/.aws` 를 수행하므로 본 PC/bastion 에서 실행하지 않는다.
-5. 과제 종료 전 부하를 모두 중지한다 — 모듈 3 은 Pod 1 / Karpenter 노드 1 상태여야 한다.
+1. 배포 전 과제지의 이름·리전·인스턴스 타입이 각 모듈 `terraform/terraform.tfvars` 및 `eksctl/cluster.yaml` 값과 일치하는지 확인한다.
+2. `terraform apply` 는 **본 PC** 에서만 한다 (모듈별 `terraform/`).
+3. 모듈 3 은 클러스터 생성·helm·kubectl 을 본 PC 에서, 이미지 빌드만 CloudShell 에서 한다. 모듈 4 는 terraform 이후 전 단계를 CloudShell 에서 한다.
+4. CloudShell 에는 `terraform output -json` 으로 뽑은 `outputs.json` 과 제공 소스만 넘긴다. tfstate·`.terraform/` 은 넘기지 않는다.
+5. 셀프 채점은 각 모듈 리전의 **CloudShell** 에서 `mark/markN.sh` 로 한다. mark1/2/4 는 `rm -rf ~/.aws` 를 수행하므로 본 PC 에서 실행하지 않는다.
+6. 과제 종료 전 부하를 모두 중지한다 — 모듈 3 은 Pod 1 / Karpenter 노드 1 상태여야 한다.
 
 ## 문서
 
-설계 근거·채점 항목 매핑·주의사항은 `docs/src/content/docs/setlist/set-07/task-2/` (Starlight 사이트) 에 있다.
-
+- 설계 근거·채점 항목 매핑: `docs/src/content/docs/setlist/set-07/task-2/` (Starlight 사이트).
+- 함정·미해결 항목·결정 로그: [NOTES.md](NOTES.md) (발행하지 않는다).
 - 제공 파일(`provided/`, `task.md`, `mark.md`, `mark/*.sh`)은 수정하지 않는다.
-- 모듈별 사용 파일: `provided/Module1-NoSQL`(terraform 직접 참조), `Module2-CDN-Function`(terraform 직접 참조), `Module3-EKS-Scaling`(bastion 빌드), `Module4-Container-Logging`(app.py 만 사용 — Dockerfile 은 결함으로 자체 작성분 사용).
+- 모듈별 사용 파일: `provided/Module1-NoSQL`(terraform 직접 참조), `Module2-CDN-Function`(terraform 직접 참조), `Module3-EKS-Scaling`(CloudShell 빌드), `Module4-Container-Logging`(`app.py` 만 사용, Dockerfile 은 `module-4-container-logging/app/Dockerfile`).

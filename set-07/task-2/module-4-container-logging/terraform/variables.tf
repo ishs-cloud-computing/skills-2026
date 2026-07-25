@@ -13,6 +13,12 @@ variable "cluster_name" {
   default     = "o11y-cluster"
 }
 
+variable "name_prefix" {
+  description = "네트워크·SG 이름 접두어. 채점 대상이 아니므로 한 곳에서 바꾼다."
+  type        = string
+  default     = "o11y"
+}
+
 variable "vpc_cidr" {
   description = "o11y VPC CIDR"
   type        = string

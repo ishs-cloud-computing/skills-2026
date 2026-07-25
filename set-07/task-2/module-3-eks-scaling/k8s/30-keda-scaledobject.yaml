@@ -3,12 +3,10 @@
 
 # ---------------------------------------------------------------------------
 # KEDA ScaledObject (과제지 3-4, 채점 3-4/3-6/3-7)
-# - min 1 / max 5, 메시지 5건당 Pod 1개 (queueLength 5)
-# - identityOwner: operator → keda-operator SA 의 IRSA(skm-keda-policy) 사용
-# - 채점 3-7 은 purge 후 최대 2.5분 내 Pod 1 수렴을 요구한다:
-#   pollingInterval 10 으로 빠르게 감지하고, HPA scaleDown stabilization 을
-#   기본 300s → 30s 로 줄여 5→1 축소가 윈도 안에 끝나게 한다.
-# - <SQS_URL> 은 apply 시 outputs.json 값으로 sed 치환 (README)
+# identityOwner: operator → keda-operator SA 의 IRSA 를 그대로 쓴다.
+# 채점 3-7 은 purge 후 최대 2.5분 내 Pod 1 수렴을 요구한다: pollingInterval 10 으로 빠르게
+# 감지하고, HPA scaleDown stabilization 을 기본 300s → 30s 로 줄여 5→1 축소를 윈도 안에 끝낸다.
+# <SQS_URL> / <AWS_REGION> 은 outputs.json 치환 토큰 (README 참조).
 # ---------------------------------------------------------------------------
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -36,5 +34,5 @@ spec:
       metadata:
         queueURL: "<SQS_URL>"
         queueLength: "5"
-        awsRegion: "ap-northeast-2"
+        awsRegion: "<AWS_REGION>"
         identityOwner: operator

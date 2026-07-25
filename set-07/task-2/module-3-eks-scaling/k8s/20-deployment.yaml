@@ -3,11 +3,10 @@
 
 # ---------------------------------------------------------------------------
 # order-processor (과제지 3-3, 채점 3-3)
-# - 초기 replicas 1, requests CPU 500m / Mem 512Mi, port 8080
-# - env 는 리터럴 3개만 (채점이 name=value 형태로 정확 비교):
-#   <ECR_IMAGE>, <SQS_URL> 은 apply 시 outputs.json 값으로 sed 치환 (README)
-# - skm-app-nodepool 에서만 구동: nodeSelector(karpenter.sh/nodepool) +
-#   NodePool taint(dedicated=app) toleration. addon NG 는 taint 로 배제된다.
+# env 는 리터럴 3개만 둔다 — 채점이 name=value 형태로 정확 비교하므로 valueFrom 을 쓸 수 없다.
+# skm-app-nodepool 에서만 구동한다: nodeSelector + NodePool taint toleration.
+# addon NG 는 CriticalAddonsOnly taint 로 배제된다.
+# <ECR_IMAGE> / <SQS_URL> / <AWS_REGION> 은 outputs.json 치환 토큰 (README 참조).
 # ---------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
@@ -45,7 +44,7 @@ spec:
               memory: 512Mi
           env:
             - name: AWS_REGION
-              value: "ap-northeast-2"
+              value: "<AWS_REGION>"
             - name: SQS_QUEUE_URL
               value: "<SQS_URL>"
             - name: PROCESSING_TIME

@@ -3,10 +3,8 @@
 
 # ---------------------------------------------------------------------------
 # Policy (과제지 2. CDN Function - 4, 채점 2-3)
-# - 캐시 정책: TTL 0/300/3600, 캐시 키에 x-sp-ab 쿠키 whitelist
-#   (A/B 버전이 서로 다른 캐시 항목으로 보관되도록)
-# - Response Headers 정책: Security Header 커스텀 정책
-# - AWS Managed Policy 는 사용하지 않는다 (과제지 명시)
+# 캐시 키에 x-sp-ab 쿠키를 whitelist 해야 A/B 버전이 서로 다른 캐시 항목으로 보관된다.
+# AWS Managed Policy 는 쓰지 않는다 (과제지 명시).
 # ---------------------------------------------------------------------------
 
 resource "aws_cloudfront_cache_policy" "ab" {
@@ -36,7 +34,7 @@ resource "aws_cloudfront_cache_policy" "ab" {
 }
 
 resource "aws_cloudfront_response_headers_policy" "security" {
-  name    = "skillsphone-cdn-ab-security-headers-policy"
+  name    = var.response_headers_policy_name
   comment = "Security headers for landing responses"
 
   security_headers_config {

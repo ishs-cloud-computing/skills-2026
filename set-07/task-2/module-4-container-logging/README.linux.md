@@ -4,6 +4,7 @@
 
 ```bash
 # ===== 본 PC =====
+# apply 전 이름 대조는 README.md 의 본 PC 단계와 동일하다.
 cd terraform
 terraform init
 terraform apply -auto-approve

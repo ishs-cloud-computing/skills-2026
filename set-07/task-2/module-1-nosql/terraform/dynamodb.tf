@@ -3,11 +3,8 @@
 
 # ---------------------------------------------------------------------------
 # DynamoDB (과제지 1. NoSQL - 1/2)
-# - 예약 테이블: train_id/seat_id 키, Streams NEW_AND_OLD_IMAGES, PITR, On-Demand
-# - GSI gsi-user-reservations: user_id/reserved_at.
-#   sparse index 는 앱(app.py)이 cancel 시 user_id/reserved_at 을 REMOVE 하는
-#   방식으로 구현된다 — 키 속성이 없는 항목은 GSI 에 포함되지 않는다.
-# - 감사 테이블: event_id 단일 키
+# GSI 키를 user_id/reserved_at 로 두는 것은 제공 app.py 가 cancel 시 이 두 속성을 REMOVE 하는
+# 것과 한 쌍이다 — 키 속성이 없는 항목은 GSI 에 포함되지 않아 sparse index 가 된다.
 # ---------------------------------------------------------------------------
 
 resource "aws_dynamodb_table" "reservation" {

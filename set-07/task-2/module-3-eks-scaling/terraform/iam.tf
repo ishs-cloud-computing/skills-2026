@@ -192,17 +192,55 @@ resource "aws_iam_policy" "karpenter" {
         Resource  = aws_iam_role.karpenter_node.arn
         Condition = { StringEquals = { "iam:PassedToService" = "ec2.amazonaws.com" } }
       },
+      # 유의사항 11(최소 권한): 인스턴스 프로파일은 이 클러스터가 소유한 것만 다루게 태그로 묶는다.
+      # 생성 시점에는 아직 리소스가 없어 RequestTag 로, 이후 변경·삭제는 ResourceTag 로 건다.
+      {
+        Sid      = "AllowScopedInstanceProfileCreation"
+        Effect   = "Allow"
+        Action   = ["iam:CreateInstanceProfile"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+            "aws:RequestTag/topology.kubernetes.io/region"             = var.region
+          }
+          StringLike = { "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass" = "*" }
+        }
+      },
+      {
+        Sid      = "AllowScopedInstanceProfileTagging"
+        Effect   = "Allow"
+        Action   = ["iam:TagInstanceProfile"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+            "aws:ResourceTag/topology.kubernetes.io/region"             = var.region
+            "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}"  = "owned"
+            "aws:RequestTag/topology.kubernetes.io/region"              = var.region
+          }
+          StringLike = {
+            "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass" = "*"
+            "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass"  = "*"
+          }
+        }
+      },
       {
         Sid    = "AllowScopedInstanceProfileActions"
         Effect = "Allow"
         Action = [
-          "iam:CreateInstanceProfile",
-          "iam:TagInstanceProfile",
           "iam:AddRoleToInstanceProfile",
           "iam:RemoveRoleFromInstanceProfile",
           "iam:DeleteInstanceProfile",
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}" = "owned"
+            "aws:ResourceTag/topology.kubernetes.io/region"             = var.region
+          }
+          StringLike = { "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass" = "*" }
+        }
       },
       {
         Sid      = "AllowInstanceProfileReadActions"

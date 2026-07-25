@@ -14,12 +14,12 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = { Name = "skm-vpc" }
+  tags = { Name = "${var.name_prefix}-vpc" }
 }
 
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
-  tags   = { Name = "skm-igw" }
+  tags   = { Name = "${var.name_prefix}-igw" }
 }
 
 resource "aws_subnet" "this" {
@@ -35,8 +35,7 @@ resource "aws_subnet" "this" {
     each.value.tier == "private" ? {
       "kubernetes.io/role/internal-elb"           = "1"
       "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-      # Karpenter 서브넷 디스커버리 태그
-      "karpenter.sh/discovery" = var.cluster_name
+      "karpenter.sh/discovery"                    = var.cluster_name
     } : {},
   )
 }
@@ -44,7 +43,7 @@ resource "aws_subnet" "this" {
 # ----- Public Route Table : IGW -----
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
-  tags   = { Name = "skm-pub-rtb" }
+  tags   = { Name = "${var.name_prefix}-pub-rtb" }
 }
 
 resource "aws_route" "public_igw" {
@@ -63,18 +62,14 @@ resource "aws_route_table_association" "public" {
 resource "aws_eip" "nat" {
   for_each = toset(local.private_subnet_keys)
   domain   = "vpc"
-  tags     = { Name = "skm-nat-eip-${each.key}" }
-}
-
-locals {
-  public_by_az = { for k in local.public_subnet_keys : var.subnets[k].az => k }
+  tags     = { Name = "${var.name_prefix}-nat-eip-${each.key}" }
 }
 
 resource "aws_nat_gateway" "this" {
   for_each      = toset(local.private_subnet_keys)
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.this[local.public_by_az[var.subnets[each.key].az]].id
-  tags          = { Name = "skm-nat-${each.key}" }
+  tags          = { Name = "${var.name_prefix}-nat-${each.key}" }
   depends_on    = [aws_internet_gateway.this]
 }
 

@@ -3,8 +3,8 @@
 
 # ---------------------------------------------------------------------------
 # 앱 EC2 (과제지 1. NoSQL - 4. Application 배포, 채점 1-4/1-5)
-# - t3.small + AL2023, Public IP, TCP 8080 오픈
-# - 제공 app.py/requirements.txt 를 userdata 로 임베드해 systemd 서비스로 구동
+# 채점 1-4 가 퍼블릭 curl 로 :8080/healthcheck 를 호출하므로 인바운드를 좁힐 수 없다.
+# 제공 app.py/requirements.txt 는 userdata 에 임베드해 systemd 서비스로 구동한다.
 # ---------------------------------------------------------------------------
 
 resource "aws_security_group" "app" {
@@ -48,7 +48,7 @@ resource "aws_instance" "app" {
 
   metadata_options {
     http_endpoint = "enabled"
-    http_tokens   = "required" # IMDSv2 강제
+    http_tokens   = "required"
   }
 
   root_block_device {

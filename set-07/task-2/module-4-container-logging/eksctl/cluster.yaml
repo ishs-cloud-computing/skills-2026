@@ -12,8 +12,8 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: o11y-cluster
-  region: ap-northeast-1
+  name: ${CLUSTER_NAME}
+  region: ${REGION}
   version: "1.35"
 
 # Auto Mode 명시적 비활성화: 관리형 노드그룹 + helm 애드온 설계.
@@ -38,7 +38,7 @@ vpc:
     privateAccess: true
 
 # ----- OIDC + IRSA ServiceAccount -----
-# LBC 가 TargetGroupBinding 으로 Pod IP 를 TG 에 등록할 권한 (o11y-lbc-policy).
+# LBC 가 TargetGroupBinding 으로 Pod IP 를 TG 에 등록할 권한.
 iam:
   withOIDC: true
   serviceAccounts:
@@ -46,13 +46,12 @@ iam:
         name: aws-load-balancer-controller
         namespace: kube-system
       attachPolicyARNs:
-        - "arn:aws:iam::${ACCOUNT_ID}:policy/o11y-lbc-policy"
+        - "${LBC_POLICY_ARN}"
 
 # ===========================================================================
 # NodeGroup (과제지 4-1 표, 채점 4-1)
-# - t3.medium, 2/2/2, private 2AZ 배치 → Multi-AZ (채점 4-1 zone 2종)
-# - 모든 노드 TimeZone KST (과제지 명시)
-# - 이름은 채점 대상 아님 (mark4.sh 가 nodegroups[0] 를 조회)
+# private 2AZ 배치로 채점 4-1 의 zone 2종을 만든다.
+# NodeGroup 이름은 채점 대상이 아니다 (mark4.sh 가 nodegroups[0] 를 조회).
 # ===========================================================================
 managedNodeGroups:
   - name: o11y-ng
@@ -71,7 +70,7 @@ managedNodeGroups:
       attachIDs:
         - "${NODE_EXTRA_SG_ID}"
     preBootstrapCommands:
-      # 모든 노드 시간대 KST (과제지 4-1)
+      # 과제지 4-1 이 모든 노드 시간대를 KST 로 요구한다.
       - "ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime || true"
       - "timedatectl set-timezone Asia/Seoul || true"
 

@@ -12,26 +12,26 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = { Name = "bigbae-nosql-vpc" }
+  tags = { Name = "${var.name_prefix}-vpc" }
 }
 
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
-  tags   = { Name = "bigbae-nosql-igw" }
+  tags   = { Name = "${var.name_prefix}-igw" }
 }
 
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = var.public_subnet_cidr
-  availability_zone       = "${var.region}a"
+  availability_zone       = var.availability_zone
   map_public_ip_on_launch = true
 
-  tags = { Name = "bigbae-nosql-subnet-pub-a" }
+  tags = { Name = "${var.name_prefix}-subnet-pub-a" }
 }
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
-  tags   = { Name = "bigbae-nosql-pub-rtb" }
+  tags   = { Name = "${var.name_prefix}-pub-rtb" }
 }
 
 resource "aws_route" "public_igw" {

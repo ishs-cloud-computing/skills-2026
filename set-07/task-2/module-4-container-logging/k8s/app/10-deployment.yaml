@@ -3,8 +3,9 @@
 
 # ---------------------------------------------------------------------------
 # log-generator (과제지 4-2, 채점 4-3/4-4)
-# - 초기 replicas 2, 8080 포트, stdout JSON 로그 출력 (제공 app.py)
-# - <ECR_IMAGE> 는 apply 시 outputs.json 값으로 sed 치환 (README)
+# 제공 app.py 가 stdout 에 JSON 한 줄씩 찍는다 — OTel filelog 가 이 형식을 그대로 넘겨야
+# Loki 에서 `| json` 이 동작한다.
+# <ECR_IMAGE> 는 outputs.json 치환 토큰 (README 참조).
 # ---------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment

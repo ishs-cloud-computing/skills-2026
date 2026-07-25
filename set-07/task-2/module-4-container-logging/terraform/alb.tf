@@ -3,16 +3,13 @@
 
 # ---------------------------------------------------------------------------
 # ALB / Target Group (과제지 4-2/4-5, 채점 4-2)
-# - 채점이 ALB·TG 를 "이름"으로 조회하므로 LBC Ingress(이름 지정 불가) 대신
-#   Terraform 으로 이름을 정확히 만들고, Pod 등록은 k8s TargetGroupBinding 이 한다.
-# - o11y-app-alb -> o11y-app-tg (8080, /healthz)
-# - o11y-grafana-alb -> o11y-grafana-tg (3000, /api/health)
+# 채점이 ALB·TG 를 "이름"으로 조회하므로 LBC Ingress(이름 지정 불가) 대신 Terraform 으로
+# 이름을 정확히 만들고, Pod 등록만 k8s TargetGroupBinding 에 맡긴다.
 # ---------------------------------------------------------------------------
 
-# ----- ALB SG: 80 인바운드 오픈 -----
 resource "aws_security_group" "alb" {
-  name        = "o11y-alb-sg"
-  description = "o11y ALBs - allow HTTP from anywhere"
+  name        = "${var.name_prefix}-alb-sg"
+  description = "${var.name_prefix} ALBs - allow HTTP from anywhere"
   vpc_id      = aws_vpc.this.id
 
   ingress {
@@ -30,13 +27,12 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "o11y-alb-sg" }
+  tags = { Name = "${var.name_prefix}-alb-sg" }
 }
 
-# ----- 노드 추가 SG: ALB -> Pod(8080/3000) 인바운드 허용 -----
 # eksctl NodeGroup 의 securityGroups.attachIDs 로 노드에 부착한다 (cluster.yaml).
 resource "aws_security_group" "node_extra" {
-  name        = "o11y-node-extra-sg"
+  name        = "${var.name_prefix}-node-extra-sg"
   description = "Allow ALB to reach app(8080) and grafana(3000) pods"
   vpc_id      = aws_vpc.this.id
 
@@ -63,10 +59,10 @@ resource "aws_security_group" "node_extra" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "o11y-node-extra-sg" }
+  tags = { Name = "${var.name_prefix}-node-extra-sg" }
 }
 
-# ===== o11y-app-alb =====
+# ===== 앱 ALB =====
 resource "aws_lb" "app" {
   name               = var.app_alb_name
   internal           = false
@@ -107,7 +103,7 @@ resource "aws_lb_listener" "app" {
   }
 }
 
-# ===== o11y-grafana-alb =====
+# ===== Grafana ALB =====
 resource "aws_lb" "grafana" {
   name               = var.grafana_alb_name
   internal           = false

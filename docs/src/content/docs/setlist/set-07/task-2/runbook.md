@@ -5,14 +5,15 @@ sidebar:
   order: 2
 ---
 
-상세 명령은 저장소의 모듈별 README 가 단일 원본이다. 이 페이지는 실행 순서와 소요 시간만 요약한다.
+상세 명령은 저장소의 모듈별 README 가 단일 원본이다. 이 페이지는 실행 순서만 요약한다.
+실측 소요시간은 저장소 `set-07/task-2/NOTES.md` 에 있다.
 
-| 모듈 | 런북 | 흐름 | 소요 |
-|------|------|------|------|
-| 1 | `set-07/task-2/module-1-nosql/README.md` | terraform apply → userdata 대기 → CloudShell 채점 | ~5분 |
-| 2 | `set-07/task-2/module-2-cdn-function/README.md` | terraform apply(CF 배포 포함) → CloudShell 채점 | ~10분 |
-| 3 | `set-07/task-2/module-3-eks-scaling/README.md` | 본 PC(terraform → eksctl ~20분 → KEDA/Karpenter → k8s) + CloudShell(이미지 빌드) → CloudShell 채점 | ~40분 |
-| 4 | `set-07/task-2/module-4-container-logging/README.md` | terraform → CloudShell(eksctl ~20분 → 이미지 → LBC → 앱 → Loki → OTel → Grafana) → CloudShell 채점 | ~45분 |
+| 모듈 | 런북 | 흐름 |
+|------|------|------|
+| 1 | `set-07/task-2/module-1-nosql/README.md` | terraform apply → userdata 대기 → CloudShell 채점 |
+| 2 | `set-07/task-2/module-2-cdn-function/README.md` | terraform apply(CF 배포 포함) → CloudShell 채점 |
+| 3 | `set-07/task-2/module-3-eks-scaling/README.md` | 본 PC(terraform → eksctl → KEDA/Karpenter → k8s) + CloudShell(이미지 빌드) → CloudShell 채점 |
+| 4 | `set-07/task-2/module-4-container-logging/README.md` | terraform → CloudShell(eksctl → 이미지 → LBC → 앱 → Loki → OTel → Grafana) → CloudShell 채점 |
 
 ## 순서 제약
 
