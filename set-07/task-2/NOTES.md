@@ -30,8 +30,6 @@
 - **log group 선존재 충돌**: 첫 apply가 `/aws/lambda/bigbae-nosql-reservation-audit` already exists로 실패 →
   `aws logs delete-log-group --log-group-name /aws/lambda/bigbae-nosql-reservation-audit --region ap-southeast-1` 후 재apply로 해결.
   대회 당일 재배포 시 같은 충돌 가능 — destroy 없이 재apply 하는 상황이면 이 명령을 먼저.
-- **mark.md 1-6-A 기대 출력 불일치**: 기대 블록은 6줄(마지막 "2" 2회)인데 채점 스크립트는 5개만 출력한다(마지막 audit 재확인 명령 없음).
-  기대 블록 마지막 "2"는 중복 기재로 판단. jq pretty-print(멀티라인 배열)·jsonify trailing newline 등 서식 차이도 값 기준으로 판정할 것.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
@@ -45,6 +43,12 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-07-26 [module-1] mark.md의 기대 출력이 원본 pdf와 다른 오류를 해결
+- 맥락: 기존 mark.md 1-6-A 기대 출력이 불일치하다는 문제를 확인했지만, 이는 원본 pdf에서 변환 도중 오류가 발생해 마지막 출력이 2번 작성된것임을 확인
+- 채택: 수동으로 mark.md의 기대 출력을 원본 pdf와 동일하게 수정
+- 기각: X
+- 대가: X
 
 ### 2026-07-26 [module-1] default VPC → 자체 VPC로 전환 (아래 default VPC 결정 번복)
 - 맥락: 대회 당일 30% 변동으로 "VPC 이름/CIDR 지정"이 나오면 data source 기반 default VPC는 변수화 불가 — retrofit 시 리소스 5개 신규 + 서브넷 교체로 인스턴스 재생성 (사용자 지적)
