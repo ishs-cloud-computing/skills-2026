@@ -28,4 +28,6 @@ kubectl/helm 작업과 채점은 **CloudShell VPC environment(`mark-sg`)** 에�
 - **[설계 근거](../deployment/)** — 본 PC/CloudShell 2분할, terraform 2회 apply,
   fully-private 클러스터를 eksctl 로 생성하는 이유 등 설계 결정의 근거.
 - **[요구사항 ↔ 구현 매핑](../mapping/)** — 채점 스크립트(mark.sh) 항목별 구현 위치.
-- **[주의 · 알려진 한계](../notes/)** — 30% 변동 대응, 채점 스크립트 오타, 실발화 불가 알람 등 함정.
+
+30% 변동 대응, 채점 스크립트 오타, 실발화 불가 알람 등 함정과 미해결 항목은 저장소
+`set-03/task-1/NOTES.md` 에 있다.

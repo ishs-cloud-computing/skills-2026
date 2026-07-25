@@ -1,6 +1,6 @@
 [tools]
 node = "24"
-terraform = "1"
+terraform = "1.15.8"
 "aqua:terraform-docs/terraform-docs" = "latest"
 
 [tasks.docs]

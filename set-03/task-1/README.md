@@ -5,7 +5,7 @@ EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / 
 
 > 설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
 > 요구사항↔구현 매핑은 [mapping.md](../../docs/src/content/docs/setlist/set-03/task-1/mapping.md),
-> 주의/함정은 [notes.md](../../docs/src/content/docs/setlist/set-03/task-1/notes.md).
+> 주의/함정·설계 이력은 [NOTES.md](NOTES.md).
 
 
 ## NOTICE
@@ -253,4 +253,32 @@ aws logs tail /wsc2026/eks/book-app --since 10m | head -5
 # S3 릴레이 제거 (static/ 만 남긴다 — mark 6-1)
 BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
 aws s3 rm "s3://$BUCKET/_transfer/" --recursive
+```
+
+### 10) 전체 destroy (채점 종료 후)
+
+생성 역순으로 지운다. ALB 와 클러스터가 남아 있으면 Terraform 이 서브넷·SG 를 못 지운다.
+
+```bash
+# 10-1) [VPC CloudShell] ingress 삭제 → LBC 가 ALB 를 회수한다
+kubectl delete ingress -n wsc2026 --all
+```
+
+```powershell
+# 10-2) [본 PC] 클러스터 (step 7 이후 cwd = terraform)
+cd ..\eksctl
+eksctl delete cluster -f cluster.rendered.yaml
+
+# 10-3) [본 PC] DynamoDB 삭제 방지 해제
+#       dynamodb.tf 는 고치지 않는다 (mark 2-1 검사 대상) — CLI 로만 해제한다
+aws dynamodb update-table --table-name wsc2026-book-table --no-deletion-protection-enabled
+
+# 10-4) [본 PC] S3 객체 비우기 (force_destroy 미설정 — 객체가 남으면 destroy 가 실패한다)
+$BUCKET = aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text
+aws s3 rm "s3://$BUCKET" --recursive
+
+# 10-5) [본 PC] 나머지 전부. enable_cdn 기본값(false)으로 돌려 data.aws_lb 조회를 건너뛴다.
+#       CloudFront 는 비활성화→삭제에 시간이 걸린다
+cd ..\terraform
+terraform destroy
 ```

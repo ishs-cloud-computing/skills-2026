@@ -10,7 +10,7 @@ EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / 
 (CloudShell 단계는 공통).
 
 > 각 단계가 왜 이렇게 짜였는지는 [설계 근거](../deployment/), 채점 항목 대조는
-> [요구사항 ↔ 구현 매핑](../mapping/), 함정은 [주의 · 알려진 한계](../notes/).
+> [요구사항 ↔ 구현 매핑](../mapping/). 함정과 미해결 항목은 저장소 `set-03/task-1/NOTES.md`.
 
 ## 디렉토리 구조
 
