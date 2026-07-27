@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # ECR (요구사항 7)
 # - unicorn-concert-app : scan on push, Data CMK 암호화

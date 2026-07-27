@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # S3 (요구사항 5)
 # - unicorn-web-<ACCOUNT_ID> : 정적 Frontend 서빙

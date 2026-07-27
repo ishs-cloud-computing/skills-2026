@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ConfigMap: Book App 환경변수 (요구사항 13, Reference)
 # AWS_REGION / TABLE_NAME 만 필요. (Pod Identity + NAT 로 DynamoDB 정상 호출)
 apiVersion: v1

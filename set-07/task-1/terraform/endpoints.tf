@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC Endpoints (요구사항 3)
 # App(private) 의 "컨테이너 이미지 다운로드 및 로그/메트릭 export" 는 외부 인터넷을

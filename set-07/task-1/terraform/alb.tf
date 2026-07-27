@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Service Endpoint - ALB (요구사항 10-1, 12)
 # - unicorn-alb (internal) : CloudFront(VPC Origin)에서만 접근. HTTP 80.
