@@ -206,6 +206,12 @@ variable "grafana_port" {
   default     = 3000
 }
 
+variable "grafana_admin_password" {
+  description = "Grafana admin 비밀번호. mark 10 이 이 값 그대로 로그인하므로 과제지 리터럴 고정 (요구사항 12)"
+  type        = string
+  default     = "$korea26!!"
+}
+
 variable "pod_log_group_name" {
   description = "Fluent Bit 가 Pod 로그를 전송할 CloudWatch Logs 로그 그룹 (요구사항 12)"
   type        = string

@@ -72,6 +72,8 @@ export BUCKET=$(terraform output -raw s3_bucket_name)
 export ALB_DNS=$(terraform output -raw book_alb_dns)
 export GRAFANA_ALB_DNS=$(terraform output -raw grafana_alb_dns)
 export CF=$(terraform output -raw cloudfront_domain)
+export GRAFANA_ADMIN_USER=$(terraform output -raw grafana_admin_user)
+export GRAFANA_ADMIN_PASSWORD='$(terraform output -raw grafana_admin_password)'
 EOF
 
 source ../.env   # 새 터미널로 이어서 할 땐 task-1 에서 `source .env` 만 다시 실행
@@ -104,7 +106,16 @@ aws ecr describe-image-scan-findings --repository-name wskorea26-book-repo --ima
 
 ```bash
 cd eksctl
-envsubst < cluster.yaml > cluster.rendered.yaml
+# 치환 전: cluster.yaml 이 요구하는 env 가 전부 선언됐는지 검사
+# (envsubst 는 미선언 변수를 빈 값으로 조용히 치환하므로 필수)
+missing=$(for v in $(grep -oh '[$]{[A-Za-z_]*}' cluster.yaml | tr -d '${}' | sort -u); do
+  [ -z "${!v}" ] && echo "$v"; done)
+[ -z "$missing" ] && envsubst < cluster.yaml > cluster.rendered.yaml \
+  || echo "env 누락: $missing — §1 의 .env 를 다시 source"
+
+# 치환 후: 잔여 ${} 가 없어야 함
+grep -n '\${' cluster.rendered.yaml && echo '치환 누락!' || echo OK
+
 eksctl create cluster -f cluster.rendered.yaml     # 약 20분
 
 aws eks update-kubeconfig --region ap-northeast-2 --name wskorea26-cluster
@@ -134,17 +145,35 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set nodeSelector.node-type=addon
 ```
 
-### 5) Book 애플리케이션 (k8s)
+### 5) k8s manifest 렌더 & 일괄 apply
+
+모든 k8s manifest 를 `rendered/` 로 렌더한 뒤 폴더 하나를 apply 한다
+(fluent-bit·grafana TGB 포함 — grafana TGB 는 서비스가 §6 helm 뒤에 생기지만 LBC 가 재시도해 자동 바인딩).
 
 ```bash
 cd ../k8s
-kubectl apply -f 00-namespaces.yaml
-kubectl apply -f app/configmap.yaml
-sed "s|<ECR_REPOSITORY_URL>|$ECR|g" app/deployment.yaml | kubectl apply -f -
-kubectl apply -f app/service.yaml -f app/pdb.yaml
-sed "s|<APP_TARGET_GROUP_ARN>|$APP_TG|g" app/targetgroupbinding.yaml | kubectl apply -f -
+rm -rf rendered
 
-# 타겟 healthy 대기
+# helm values(§6)는 kubectl 대상이 아니므로 제외
+srcs=$(find . -path ./rendered -prune -o -name '*.yaml' ! -name 'kube-prometheus-stack-values.yaml' -print)
+
+# 치환 전: manifest 전체가 요구하는 env 가 선언됐는지 검사
+missing=$(for v in $(grep -oh '[$]{[A-Za-z_]*}' $srcs | tr -d '${}' | sort -u); do
+  [ -z "${!v}" ] && echo "$v"; done)
+[ -n "$missing" ] && echo "env 누락: $missing — §1 의 .env 를 다시 source"
+
+# 렌더: k8s/ 하위 구조 그대로 rendered/ 에 미러
+[ -z "$missing" ] && for f in $srcs; do
+  mkdir -p "rendered/$(dirname "$f")"
+  envsubst < "$f" > "rendered/$f"
+done
+
+# 치환 후: 잔여 ${} 가 없어야 함
+grep -rn '\${' rendered/ && echo '치환 누락!' || echo OK
+
+kubectl apply -R -f rendered/   # 00-namespaces 가 사전순 처음이라 ns 부터 적용됨
+
+# 앱 타겟 healthy 대기
 aws elbv2 wait target-in-service --target-group-arn "$APP_TG"
 ```
 
@@ -153,28 +182,30 @@ aws elbv2 wait target-in-service --target-group-arn "$APP_TG"
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update
 
-# Grafana 계정 치환: skills-<비번호>-admin / $korea26!! (mark 10)
-sed -e "s|<GRAFANA_ADMIN_USER>|skills-${NUM}-admin|" \
-    -e 's|<GRAFANA_ADMIN_PASSWORD>|$korea26!!|' \
-    monitoring/kube-prometheus-stack-values.yaml > /tmp/kps-values.yaml
+# Grafana 계정 렌더: skills-<비번호>-admin / $korea26!! (mark 10) — §3 과 같은 패턴 (cwd = k8s)
+missing=$(for v in $(grep -oh '[$]{[A-Za-z_]*}' monitoring/kube-prometheus-stack-values.yaml | tr -d '${}' | sort -u); do
+  [ -z "${!v}" ] && echo "$v"; done)
+[ -z "$missing" ] && envsubst < monitoring/kube-prometheus-stack-values.yaml > kps-values.rendered.yaml \
+  || echo "env 누락: $missing — §1 의 .env 를 다시 source"
+grep -n '\${' kps-values.rendered.yaml && echo '치환 누락!' || echo OK
 
 helm upgrade --install wskorea26-monitoring prometheus-community/kube-prometheus-stack \
-  --version 87.5.1 -n monitoring -f /tmp/kps-values.yaml
+  --version 87.5.1 -n monitoring -f kps-values.rendered.yaml
 
 # 대시보드 provisioning (uid=wskorea26, title=wskorea26-monitoring)
 kubectl -n monitoring create configmap wskorea26-dashboard \
   --from-file=dashboard.json=monitoring/dashboard.json
 kubectl -n monitoring label configmap wskorea26-dashboard grafana_dashboard=1
 
-# Grafana ALB 연결
-sed "s|<GRAFANA_TARGET_GROUP_ARN>|$GRAFANA_TG|g" monitoring/grafana-targetgroupbinding.yaml | kubectl apply -f -
+# Grafana ALB 타겟 healthy 대기 (TGB 는 §5 에서 apply 됨)
 aws elbv2 wait target-in-service --target-group-arn "$GRAFANA_TG"
 ```
 
-### 7) 로깅 (Fluent Bit → CloudWatch Logs)
+### 7) 로깅 확인 (Fluent Bit → CloudWatch Logs)
+
+fluent-bit 은 §5 에서 apply 됨 — 여기서는 상태만 확인한다:
 
 ```bash
-kubectl apply -f monitoring/fluent-bit.yaml
 kubectl -n monitoring get ds fluent-bit   # DESIRED = 노드 수
 ```
 
@@ -198,7 +229,7 @@ curl -s "https://$CF/book?concert_name=SEED_CON"                  # 최신순 �
 curl -o /dev/null -s -w "%{http_code}\n" "https://$CF/book"       # 400 (파라미터 없음)
 
 echo "Grafana: http://$GRAFANA_ALB_DNS/d/wskorea26/wskorea26-monitoring"
-echo "Login  : skills-${NUM}-admin / \$korea26!!"
+echo "Login  : $GRAFANA_ADMIN_USER / $GRAFANA_ADMIN_PASSWORD"
 ```
 
 ### 9) 채점 준비 (CloudShell VPC Environment)
@@ -278,8 +309,9 @@ cd terraform && terraform destroy -var="player_number=$NUM"
 
 - **비번호(`player_number`)**: `terraform.tfvars` 기본 103. 반드시 본인 번호로 교체
   (버킷 이름 + Grafana 계정에 사용).
-- **Grafana 비밀번호 `$korea26!!`**: 셸에서 반드시 **작은따옴표**로 감쌀 것
-  (`$`, `!` 확장 방지). 배포 순서 6) 의 sed 명령이 그 형태다.
+- **Grafana 비밀번호 `$korea26!!`**: 값은 terraform output(`grafana_admin_password`)에서
+  오므로 셸에 리터럴로 칠 일이 없다. 직접 입력할 일이 생기면 **작은따옴표**로 감쌀 것
+  (`$`, `!` 확장 방지). §1 의 .env heredoc 은 값을 작은따옴표로 감싸 기록해 source 시 안전하다.
 - **ECR 스캔**: 당일 alpine 패치 상태에 따라 결과가 달라질 수 있다. 기준은
   "Critical/High 없음"(mark 3-1 비고). High 가 나오면 Dockerfile 에
   `RUN apk upgrade --no-cache` 를 추가해 재빌드/재푸시한다.
