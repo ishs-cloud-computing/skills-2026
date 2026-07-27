@@ -6,7 +6,8 @@
 # - workload 노드 전용 (nodeSelector + taint toleration, mark 5-4)
 # - startup/readiness/liveness = /health:8080 (mark 5-3)
 # - 자원: requests = limits = 250m / 512Mi (mark 5-2)
-# <ECR_REPOSITORY_URL> 은 terraform output ecr_repository_url 로 치환 (README).
+# image 는 terraform output ecr_repository_url 로 렌더된다 (README step 5).
+# 이 주석에 플레이스홀더 리터럴을 쓰지 않는다 — 렌더 후 잔여 치환 검사가 이 줄을 잡는다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -43,7 +44,7 @@ spec:
               app: wsc2026-book
       containers:
         - name: book
-          image: "<ECR_REPOSITORY_URL>:v1.0.0"
+          image: "${ECR}:v1.0.0"
           ports:
             - containerPort: 8080
           envFrom:

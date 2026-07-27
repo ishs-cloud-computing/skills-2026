@@ -106,3 +106,17 @@ variable "enable_cdn" {
   type        = bool
   default     = false
 }
+
+# 작업용 bastion (bastion.tf). 채점 대상이 아니라 배포 작업 환경이므로
+# 채점 전 apply -var="enable_bastion=false" 로 제거한다 (README step 9-3).
+variable "enable_bastion" {
+  description = "작업용 bastion 생성 여부 (채점 전 false 로 제거)"
+  type        = bool
+  default     = true
+}
+
+variable "bastion_instance_type" {
+  description = "작업용 bastion 인스턴스 타입"
+  type        = string
+  default     = "t3.small"
+}

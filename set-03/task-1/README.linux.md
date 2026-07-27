@@ -1,12 +1,14 @@
 # 본 PC 가 Linux 일 때의 런북 (set-03 / task-1)
 
-[README.md](README.md) 의 본 PC 단계(0·1·3·7·10)를 bash 로 옮긴 것. CloudShell 단계(2·4·5·6·8·9)는
-README.md 와 동일. 설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
+[README.md](README.md) 의 본 PC 단계(0·1·3·7·9·10)를 bash 로 옮긴 것.
+원격 단계(2 일반 CloudShell · 4·5·6·8 bastion · 9-2 VPC CloudShell)는 README.md 와 동일.
+설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
 주의/함정·설계 이력은 [NOTES.md](NOTES.md).
 
 ### 0) [본 PC] 도구 준비 + 작업용 IAM 사용자 + 사전 변수
 
-필요 도구: AWS CLI v2 · Terraform · eksctl · jq · gettext(envsubst) (Docker 불필요).
+필요 도구: AWS CLI v2 · Terraform · eksctl · jq · gettext(envsubst) ·
+session-manager-plugin(bastion SSM 접속) (Docker 불필요).
 
 ```bash
 # root 자격증명으로 1회만 실행
@@ -69,8 +71,20 @@ export LBC_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.lbc' ../outputs.json)
 export FLUENTBIT_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.fluentbit' ../outputs.json)
 export GRAFANA_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.grafana' ../outputs.json)
 
-envsubst < cluster.yaml > cluster.rendered.yaml
-grep '\${[A-Z]' cluster.rendered.yaml && echo '치환 누락'   # 출력 없어야 함 (주석의 ${...} 는 제외)
+# 치환 전: cluster.yaml 이 요구하는 env 가 전부 등록됐는지 검사.
+# envsubst 는 누락된 env 를 빈 문자열로 조용히 치환하므로 이 검사가 없으면 20분 뒤 create 가 깨진다.
+missing=$(for v in $(grep -oh '\${[A-Za-z_][A-Za-z0-9_]*}' cluster.yaml | tr -d '${}' | sort -u); do
+  [ -z "${!v}" ] && echo "$v"; done)
+[ -z "$missing" ] && envsubst < cluster.yaml > cluster.rendered.yaml \
+  || echo "env 누락: $missing — .env 를 다시 source"
+
+# 치환 후: 잔여 ${} 가 없어야 함
+grep -n '\${' cluster.rendered.yaml && echo '치환 누락!' || echo OK
+
+# 셸 재시작 대비 — .env 통째로 재작성 (작업 규칙 6)
+for v in AWS_PROFILE AWS_DEFAULT_REGION VPC_ID CP_EXTRA_SG_ID NODE_SHARED_SG_ID \
+  PRIV_SUBNET_A PRIV_SUBNET_B EKS_KMS_ARN BOOK_POD_ROLE_ARN LBC_ROLE_ARN \
+  FLUENTBIT_ROLE_ARN GRAFANA_ROLE_ARN; do echo "export $v=\"${!v}\""; done > ../.env
 
 eksctl create cluster -f cluster.rendered.yaml   # 약 20분, 완료 시 자동 private 전환
 aws eks describe-cluster --name wsc2026-eks-cluster \
@@ -79,7 +93,13 @@ aws eks describe-cluster --name wsc2026-eks-cluster \
 # aws eks update-cluster-config --name wsc2026-eks-cluster --resources-vpc-config endpointPublicAccess=false
 ```
 
-### 4~6) → README.md step 4·5·6 (VPC CloudShell)
+### 4~6) → README.md step 4·5·6 (bastion)
+
+bastion 접속만 bash 로:
+
+```bash
+aws ssm start-session --target "$(terraform output -raw bastion_instance_id)"   # cwd = terraform
+```
 
 ### 7) [본 PC] Terraform 2차
 
@@ -89,7 +109,28 @@ terraform apply -var="enable_cdn=true"
 terraform output -raw cloudfront_domain
 ```
 
-### 8~9) → README.md step 8·9 (VPC CloudShell — E2E 검증, 정리)
+### 8) → README.md step 8 (bastion — E2E 검증)
+
+### 9) [bastion → 본 PC] 작업물 백업
+
+bastion 쪽 명령은 README.md step 9 와 동일. 본 PC 명령만 bash 로:
+
+```bash
+# cwd = terraform
+BUCKET=$(terraform output -raw s3_bucket_name)
+aws s3 cp "s3://$BUCKET/_transfer/_backup.tgz" ../_backup.tgz
+mkdir -p ../_backup && tar xzf ../_backup.tgz -C ../_backup
+# ../_backup/k8s 를 저장소 k8s/ 와 대조해 bastion 에서 고친 내용을 반영한다
+```
+
+### 9-2) → README.md step 9-2 (VPC CloudShell — mark.sh 로 채점 경로 확인)
+
+### 9-3) [본 PC] 채점 전 정리
+
+```bash
+aws s3 rm "s3://$BUCKET/_transfer/" --recursive   # static/ 만 남긴다 (mark 6-1)
+terraform apply -var="enable_cdn=true" -var="enable_bastion=false"   # bastion 제거
+```
 
 ### 10) 전체 destroy (채점 종료 후)
 
