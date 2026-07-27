@@ -31,6 +31,15 @@
   - **KMS 5키의 admin principal 은 배포자 IAM 신원뿐이다**(유의 10: 키 정책에 root·`kms:*` 금지).
     root 자격증명은 `data.tf` 의 `terraform_data.kms_admin_guard` precondition 이 plan 단계에서
     차단한다. 관리자 추가는 `kms_extra_admin_arns` 변수.
+  - **k8s 치환 대상은 `${ECR}` 하나뿐이다**(`k8s/app/02-deployment.yaml`). 렌더는 bastion 에서
+    `k8s/rendered/` 미러로 만들고 `kubectl apply -R -f rendered/` 한 번에 적용한다. helm values
+    (`kube-prometheus-stack-values.yaml`)만 kubectl 대상이 아니라 제외된다. `dashboard.json` 은
+    렌더 단계에서 ConfigMap yaml 로 만들어 `rendered/monitoring/99-dashboard-cm.yaml` 로 들어간다.
+  - **kubectl 은 bastion 에서만 된다.** 클러스터가 fully private 이라 본 PC 는 API 에 닿지 않는다.
+    본 PC PowerShell 은 terraform·eksctl 전용. 채점 경로(CloudShell + `mark-sg`)는 제출 전
+    mark.sh 1회로 따로 확인한다(README step 9-2).
+  - **bastion 은 채점 대상이 아니다.** `terraform/bastion.tf`, 채점 전
+    `apply -var="enable_bastion=false"` 로 제거한다. 지우기 전 README step 9 로 작업물을 회수한다.
   - **이름 변수화는 절반만 돼 있다.** `name_prefix` 변수(기본 `wsc2026`)가 있지만 `vpc_name` 과
     서브넷 맵 키는 리터럴 `wsc2026-...` 이고, 보간을 쓰는 곳은 IGW/RTB/NAT 태그뿐이다.
     클러스터·테이블·ECR·Lambda 이름도 `variables.tf` 기본값이지 tfvars 항목이 아니다
@@ -48,8 +57,6 @@
   - **접두어가 30% 변동으로 바뀌면 `name_prefix` 만으로 안 끝난다.**
     `grep -rl wsc2026 terraform eksctl k8s app | xargs sed -i 's/wsc2026/<새접두어>/g'` 로
     terraform 까지 포함해 일괄 치환해야 한다. 라벨 키 `wsc2026/node` 도 이 범위에 든다.
-  - **VPC CloudShell 홈은 세션 종료 시 삭제되고 업로드 UI 도 없다.** 재접속하면 README step 4
-    셋업 블록을 통째로 다시 실행한다(멱등, 약 1–2분).
   - **coredns addon 을 업데이트하면 Corefile 이 초기화될 수 있다.** 업데이트하지 않는다.
     했다면 `k8s/01-coredns-wsc2026.yaml` 재적용 후 mark 4-1 grep 을 재확인한다.
   - 실측 소요시간 미기록.
@@ -94,6 +101,39 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-07-27 배포 작업 환경을 VPC CloudShell → SSM bastion 으로
+- 맥락: CloudShell 홈이 세션마다 삭제되고 업로드 UI 도 없어, manifest 하나 고치려면 본 PC 재-tar →
+  S3 → 재전개가 필요했다. 재접속마다 kubectl·helm 재설치와 `aws configure` 도 반복됐다.
+- 채택: `bastion.tf` — app-sub-a(private+NAT)에 t3.small, SG 는 `mark-sg` 재사용, IAM 은
+  `AmazonSSMManagedInstanceCore` 만. kubectl 권한은 인스턴스 역할이 아니라 bastion 에서
+  `aws configure` 한 wsc2026-admin(= cluster creator)이 갖는다.
+- 기각: bastion role 에 AdministratorAccess + EKS access entry → `cluster.yaml` 에 access entry 와
+  env 가 늘고 `bootstrapClusterCreatorAdminPermissions` 와 이중화된다.
+- 기각: 전용 bastion SG + cp-extra 인그레스 추가 → `mark-sg` 재사용이면 새 리소스가 0개이고,
+  채점자가 쓸 mark-sg → private API 443 경로를 배포 내내 검증하게 된다.
+- 기각: public 서브넷 + EIP + SSH(set-05 패턴) → SSM 이면 인바운드 규칙이 0개다.
+- 기각: 작업물 백업을 S3 에 남기기 → `_transfer/` 는 mark 6-1 때문에 채점 전에 비워야 해서 같이
+  지워진다. 릴레이를 역방향으로 한 번 더 써 본 PC 로 내린다(README step 9).
+- 기각: bastion 삭제를 `terraform destroy -target` 으로 → `enable_cdn` 조건부 리소스와 data 조회가
+  걸린다. 이미 쓰는 토글 패턴대로 `enable_bastion` 변수를 둔다.
+- 대가: EC2 1대 과금(채점 전 제거). 채점 경로는 mark.sh 1회로 별도 확인해야 한다.
+  bastion 을 지운 뒤 k8s 를 고치려면 되살려야 한다.
+- 전제: 본 PC 에 session-manager-plugin 이 필요하다(동아리 lab-bootstrap 이 설치).
+
+### 2026-07-27 k8s 치환을 rendered/ 로 옮기고 치환 전후 검사를 추가
+- 맥락: eksctl 렌더가 env 누락을 조용히 삼켰다 — PowerShell `(Get-Item "env:X").Value` 가 `$null` 이
+  되고 `String.Replace(old, null)` 은 예외 없이 빈 문자열을 넣는다. 잔여 검사
+  `Select-String '\$\{'` 는 `cluster.yaml` 주석의 리터럴 `${...}` 를 잡아 항상 발화해 죽어 있었다.
+  k8s 는 `sed | kubectl apply -f -` 로 디스크에 안 남겨 무엇이 적용됐는지 확인할 수 없었다.
+- 채택: set-02/task-1 패턴 재사용 — 치환 전 env 존재 검사, `k8s/rendered/` 미러 렌더,
+  치환 후 잔여 `${}` 검사, `kubectl apply -R -f rendered/` 한 번. 플레이스홀더는 `${ECR}` 로 통일하고
+  주석에서는 리터럴 플레이스홀더를 뺐다(검사가 주석을 잡지 않게).
+- 기각: 무제한 `envsubst` → `prometheus-rules.yaml` 의 `{{ $labels.* }}` 를 빈 문자열로 삼킨다.
+  변수 목록을 먼저 뽑아 그것만 `sed` 로 치환한다.
+- 기각: 전부를 한 번에 apply → PrometheusRule CRD 가 helm 설치물이라 순서가 필요하다.
+  ns·CoreDNS 만 helm 앞에서 개별 apply 하고 나머지를 일괄 apply 한다.
+- 대가: apply 지점이 두 곳(step 5 의 ns·CoreDNS, step 6-3 의 나머지)으로 남는다.
 
 ### 2026-07-21 HighLatency 룰을 사양(3s/1m)대로 유지
 - 맥락: 채점 11-4 알람 5종 Firing. 제공 book 바이너리에 `/delay` 가 없어 실발화가 불가능하다.

@@ -11,6 +11,9 @@ crash.*.log
 __pycache__/
 **/*.rendered.yaml
 **/k8s/rendered/
+# bastion 작업물 회수분 (set-03/task-1 README step 9)
+**/_backup/
+**/_backup.tgz
 # set-02 module-4: sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
 **/lambda/sensor_consumer/*
 !**/lambda/sensor_consumer/index.py
