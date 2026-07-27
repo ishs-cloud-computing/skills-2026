@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Helm values: prometheus-community/kube-prometheus-stack (요구사항 12)
 # release name: unicorn-monitoring / namespace: monitoring
@@ -60,8 +63,9 @@ kube-state-metrics:
 grafana:
   nodeSelector:
     unicorn: addon
-  adminUser: "<GRAFANA_ADMIN_USER>"
-  adminPassword: "<GRAFANA_ADMIN_PASSWORD>"
+  # ${GRAFANA_USER}/${GRAFANA_PW} 는 ~/.env 값으로 치환 (README step 6 렌더)
+  adminUser: "${GRAFANA_USER}"
+  adminPassword: "${GRAFANA_PW}"
   # unicorn-grafana-tg(IP TG) 가 Pod:3000 을 등록하므로 Service 포트를 3000 으로 노출
   service:
     type: ClusterIP

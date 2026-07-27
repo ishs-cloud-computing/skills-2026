@@ -1,9 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Book App Deployment (요구사항 8 / 13)
 # - ns unicorn, 컨테이너명 book, App NodeGroup(unicorn=app) 전용
 # - replicas 2 + AZ topologySpread (HA), /health Liveness/Readiness
 # - preStop + terminationGracePeriodSeconds 로 graceful shutdown
 # - 환경변수는 ConfigMap(unicorn-config) 참조, IAM 은 Pod Identity(unicorn-book-app-sa)
-# <ECR_REPOSITORY_URL> 은 terraform output ecr_repository_url 로 치환.
+# ${ECR} 은 terraform output ecr_repository_url 로 치환 (README step 7 렌더).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,7 +38,7 @@ spec:
               app: unicorn-book-app
       containers:
         - name: book
-          image: "<ECR_REPOSITORY_URL>:v1.0.0"
+          image: "${ECR}:v1.0.0"
           ports:
             - containerPort: 8080
           envFrom:

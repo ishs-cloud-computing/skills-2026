@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudFront (요구사항 10-2)
 # - unicorn-svc-cf : Origin = s3-origin(S3+OAC) + app-origin(unicorn-alb VPC Origin)

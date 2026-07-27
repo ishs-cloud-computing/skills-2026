@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Security Groups
 # - unicorn-vpce-sg            : VPC -> Interface Endpoint(443)

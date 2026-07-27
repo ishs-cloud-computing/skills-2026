@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Lambda (요구사항 9)
 # - unicorn-get-booking-func : ALB GET 요청으로 예약 데이터 조회

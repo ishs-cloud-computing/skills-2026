@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudWatch Log Groups (요구사항 8 / 12) — Platform CMK 암호화
 # - /unicorn/eks/book-app                : Fluent Bit 가 Book App 로그 전송 (auto_create_group=false)
