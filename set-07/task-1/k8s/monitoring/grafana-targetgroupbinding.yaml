@@ -1,7 +1,7 @@
 # TargetGroupBinding: unicorn-grafana-tg(IP TG) 에 Grafana Pod IP 등록 (요구사항 12)
 # unicorn-grafana-alb(internet-facing) -> unicorn-grafana-tg -> Grafana Pod:3000
 # 서비스 이름은 kube-prometheus-stack 번들 Grafana(release unicorn-monitoring) = unicorn-monitoring-grafana.
-# <GRAFANA_TARGET_GROUP_ARN> 은 terraform output grafana_target_group_arn 으로 치환.
+# ${GRAFANA_TG} 는 terraform output grafana_target_group_arn 으로 치환 (README step 7 렌더).
 apiVersion: elbv2.k8s.aws/v1beta1
 kind: TargetGroupBinding
 metadata:
@@ -11,5 +11,5 @@ spec:
   serviceRef:
     name: unicorn-monitoring-grafana
     port: 3000
-  targetGroupARN: "<GRAFANA_TARGET_GROUP_ARN>"
+  targetGroupARN: "${GRAFANA_TG}"
   targetType: ip
