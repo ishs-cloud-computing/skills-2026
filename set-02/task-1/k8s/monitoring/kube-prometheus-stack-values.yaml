@@ -5,7 +5,7 @@
 # - 관리형 Control Plane 미노출 컴포넌트(controllerManager/scheduler/etcd/proxy) 수집 비활성
 # - 스토리지는 emptyDir(기본값): EBS CSI 를 설치하면 csi-node DaemonSet 이 app 노드에
 #   떠서 mark 5-4 를 위반하므로 PVC 를 쓰지 않는다 (대회 기간 내 retention 6h 로 충분)
-# - <GRAFANA_ADMIN_USER>/<GRAFANA_ADMIN_PASSWORD> 는 설치 시 sed 로 치환 (README)
+# - ${GRAFANA_ADMIN_USER}/${GRAFANA_ADMIN_PASSWORD} 는 설치 시 env 값으로 치환 (README §6 렌더)
 # 설치:
 #   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 #   helm upgrade --install wskorea26-monitoring prometheus-community/kube-prometheus-stack \
@@ -60,8 +60,8 @@ kube-state-metrics:
 grafana:
   nodeSelector:
     node-type: addon
-  adminUser: "<GRAFANA_ADMIN_USER>"
-  adminPassword: "<GRAFANA_ADMIN_PASSWORD>"
+  adminUser: "${GRAFANA_ADMIN_USER}"
+  adminPassword: "${GRAFANA_ADMIN_PASSWORD}"
   # wskorea26-grafana-tg(IP TG)가 Pod:3000 을 등록하므로 Service 포트를 3000 으로 노출
   service:
     type: ClusterIP

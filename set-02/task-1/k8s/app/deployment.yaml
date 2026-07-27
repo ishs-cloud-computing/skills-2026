@@ -2,7 +2,7 @@
 # - ns wskorea26, App NodeGroup(node-type=app) 전용 (mark 5-4)
 # - replicas 2 + AZ topologySpread (고가용성), /health Liveness/Readiness
 # - IAM 은 IRSA(wskorea26-book-sa — eksctl 이 생성하므로 SA manifest 없음)
-# <ECR_REPOSITORY_URL> 은 terraform output ecr_repository_url 로 치환 (README).
+# ${ECR} 는 terraform output ecr_repository_url ($env:ECR) 로 치환 (README §5 렌더).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,7 +34,7 @@ spec:
               app: wskorea26-book
       containers:
         - name: book
-          image: "<ECR_REPOSITORY_URL>:stable"
+          image: "${ECR}:stable"
           ports:
             - containerPort: 8080
           envFrom:

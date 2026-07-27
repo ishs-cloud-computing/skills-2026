@@ -1,10 +1,7 @@
-# set-02 / 제1과제 — wskorea26 Concert Platform (Windows PowerShell 런북)
+# [set-02 / task-1] wskorea26 Concert Platform
 
 CloudFront + S3(정적 웹) + EKS(book 앱) + Lambda(예매 조회) + DynamoDB + 모니터링(Grafana)을
 **Terraform / eksctl / Kubernetes manifest** 로 구성한다. 모든 리소스는 서울(`ap-northeast-2`).
-
-> 대회 PC 는 Windows 11 이므로 이 런북은 **PowerShell** 기준이다.
-> 리눅스 개발 환경용 bash 런북은 [README.linux.md](./README.linux.md) 에 보존돼 있다.
 
 ## 디렉토리 구조
 
@@ -69,6 +66,8 @@ $env:BUCKET          = terraform output -raw s3_bucket_name
 $env:ALB_DNS         = terraform output -raw book_alb_dns
 $env:GRAFANA_ALB_DNS = terraform output -raw grafana_alb_dns
 $env:CF              = terraform output -raw cloudfront_domain
+$env:GRAFANA_ADMIN_USER     = terraform output -raw grafana_admin_user
+$env:GRAFANA_ADMIN_PASSWORD = terraform output -raw grafana_admin_password
 
 # 현재 값을 그대로 파일에 박아 재접속 시 재사용
 @"
@@ -91,6 +90,8 @@ $env:CF              = terraform output -raw cloudfront_domain
 `$env:ALB_DNS            = "$env:ALB_DNS"
 `$env:GRAFANA_ALB_DNS    = "$env:GRAFANA_ALB_DNS"
 `$env:CF                 = "$env:CF"
+`$env:GRAFANA_ADMIN_USER = "$env:GRAFANA_ADMIN_USER"
+`$env:GRAFANA_ADMIN_PASSWORD = '$env:GRAFANA_ADMIN_PASSWORD'
 "@ | Set-Content ..\.env.ps1
 
 . ..\.env.ps1   # 새 터미널로 이어서 할 땐 task-1 에서 `. .\.env.ps1` 만 다시 실행
@@ -126,11 +127,18 @@ aws ecr describe-image-scan-findings --repository-name wskorea26-book-repo --ima
 ```powershell
 cd eksctl
 $c = Get-Content cluster.yaml -Raw
-foreach ($v in 'VPC_ID','PRIV_SUBNET_C','PRIV_SUBNET_D','CLUSTER_EXTRA_SG_ID','NODE_SG_ID',
-               'EKS_KMS_ARN','BOOK_APP_POLICY_ARN','LBC_POLICY_ARN','FLUENT_BIT_POLICY_ARN') {
-  $c = $c.Replace('${' + $v + '}', [Environment]::GetEnvironmentVariable($v))
-}
+
+# 치환 전: cluster.yaml 이 요구하는 env 가 전부 선언됐는지 검사
+$vars = [regex]::Matches($c, '\$\{(\w+)\}') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+$missing = $vars | Where-Object { -not (Test-Path "env:$_") }
+if ($missing) { throw "env 누락: $($missing -join ', ') — §1 의 .env.ps1 을 다시 source" }
+
+$vars | ForEach-Object { $c = $c.Replace('${' + $_ + '}', (Get-Item "env:$_").Value) }
 $c | Set-Content cluster.rendered.yaml
+
+# 치환 후: 잔여 ${} 가 없어야 함 (출력 없음 = 정상)
+Select-String '\$\{' cluster.rendered.yaml
+
 eksctl create cluster -f cluster.rendered.yaml     # 약 20분
 
 aws eks update-kubeconfig --region ap-northeast-2 --name wskorea26-cluster
@@ -160,17 +168,41 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set nodeSelector.node-type=addon
 ```
 
-### 5) Book 애플리케이션 (k8s)
+### 5) k8s manifest 렌더 & 일괄 apply
+
+모든 k8s manifest 를 `rendered/` 로 렌더한 뒤 폴더 하나를 apply 한다
+(fluent-bit·grafana TGB 포함 — grafana TGB 는 서비스가 §6 helm 뒤에 생기지만 LBC 가 재시도해 자동 바인딩).
 
 ```powershell
 cd ..\k8s
-kubectl apply -f 00-namespaces.yaml
-kubectl apply -f app/configmap.yaml
-(Get-Content app/deployment.yaml -Raw).Replace('<ECR_REPOSITORY_URL>', $env:ECR) | kubectl apply -f -
-kubectl apply -f app/service.yaml -f app/pdb.yaml
-(Get-Content app/targetgroupbinding.yaml -Raw).Replace('<APP_TARGET_GROUP_ARN>', $env:APP_TG) | kubectl apply -f -
+Remove-Item -Recurse -Force rendered -ErrorAction SilentlyContinue
 
-# 타겟 healthy 대기
+# helm values(§6)는 kubectl 대상이 아니므로 제외
+$files = Get-ChildItem -Recurse -File -Filter *.yaml |
+  Where-Object { $_.Name -ne 'kube-prometheus-stack-values.yaml' }
+
+# 치환 전: manifest 전체가 요구하는 env 가 선언됐는지 검사
+$vars = $files | ForEach-Object {
+  [regex]::Matches((Get-Content $_ -Raw), '\$\{(\w+)\}') | ForEach-Object { $_.Groups[1].Value }
+} | Sort-Object -Unique
+$missing = $vars | Where-Object { -not (Test-Path "env:$_") }
+if ($missing) { throw "env 누락: $($missing -join ', ') — §1 의 .env.ps1 을 다시 source" }
+
+# 렌더: k8s/ 하위 구조 그대로 rendered/ 에 미러
+foreach ($f in $files) {
+  $out = Join-Path rendered ([IO.Path]::GetRelativePath($PWD, $f.FullName))
+  New-Item -Force -ItemType Directory (Split-Path $out) | Out-Null
+  $c = Get-Content $f -Raw
+  $vars | ForEach-Object { $c = $c.Replace('${' + $_ + '}', (Get-Item "env:$_").Value) }
+  $c | Set-Content $out
+}
+
+# 치환 후: 잔여 ${} 가 없어야 함 (출력 없음 = 정상)
+Get-ChildItem -Recurse -File rendered | Select-String '\$\{'
+
+kubectl apply -R -f rendered/   # 00-namespaces 가 사전순 처음이라 ns 부터 적용됨
+
+# 앱 타겟 healthy 대기
 aws elbv2 wait target-in-service --target-group-arn "$env:APP_TG"
 ```
 
@@ -179,28 +211,32 @@ aws elbv2 wait target-in-service --target-group-arn "$env:APP_TG"
 ```powershell
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts; helm repo update
 
-# Grafana 계정 치환: skills-<비번호>-admin / $korea26!! (mark 10)
-(Get-Content monitoring/kube-prometheus-stack-values.yaml -Raw).
-  Replace('<GRAFANA_ADMIN_USER>', "skills-$($env:NUM)-admin").
-  Replace('<GRAFANA_ADMIN_PASSWORD>', '$korea26!!') | Set-Content "$env:TEMP\kps-values.yaml"
+# Grafana 계정 렌더: skills-<비번호>-admin / $korea26!! (mark 10) — §3 과 같은 패턴 (cwd = k8s)
+$c = Get-Content monitoring/kube-prometheus-stack-values.yaml -Raw
+$vars = [regex]::Matches($c, '\$\{(\w+)\}') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+$missing = $vars | Where-Object { -not (Test-Path "env:$_") }
+if ($missing) { throw "env 누락: $($missing -join ', ') — §1 의 .env.ps1 을 다시 source" }
+$vars | ForEach-Object { $c = $c.Replace('${' + $_ + '}', (Get-Item "env:$_").Value) }
+$c | Set-Content kps-values.rendered.yaml
+Select-String '\$\{' kps-values.rendered.yaml   # 출력 없음 = 정상
 
 helm upgrade --install wskorea26-monitoring prometheus-community/kube-prometheus-stack `
-  --version 87.5.1 -n monitoring -f "$env:TEMP\kps-values.yaml"
+  --version 87.5.1 -n monitoring -f kps-values.rendered.yaml
 
 # 대시보드 provisioning (uid=wskorea26, title=wskorea26-monitoring)
 kubectl -n monitoring create configmap wskorea26-dashboard `
   --from-file=dashboard.json=monitoring/dashboard.json
 kubectl -n monitoring label configmap wskorea26-dashboard grafana_dashboard=1
 
-# Grafana ALB 연결
-(Get-Content monitoring/grafana-targetgroupbinding.yaml -Raw).Replace('<GRAFANA_TARGET_GROUP_ARN>', $env:GRAFANA_TG) | kubectl apply -f -
+# Grafana ALB 타겟 healthy 대기 (TGB 는 §5 에서 apply 됨)
 aws elbv2 wait target-in-service --target-group-arn "$env:GRAFANA_TG"
 ```
 
-### 7) 로깅 (Fluent Bit → CloudWatch Logs)
+### 7) 로깅 확인 (Fluent Bit → CloudWatch Logs)
+
+fluent-bit 은 §5 에서 apply 됨 — 여기서는 상태만 확인한다:
 
 ```powershell
-kubectl apply -f monitoring/fluent-bit.yaml
 kubectl -n monitoring get ds fluent-bit   # DESIRED = 노드 수
 ```
 
@@ -224,7 +260,7 @@ curl.exe -s "https://$env:CF/book?concert_name=SEED_CON"            # 최신순 
 curl.exe -o NUL -s -w "%{http_code}\n" "https://$env:CF/book"       # 400 (파라미터 없음)
 
 echo "Grafana: http://$($env:GRAFANA_ALB_DNS)/d/wskorea26/wskorea26-monitoring"
-echo "Login  : skills-$($env:NUM)-admin / `$korea26!!"
+echo "Login  : $env:GRAFANA_ADMIN_USER / $env:GRAFANA_ADMIN_PASSWORD"
 ```
 
 ### 9) 채점 준비 (CloudShell VPC Environment)
@@ -304,8 +340,9 @@ cd terraform; terraform destroy -var "player_number=$env:NUM"
 
 - **비번호(`player_number`)**: `terraform.tfvars` 기본 103. 반드시 본인 번호로 교체
   (버킷 이름 + Grafana 계정에 사용).
-- **Grafana 비밀번호 `$korea26!!`**: PowerShell 에서 **작은따옴표**로 감쌀 것
-  (`'$korea26!!'` — `$` 확장 방지). 배포 순서 6) 의 Replace 인자가 그 형태다.
+- **Grafana 비밀번호 `$korea26!!`**: 값은 terraform output(`grafana_admin_password`)에서
+  오므로 셸에 리터럴로 칠 일이 없다. 직접 입력할 일이 생기면 **작은따옴표**로 감쌀 것
+  (`'$korea26!!'` — `$` 확장 방지). .env.ps1 에도 작은따옴표로 기록돼 dot-source 시 안전하다.
 - **ECR 스캔**: 당일 alpine 패치 상태에 따라 결과가 달라질 수 있다. 기준은
   "Critical/High 없음"(mark 3-1 비고). High 가 나오면 Dockerfile 에
   `RUN apk upgrade --no-cache` 를 추가해 재빌드/재푸시한다.
