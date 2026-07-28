@@ -45,8 +45,9 @@ $env:AWS_DEFAULT_REGION = "ap-northeast-2"
 $env:NUM = "<선수등번호>"     # ExternalId / Grafana 계정에 사용
 ```
 
-> 자격증명은 **채점 때 콘솔에 로그인할 신원과 같은 것**을 쓴다. 대회에서 root 사용을 금지하지 않으면
-> 선수는 보통 root 로 운영하므로, 그 경우 본 PC·bastion 모두 root 액세스 키를 쓴다. 이유는 step 4 참고.
+> 본 PC 는 terraform 전용이라 계정만 맞으면 신원은 무관하다. 액세스 키가 없으면 `aws login`(AWS CLI
+> 2.32.0 이상)으로 콘솔 자격증명을 그대로 쓴다. **채점 신원과의 일치는 클러스터를 만드는 bastion 에서만**
+> 문제가 되며 step 4 에서 다룬다.
 
 ### 1) [본 PC·PowerShell] Terraform (네트워크 + AWS 리소스)
 
@@ -110,7 +111,7 @@ aws ecr describe-image-scan-findings --repository-name unicorn-concert-app --ima
 
 > private 서브넷 EC2 + **`unicorn-mark-sg` 공유** + SSM 접속(인바운드 0). EKS API(443) 는 cp-extra SG 가
 > `unicorn-mark-sg` 에 열어두므로 이 bastion 에서 바로 kubectl 가능.
-> 인스턴스 프로파일은 **SSM 전용**만 부여한다(작업 자격증명은 4) 에서 `aws configure`). Name 태그를
+> 인스턴스 프로파일은 **SSM 전용**만 부여한다(작업 자격증명은 4) 에서 `aws login --remote`). Name 태그를
 > 노드(`unicorn-k8snode-*`)와 다르게 줘 mark.sh 인스턴스 카운트에 안 걸리게 한다. **채점 전 삭제**(step 10).
 
 ```powershell
@@ -123,7 +124,7 @@ $MARK_SG = $o.mark_sg_id.value
 $AMI = aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 `
   --query Parameter.Value --output text
 
-# IAM: SSM 접속용만 (작업 권한은 4) 의 aws configure 로 주입)
+# IAM: SSM 접속용만 (작업 권한은 4) 의 aws login --remote 로 주입)
 # 인라인 JSON 은 Windows AWS CLI 에서 따옴표가 깨지므로 파일로 넘긴다
 @'
 {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}
@@ -151,18 +152,30 @@ aws ssm start-session --target "$BID"
 
 ### 4) [bastion] 도구 설치 · 자격증명 · 파일 수신 · 환경 변수
 
-> **`aws configure` 에는 채점 때 콘솔에 로그인할 그 자격증명을 넣는다** — root 로 운영하면 root 액세스 키를,
-> 별도 IAM 사용자를 만들었으면 그 키를. 그래야 **클러스터 생성자 = 채점 CloudShell 신원** 이 되어
+> **`aws login --remote` 는 채점 때 콘솔에 로그인할 그 세션으로 로그인한다** — 채점은 root 로 하므로
+> 브라우저에서도 root 로 로그인한다. 그래야 **클러스터 생성자 = 채점 CloudShell 신원** 이 되어
 > (`bootstrapClusterCreatorAdminPermissions`) bastion 삭제 후에도 채점 셸 kubectl 권한이 유지된다.
-> 인스턴스 프로파일(SSM) 보다 `~/.aws` 자격증명이 우선한다. 신원이 어긋나면 step 9 게이트에서 걸린다.
+> `--remote` 는 브라우저 없는 호스트용이라 URL 과 authorization code 를 손으로 옮긴다 — SSM 세션에 맞는다.
+> 액세스 키를 만들지 않아 root 키 생성이 막힌 계정에서도 되고, bastion 디스크에 장기 키가 남지 않는다.
+> 세션은 최대 12시간(15분마다 자동 갱신)이라 `ExpiredToken` 이 뜨면 `aws login --remote` 를 다시 실행한다.
 
 ```bash
-sudo dnf install -y jq tar gzip
+sudo dnf install -y jq tar gzip unzip
 curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && sudo install -m755 /tmp/eksctl /usr/local/bin/eksctl
 curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo install -m755 kubectl /usr/local/bin/kubectl
 curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-aws configure   # 위 인용문 참고, default region = ap-northeast-2
+# aws login 은 CLI 2.32.0 이상이 필요하다. AL2023 기본(dnf) 버전이 미달일 수 있어 최신 v2 를 덮어쓴다.
+curl -sL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
+unzip -q -o /tmp/awscli.zip -d /tmp && sudo /tmp/aws/install --update
+hash -r && aws --version   # 2.32.0 이상 확인
+
+aws login --remote   # 출력 URL 을 본 PC 브라우저에서 열어 root 로 로그인 → 표시된 authorization code 를
+                     # 이 터미널에 붙여넣는다. region 프롬프트 = ap-northeast-2
+
+# 신원 확인 — 여기서 어긋나면 클러스터를 만들기 전에 잡는다
+aws configure list                                      # TYPE 열이 login (~/.aws/credentials 가 남아 있으면 그쪽이 이긴다)
+aws sts get-caller-identity --query Arn --output text    # 채점 셸과 같은 신원(root)
 
 # 파일 (S3 릴레이) + NUM
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -338,7 +351,7 @@ for i in $(seq 1 20); do curl -s -o /dev/null "https://$CF/health"; done        
    ```
 3. **권한 게이트 — 여기가 통과해야 step 10 으로 넘어간다:**
    ```bash
-   aws sts get-caller-identity --query Arn --output text   # step 4 의 aws configure 신원과 같아야 함
+   aws sts get-caller-identity --query Arn --output text   # step 4 의 aws login 신원과 같아야 함
    kubectl auth can-i '*' '*'                              # yes
    kubectl get nodes                                       # 노드가 보여야 함
    ```
@@ -346,7 +359,7 @@ for i in $(seq 1 20); do curl -s -o /dev/null "https://$CF/health"; done        
    > `aws eks create-access-entry --cluster-name unicorn-eks-cluster --principal-arn <ARN>` →
    > `aws eks associate-access-policy --cluster-name unicorn-eks-cluster --principal-arn <ARN> --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy --access-scope type=cluster`
    > 계정 root 로 운영 중이라면 이 경로는 보장되지 않는다(root ARN 은 access entry 대상으로 문서화돼 있지 않다).
-   > 그때는 step 4 의 `aws configure` 신원을 채점 셸과 맞춰 클러스터를 다시 만드는 것이 확실하다.
+   > 그때는 step 4 의 `aws login` 을 채점 셸과 같은 세션으로 다시 해 클러스터를 재생성하는 것이 확실하다.
 
 ### 10) [본 PC·PowerShell] 채점 전 정리 (배포 검증 후)
 
@@ -360,6 +373,9 @@ for i in $(seq 1 20); do curl -s -o /dev/null "https://$CF/health"; done        
 cd ~ && tar czf ~/unicorn-bastion-state.tgz -C ~ .env unicorn
 aws s3 cp ~/unicorn-bastion-state.tgz "s3://unicorn-web-$ACCOUNT_ID/_transfer/"
 ```
+
+> `~/.aws` 는 백업에 넣지 않는다 — 자격증명이 채점 대상 버킷을 경유할 이유가 없고, 복구 때는
+> `aws login --remote` 를 다시 하면 된다.
 
 **10-2) [본 PC·PowerShell] 백업 회수 → bastion 삭제 → S3 릴레이 제거**
 
@@ -386,14 +402,14 @@ aws s3 rm "s3://$env:BUCKET/_transfer/" --recursive
 aws s3api list-objects-v2 --bucket "$env:BUCKET" --prefix _transfer/ --query 'Contents[].Key'  # null 확인
 ```
 
-> **bastion 복구** — step 3 재실행(EC2+프로파일 재생성) → step 4 의 도구 설치 + `aws configure` 재실행 →
+> **bastion 복구** — step 3 재실행(EC2+프로파일 재생성) → step 4 의 도구 설치 + `aws login --remote` 재실행 →
 > 본 PC 에서 `$env:TEMP\unicorn-bastion-state.tgz` 를 `_transfer/` 로 재업로드 → bastion 에서 받아
 > `tar xzf ~/unicorn-bastion-state.tgz -C ~` → `source ~/.env` + `aws eks update-kubeconfig`.
 > 채점이 아직이면 복구 후 `_transfer/` 를 다시 비운다.
 
 > (유의사항 9) 실행 중 부하/테스트 없어야 함 — 8) seed 는 one-shot. DynamoDB seed item 은 채점이 자체 `booking_id` 로 조회하므로 무방.
 
-> **Fallback — bastion 없이 가려면**: 3)·10) 의 bastion 을 건너뛰고, 4)~8) 을 `unicorn-mark` CloudShell 에서 그대로 실행한다(생성자=채점 신원이라 권한 게이트도 자동 통과). 단 CloudShell 제약: ① 30분 유휴 시 환경 삭제 → eksctl 은 `--without-nodegroup` 후 `create nodegroup` 으로 쪼개거나, 끊겨도 같은 명령 재실행으로 수렴. ② 업로드 UI 없음 → 끊기면 S3 릴레이에서 다시 받고 4) 재실행. ③ `eksctl/helm/kubectl` 설치 필요(4) 의 설치 블록 동일), `aws configure` 는 CloudShell 자격증명이 이미 있으면 생략.
+> **Fallback — bastion 없이 가려면**: 3)·10) 의 bastion 을 건너뛰고, 4)~8) 을 `unicorn-mark` CloudShell 에서 그대로 실행한다(생성자=채점 신원이라 권한 게이트도 자동 통과). 단 CloudShell 제약: ① 30분 유휴 시 환경 삭제 → eksctl 은 `--without-nodegroup` 후 `create nodegroup` 으로 쪼개거나, 끊겨도 같은 명령 재실행으로 수렴. ② 업로드 UI 없음 → 끊기면 S3 릴레이에서 다시 받고 4) 재실행. ③ `eksctl/helm/kubectl` 설치 필요(4) 의 설치 블록 동일), `aws login` 은 CloudShell 이 콘솔 세션 자격증명을 이미 갖고 있어 불필요하다(CLI 갱신도 불필요).
 
 
 ## 리소스 정리 유의사항
@@ -435,12 +451,15 @@ aws s3api list-objects-v2 --bucket "$env:BUCKET" --prefix _transfer/ --query 'Co
 
 ## 주의 / 검증 필요 포인트
 
-- **작업용 bastion 은 임시**: `unicorn-mark-sg` 공유로 private API 에 접근하고, 자격증명은 `aws configure` 로 주입해
+- **작업용 bastion 은 임시**: `unicorn-mark-sg` 공유로 private API 에 접근하고, 자격증명은 `aws login --remote` 로 받아
   생성자=채점 신원을 맞춘다. 인스턴스 프로파일은 SSM 전용. **채점 전 step 10 으로 인스턴스+프로파일+role 까지 삭제** —
   mark.sh 가 검사하지 않아도 남기지 않는다. 삭제 전 상태를 본 PC 로 회수하므로 복구는 언제든 가능하다.
-- **자격증명 신원**: 대회가 root 사용을 금지하지 않으면 선수는 root 로 운영한다. 이 경우 `aws configure` 에도
-  root 액세스 키를 넣어 생성자=채점 신원을 맞춘다. 계정 root ARN 은 EKS access entry 대상으로 문서화돼 있지 않아
-  **사후 보정이 안 될 수 있으므로**, step 9 권한 게이트를 bastion 삭제 전에 반드시 통과시킨다.
+- **자격증명 신원**: 채점은 root 로 하므로(`mark.md` 순번 0 이 `rm -rf ~/.aws` 후 콘솔 세션 자격증명을 그대로 쓴다)
+  bastion 도 root 여야 한다. `aws login --remote` 로 root 콘솔 세션의 임시 크레덴셜을 받는다 — 액세스 키와 신원이
+  같으면서 키 생성이 막힌 계정에서도 되고, 장기 키가 bastion 에 남지 않는다. 계정 root ARN 은 EKS access entry
+  대상으로 문서화돼 있지 않아 **사후 보정이 안 될 수 있으므로**, step 9 권한 게이트를 bastion 삭제 전에 반드시 통과시킨다.
+- **`aws login` 전제**: AWS CLI 2.32.0 이상(step 4 에서 최신 v2 로 갱신), signin 엔드포인트는 VPC Endpoint 가 없어
+  NAT 경유(유의사항 6 의 443 outbound open 으로 통과), 세션 최대 12시간 후 재로그인.
 - **Platform KMS = MRK**: 프라이머리(us-east-1)·레플리카(ap-northeast-2) 동일 키 자료. WAF 로그(us-east-1)=프라이머리,
   EKS/EBS/Log(서울)=레플리카. `alias/unicorn-kms-platform` 은 양 리전에 존재. 회전(90일)은 프라이머리가 관리.
 - **이미지 풀**: private 서브넷에 NAT 가 있어 공개 레지스트리(LBC/Prometheus/Grafana/Fluent Bit)는 직접 pull.

@@ -11,7 +11,8 @@ export AWS_DEFAULT_REGION=ap-northeast-2
 export NUM=<선수등번호>     # ExternalId / Grafana 계정에 사용
 ```
 
-> 자격증명은 **채점 때 콘솔에 로그인할 신원과 같은 것**을 쓴다 (README.md step 4 의 인용문 참고).
+> 본 PC 는 terraform 전용이라 계정만 맞으면 신원은 무관하다. 채점 신원과의 일치는 클러스터를 만드는
+> bastion 에서만 문제가 된다 (README.md step 4 의 인용문 참고).
 
 ### 1) [본 PC] Terraform (네트워크 + AWS 리소스)
 
@@ -58,7 +59,7 @@ SUBNET=$(jq -r '.private_subnet_ids.value["unicorn-subnet-priv-a"]' ../outputs.j
 MARK_SG=$(jq -r '.mark_sg_id.value' ../outputs.json)
 AMI=$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --query Parameter.Value --output text)
 
-# IAM: SSM 접속용만 (작업 권한은 4) 의 aws configure 로 주입)
+# IAM: SSM 접속용만 (작업 권한은 4) 의 aws login --remote 로 주입)
 aws iam create-role --role-name unicorn-bastion-role \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
 aws iam attach-role-policy --role-name unicorn-bastion-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
@@ -108,7 +109,7 @@ aws s3 rm "s3://$BUCKET/_transfer/" --recursive
 aws s3api list-objects-v2 --bucket "$BUCKET" --prefix _transfer/ --query 'Contents[].Key'  # null 확인
 ```
 
-> **bastion 복구** — step 3 재실행 → README.md step 4 의 도구 설치 + `aws configure` 재실행 →
+> **bastion 복구** — step 3 재실행 → README.md step 4 의 도구 설치 + `aws login --remote` 재실행 →
 > `/tmp/unicorn-bastion-state.tgz` 를 `_transfer/` 로 재업로드 → bastion 에서 받아
 > `tar xzf ~/unicorn-bastion-state.tgz -C ~` → `source ~/.env` + `aws eks update-kubeconfig`.
 > 채점이 아직이면 복구 후 `_transfer/` 를 다시 비운다.
