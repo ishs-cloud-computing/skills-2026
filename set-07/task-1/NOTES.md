@@ -29,6 +29,21 @@
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
 
+### 2026-07-28 bastion 자격증명을 root 액세스 키에서 `aws login --remote` 로 전환
+- 맥락: 채점은 root 로 하고(`mark.md` 순번 0 이 `rm -rf ~/.aws` 후 콘솔 세션 자격증명을 그대로 쓴다)
+  private cluster 라 생성은 bastion 에서 해야 하므로, bastion 신원도 root 여야 한다. 그런데 런북은 그걸
+  root 액세스 키로 맞추고 있었다. Organizations 멤버 계정에서 centralized root access management 가 켜져
+  있으면 root 액세스 키 생성·복구가 차단돼 step 4 자체가 실행 불가가 된다.
+- 채택: `aws login --remote`(AWS CLI 2.32.0+, 콘솔 자격증명 → 임시 크레덴셜). 얻는 신원은 액세스 키와 같아
+  생성자=채점 신원 조건이 그대로 성립하고, 키 없이 콘솔 ID/PW 만으로 된다. `--remote` 는 브라우저 없는
+  호스트용이라 SSM 세션에 맞는다. step 4 에 CLI 최신 v2 갱신과 `aws configure list`(TYPE=login) 확인을 넣었다.
+- 기각: root 액세스 키 유지 → 키 생성이 막히면 대안이 없다.
+  bastion 인스턴스 역할에 작업 권한 부여 → 생성자가 역할 ARN 이 되어 채점 셸(root)과 어긋난다.
+  클러스터 생성 전에 채점 CloudShell 을 미리 띄워 ARN 을 대조하는 게이트 신설 → root 는 root 라 대조할
+  모호함이 없다. `aws login` 직후 `get-caller-identity` 한 줄이면 같은 실수를 잡는다.
+- 대가: CLI 2.32.0 의존(AL2023 기본 버전이 미달일 수 있어 설치 블록이 한 단계 늘었다), 세션 12시간 만료 시
+  재로그인, signin 엔드포인트는 VPC Endpoint 가 없어 NAT 경유가 필수다.
+
 ### 2026-07-27 bastion 삭제 전 권한 게이트 + 상태 백업으로 복구 가능하게
 - 맥락: step 10 이 bastion 을 지운 뒤에야 채점 셸에 kubectl 권한이 없다는 걸 알면 손쓸 방법이 없다.
   private cluster 라 VPC 밖에서는 클러스터에 접근조차 못 한다.
