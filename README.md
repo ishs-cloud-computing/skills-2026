@@ -43,7 +43,7 @@ mise docs
 
 치트시트, 트러블슈팅 관련 문서는 해당 학습 가이드를 참고해주세요!
 
-- 주소: https://skills-learn.zenru.net/
+- 주소: https://skills-learn.zenru.net/ ( 임시 로그인: user / bruh1004pass )
 - 기여: 김우진 @rladnwls122
 
 ## 진행 상황
