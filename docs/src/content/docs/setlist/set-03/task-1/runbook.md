@@ -36,17 +36,18 @@ README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7·9·10 �
 
 ## 배포 순서
 
-### 0) [본 PC·PowerShell] 도구 준비 + 작업용 IAM 사용자 + 사전 변수
+### 0) [본 PC·PowerShell] 도구 준비 + 콘솔 자격증명 로그인 + 사전 변수
+
+> **모든 단계를 지급받은 root 로 수행한다.** 채점도 root 콘솔 세션으로 진행되므로(채점지에 IAM 사용자를
+> 만들라는 지시가 없다) 클러스터 생성자·KMS·S3 신원이 채점 셸과 어긋나지 않는다.
+> 액세스 키는 만들지 않는다 — `aws login` 이 콘솔 자격증명으로 임시 크레덴셜을 받는다.
 
 ```powershell
-# root 자격증명으로 1회만 실행
-aws iam create-user --user-name wsc2026-admin
-aws iam attach-user-policy --user-name wsc2026-admin --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
-aws iam create-access-key --user-name wsc2026-admin --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text
+aws --version                          # 2.32.0 이상 (aws login 요건)
 
-# 출력된 키로 프로파일 등록 — step 2(일반 CloudShell)·4(bastion)·9-2(VPC CloudShell)에서
-# 같은 키를 다시 입력하므로 잘 보관
-aws configure --profile wsc2026        # region = ap-northeast-2
+# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행
+aws login --profile wsc2026            # region = ap-northeast-2
+aws configure list --profile wsc2026   # TYPE 열이 login (~/.aws/credentials 가 남아 있으면 그쪽이 이긴다)
 
 # local .env.ps1 — 셸 재시작에도 재사용 (작업 규칙 6, .gitignore 등록됨)
 @'
@@ -54,7 +55,14 @@ $env:AWS_PROFILE = "wsc2026"
 $env:AWS_DEFAULT_REGION = "ap-northeast-2"
 '@ | Set-Content .env.ps1
 . .\.env.ps1   # 새 터미널로 이어서 할 땐 set-03/task-1 에서 이 줄만 다시 실행
-aws sts get-caller-identity            # arn:...:user/wsc2026-admin 확인
+aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root 확인
+# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login --profile wsc2026 재실행
+
+# terraform·eksctl 이 login 프로파일을 못 읽으면(SDK 미지원) 아래를 ~/.aws/config 에 덧붙이고
+# $env:AWS_PROFILE 을 wsc2026-proc 으로 바꾼다. CLI 가 자격증명을 대신 넘겨준다.
+#   [profile wsc2026-proc]
+#   credential_process = aws configure export-credentials --profile wsc2026 --format process
+#   region = ap-northeast-2
 
 # 배포파일을 이 과제의 app/ 로 복사 (원본은 shared, 수정 금지)
 Copy-Item ..\..\shared\provided\task-1\* .\app\
@@ -87,10 +95,12 @@ aws s3 cp ..\mark.sh "s3://$BUCKET/_transfer/mark.sh"   # step 9-2 용 (VPC Clou
 ### 2) [일반 CloudShell] 컨테이너 이미지 빌드 & ECR push (v1.0.0 단일 태그)
 
 > 콘솔에서 **일반 CloudShell**(VPC environment 아님)을 열고 **Actions → Upload file** 로 `app/` 의
-> `Dockerfile` 과 `book` 두 파일을 올린다.
+> `Dockerfile` 과 `book` 두 파일을 올린다. CloudShell 은 콘솔 로그인 자격증명을 그대로 물려받으므로
+> `aws configure` 가 필요 없다 — root 로 로그인한 콘솔에서 열기만 하면 된다.
 
 ```bash
-aws configure   # step 0 의 wsc2026-admin 키, region = ap-northeast-2
+aws configure set default.region ap-northeast-2
+aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root
 mkdir -p ~/book-image && mv ~/Dockerfile ~/book ~/book-image/ && cd ~/book-image
 
 ECR=$(aws ecr describe-repositories --repository-names wsc2026-book-ecr --query 'repositories[0].repositoryUri' --output text)
@@ -152,7 +162,8 @@ aws eks describe-cluster --name wsc2026-eks-cluster `
 
 ### 4) [본 PC → bastion] SSM 접속 + 셋업 (최초 1회)
 
-kubectl·helm·jq 는 bastion_user_data.sh 가 부팅 때 설치해 둔다. 홈이 유지되므로 이 블록은 1회만 실행한다.
+kubectl·helm·jq·AWS CLI(2.32.0+) 는 bastion_user_data.sh 가 부팅 때 설치해 둔다.
+홈이 유지되므로 이 블록은 1회만 실행한다.
 
 ```powershell
 # [본 PC] cwd = terraform
@@ -161,8 +172,15 @@ aws ssm start-session --target (terraform output -raw bastion_instance_id)
 
 ```bash
 # ---- bastion 최초 1회 ----
-aws configure   # step 0 의 wsc2026-admin 키, region = ap-northeast-2
-                # 클러스터 생성 신원과 같아야 kubectl 이 된다 (cluster.yaml bootstrapClusterCreatorAdminPermissions)
+aws --version        # 2.32.0 이상. 미달이면 user_data 갱신이 실패한 것 — 아래로 직접 갱신한다
+# curl -sL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
+# unzip -q -o /tmp/awscli.zip -d /tmp && sudo /tmp/aws/install --update && hash -r
+aws login --remote   # 출력 URL 을 본 PC 브라우저에서 열어 root 로 로그인 →
+                     # 표시된 authorization code 를 이 터미널에 붙여넣는다. region = ap-northeast-2
+                     # 클러스터 생성 신원과 같아야 kubectl 이 된다 (cluster.yaml bootstrapClusterCreatorAdminPermissions)
+aws configure list                                      # TYPE 열이 login
+aws sts get-caller-identity --query Arn --output text    # 본 PC·채점 셸과 같은 신원(root)
+
 BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
 mkdir -p ~/wsc2026 && cd ~/wsc2026
 aws s3 cp "s3://$BUCKET/_transfer/wsc2026-cs.tgz" . && tar xzf wsc2026-cs.tgz
@@ -318,9 +336,15 @@ tar xzf ..\_backup.tgz -C ..\_backup
 
 > 콘솔 CloudShell → **Actions → Create VPC environment** → VPC `wsc2026-skills-vpc`,
 > Subnet `wsc2026-skills-app-sub-a`, SG `mark-sg`.
+> 여기가 채점과 같은 경로다 — 신원까지 같아야 의미가 있으므로 **root 로 로그인한 콘솔에서 연다**.
+> `check_kms` 5건과 7-1 Lambda 환경변수는 신원이 어긋나면 그대로 FAIL 로 나온다.
 
 ```bash
-aws configure   # step 0 의 wsc2026-admin 키, region = ap-northeast-2
+aws configure set default.region ap-northeast-2
+aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root
+# root 가 아니면 여기서 교정한다 (콘솔 로그아웃 없이)
+# aws login --remote --profile wsc2026 && export AWS_PROFILE=wsc2026
+
 sudo curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo chmod +x /usr/local/bin/kubectl
 aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
 
@@ -344,13 +368,14 @@ terraform apply -var="enable_cdn=true" -var="enable_bastion=false"
 
 생성 역순으로 지운다. ALB 와 클러스터가 남아 있으면 Terraform 이 서브넷·SG 를 못 지운다.
 
-```bash
-# 10-1) [VPC CloudShell] ingress 삭제 → LBC 가 ALB 를 회수한다
-#       bastion 은 step 9-3 에서 지웠으므로 9-2 의 CloudShell 에서 실행한다
-kubectl delete ingress -n wsc2026 --all
-```
-
 ```powershell
+# 10-1) [본 PC] 클러스터 API 퍼블릭 전환 후 ingress 삭제 → LBC 가 ALB 를 회수한다
+#       채점(mark 4-1 fully-private)이 끝난 시점이라 전환해도 무방. 전환은 수 분 걸린다.
+#       전환 직후 kubectl 이 잠시 실패하면 잠깐 기다렸다 재시도한다.
+aws eks update-cluster-config --name wsc2026-eks-cluster --resources-vpc-config endpointPublicAccess=true,endpointPrivateAccess=true
+aws eks wait cluster-active --name wsc2026-eks-cluster
+aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
+kubectl delete ingress -n wsc2026 --all
 # 10-2) [본 PC] 클러스터 (step 9-3 이후 cwd = terraform)
 cd ..\eksctl
 eksctl delete cluster -f cluster.rendered.yaml

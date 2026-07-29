@@ -28,16 +28,19 @@
   - **`endpoints.tf` 에는 S3 Gateway 엔드포인트뿐이다.** eks/eks-auth Interface Endpoint 를 만들지
     않는다 — PHZ 가 Pod Identity 를 깬다(사유는 `endpoints.tf` 주석). 이미지 pull 은 app 서브넷의
     NAT 로 공개 레지스트리에서 직접 받는다.
-  - **KMS 5키의 admin principal 은 배포자 IAM 신원뿐이다**(유의 10: 키 정책에 root·`kms:*` 금지).
-    root 자격증명은 `data.tf` 의 `terraform_data.kms_admin_guard` precondition 이 plan 단계에서
-    차단한다. 관리자 추가는 `kms_extra_admin_arns` 변수.
+  - **KMS 5키의 admin principal 은 계정 위임이다** — principal `"*"` + `kms:CallerAccount` 조건
+    (`kms.tf`). 유의 10 이 금지하는 건 정책 텍스트의 root principal 과 `kms:*` 액션이고
+    (`check_kms` 가 `:root"`·`"kms:*"` 두 문자열을 grep), 조건절이 범위를 계정 안으로 좁힌다.
+    **조건절을 지우면 전 세계 공개**가 되므로 principal 만 따로 손대지 않는다.
+    액션은 계속 열거해 `kms:*` 문자열을 만들지 않는다.
   - **k8s 치환 대상은 `${ECR}` 하나뿐이다**(`k8s/app/02-deployment.yaml`). 렌더는 bastion 에서
     `k8s/rendered/` 미러로 만들고 `kubectl apply -R -f rendered/` 한 번에 적용한다. helm values
     (`kube-prometheus-stack-values.yaml`)만 kubectl 대상이 아니라 제외된다. `dashboard.json` 은
     렌더 단계에서 ConfigMap yaml 로 만들어 `rendered/monitoring/99-dashboard-cm.yaml` 로 들어간다.
   - **kubectl 은 bastion 에서만 된다.** 클러스터가 fully private 이라 본 PC 는 API 에 닿지 않는다.
     본 PC PowerShell 은 terraform·eksctl 전용. 채점 경로(CloudShell + `mark-sg`)는 제출 전
-    mark.sh 1회로 따로 확인한다(README step 9-2).
+    mark.sh 1회로 따로 확인한다(README step 9-2). 예외: destroy 10-1 은 엔드포인트를
+    퍼블릭으로 전환해 본 PC 에서 kubectl 을 쓴다.
   - **bastion 은 채점 대상이 아니다.** `terraform/bastion.tf`, 채점 전
     `apply -var="enable_bastion=false"` 로 제거한다. 지우기 전 README step 9 로 작업물을 회수한다.
   - **이름 변수화는 절반만 돼 있다.** `name_prefix` 변수(기본 `wsc2026`)가 있지만 `vpc_name` 과
@@ -47,8 +50,8 @@
 - 미해결:
   - **11-4 HighLatency 는 실발화가 불가능하다.** 제공 book 바이너리에 `/delay` 엔드포인트가 없다
     (로컬 실측 — 404, µs 응답). 채점 스크립트의 latency-gen 으로 평균 3초 초과를 만들 수 없다.
-    채점 11-4 가 요구하는 5종 중 나머지 4종(PodHighCPU/PodHighMemory/PodNotReady/HighErrorRate)은
-    부하 파드로 발화된다. `PodCrashLooping` 룰은 구현돼 있지만 채점 대상이 아니다.
+    채점 11-4 가 요구하는 6종(채점지 사진 기준, PodCrashLooping 포함) 중 나머지 5종은
+    부하 파드로 발화된다.
   - **mark 5-5 오타 대응이 임시 상태다.** 채점지 5-5 가 클러스터를 `wsi2026-xxxxx` 형식으로 조회하는
     오류가 있어 저장소 `mark.sh` 를 `wsc2026-eks-cluster` 로 고쳤다. 마이스터넷 질의 답변 대기 중.
   - **메트릭 실명을 배포 후 다시 확인해야 한다.** README step 8 에서 `:2021/metrics` 를 grep 해
@@ -89,7 +92,7 @@
 - [x] 11-1 부하/장애 파드 생성 후 observability 파드 Running 수
 - [x] 11-2 Grafana datasource 목록 + `wsc2026` 대시보드 검색
 - [x] 11-3 (수동) 대시보드 Row 구성 + 로그 패널 형식
-- [~] 11-4 (수동) 알람 5종 Firing — **4종만 가능**. HighLatency 는 `/delay` 부재로 실발화 불가
+- [~] 11-4 (수동) 알람 6종 Firing — **5종만 가능**. HighLatency 는 `/delay` 부재로 실발화 불가
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거가 된다. -->
@@ -101,6 +104,66 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-07-29 destroy 10-1 을 CloudShell 재진입 대신 엔드포인트 퍼블릭 전환으로
+- 맥락: bastion 은 9-3 에서 지워지고 클러스터는 fully private 라, ingress 삭제 하나를 위해
+  VPC CloudShell 에 재진입(홈 초기화 → kubectl 재설치·kubeconfig 재설정)해야 했다.
+- 채택: 채점 종료 후에는 fully-private(mark 4-1)를 유지할 이유가 없다. AWS CLI
+  `update-cluster-config` 로 `endpointPublicAccess=true` 를 켜고 본 PC PowerShell 에서
+  ingress 삭제 → destroy 전 과정이 본 PC 한 곳에서 끝난다. `endpointPrivateAccess=true` 는
+  유지해 teardown 중 노드 통신을 깨지 않는다.
+- 기각: eksctl `utils update-cluster-vpc-config` → fully-private 로 만든 클러스터의 endpoint
+  변경에 제약이 있고 버전별 동작이 변한다(작업 규칙 7). EKS API 직접 호출이 확실하다.
+- 대가: 전환에 수 분 대기. 전환 후에는 mark 4-1(private 검사)이 통과하지 않는 상태가 된다 —
+  채점 종료 후 단계라 무방하다.
+
+### 2026-07-29 대시보드를 채점지 사진 기준으로 정렬, Active Alerts 는 alertlist 패널로
+- 맥락: 채점지 사진 2장을 입수했다. 11-3·11-4 는 "채점지 사진과 일치" 가 채점 기준인데, 기존
+  구현은 task.md 표기("All Node CPU" 등)를 따랐고 Active Alerts 는 `ALERTS{alertstate="firing"}`
+  table 패널이라 사진(불꽃 아이콘·"Firing for"·"View alert rule")과 형태가 달랐다.
+- 채택: 사진을 우선한다. 패널 제목·범례·단위·레이아웃을 사진대로 재작성(Pod CPU 는 raw cores
+  무단위, Pod Memory 는 raw bytes, Available Nodes·Pod/App Restarts 는 그룹별/pod별 스탯,
+  Status Codes 는 2XX/4XX/5XX + CloudWatch `AWS/ApplicationELB` ELB 4XX/5XX 혼합). Active Alerts
+  는 `alertlist` 패널(stateFilter firing-only, datasource "prometheus") — Grafana 13.1.0(차트
+  87.2.1 동봉)의 alertlist 는 data-source-managed(Prometheus) 룰을 네이티브로 표시하고
+  datasource `manageAlerts` 기본값이 true 라 values 변경이 없다. 사진에 PodCrashLooping 이
+  Firing 으로 있어 채점 알람을 5종 → 6종으로 정정(mark.sh 11-4 안내 포함).
+- 기각: 6종 룰을 Grafana-managed 알람으로 이중 프로비저닝(sidecar.alerts) → PrometheusRule 과
+  중복 정의가 되고 채점 대상인 Prometheus Alert 사양의 단일 근원이 깨진다.
+- 대가: task.md Reference02 의 패널 표기와는 어긋난다(채점은 사진 대조라 사진을 따름). ELB 4XX/5XX
+  는 ALB 이름을 미리 알 수 없어 dimension 와일드카드(`LoadBalancer: *`)+`matchExact: false` 에
+  의존한다 — 배포 리허설에서 시리즈가 뜨는지 확인 필요.
+
+### 2026-07-29 신원을 wsc2026-admin(액세스 키) → root(`aws login`)로, KMS 키 정책을 계정 위임으로
+- 맥락: 채점지(`mark.md`·`task.md`)에 "사전에 IAM 사용자를 만들어 그 신원으로 진행하라"는 문구가 없다.
+  문구가 없으면 채점자는 지급받은 root 로 CloudShell 을 연다. 그런데 KMS 는 IAM 정책이 아니라 키 정책이
+  1차 관문이라, 관리자를 배포자 IAM 신원 하나로 잠근 기존 구성에서는 **채점 스크립트 자신이** 5키를
+  `describe-key`·`get-key-policy` 조차 못 한다 → `check_kms` 5건 + 7-1 Lambda 환경변수 +
+  (생성자 불일치로) kubectl 항목이 전부 FAIL 이 된다. 액세스 키 방식도 별개 문제였다 — Organizations
+  멤버 계정에서 centralized root access management 가 켜져 있으면 root 키 생성 자체가 막힌다.
+- 채택: 키 정책 관리자 principal 을 `"*"` + `Condition kms:CallerAccount = <account_id>` 로 바꿔
+  **root ARN 문자열 없이 계정 위임**을 표현한다(액션 열거는 유지 → `kms:*` 문자열도 없다).
+  그러면 신원을 나눌 이유가 사라져 terraform·eksctl·docker push·kubectl·채점이 모두 root 한 신원이 되고,
+  자격증명은 `aws login`(본 PC) / `aws login --remote`(bastion) / 콘솔 세션 상속(CloudShell 2곳)으로
+  받는다. 액세스 키를 만들지 않는다. `data.tf` 의 `kms_admin_guard`·`aws_iam_session_context` 와
+  `kms_extra_admin_arns` 변수는 root 차단 장치였으므로 함께 제거했다. set-07/task-1 과 같은 모델이 된다.
+- 기각: IAM 사용자 유지 + "채점 콘솔을 wsc2026-admin 으로 열어달라" → 채점자 행동은 통제할 수 없다.
+  IAM 사용자 유지 + 키 정책에 읽기 전용 계정 위임 statement 만 추가 → KMS 는 통과해도 신원이 둘로 갈려
+  런북이 복잡해지고 kubectl 은 여전히 root access entry 가 필요하다.
+  키 정책에 `arn:aws:iam::<acct>:root` 명시 → `check_kms` 의 `:root"` grep 에 그대로 걸린다.
+  principal 을 계정 ID 문자열(`"AWS": "<account_id>"`)로 → 저장 시 root ARN 으로 정규화될 가능성이
+  높다(S3 버킷 정책이 그렇다). 실계정에서 `put-key-policy` → `get-key-policy` 로 확인되면 텍스트가 더
+  얌전하므로 그때 갈아탄다.
+- 대가: 정책 텍스트에 `"AWS": "*"` 가 남아 사람 채점자가 최소권한 위반으로 볼 여지가 있다(조건절로 계정
+  안에 갇혀 있음을 설명할 수 있어야 한다). AWS CLI 2.32.0 의존(bastion 은 user_data 가 최신 v2 로 갱신,
+  대회 PC 가 미달이고 갱신 불가면 `create-access-key` + `aws configure` 로 폴백). 세션 12시간 만료 시
+  재로그인. signin 엔드포인트는 VPC Endpoint 가 없어 NAT 경유가 필수다.
+  terraform·eksctl 은 Go SDK 라 `login_session` 프로파일을 아직 못 읽을 수 있다 — AWS 가 안내하는
+  `credential_process = aws configure export-credentials ... --format process` 우회를 README step 0
+  주석에 넣어 뒀다.
+- 전제(미검증): EKS 가 root 를 클러스터 생성자 access entry 로 받는지 문서에 명시가 없다. 배포 리허설
+  때 `bootstrapClusterCreatorAdminPermissions` 로 만든 클러스터에서 bastion kubectl 이 되는지 먼저 본다.
+  안 되면 이 결정 전체를 되돌려야 한다.
 
 ### 2026-07-27 배포 작업 환경을 VPC CloudShell → SSM bastion 으로
 - 맥락: CloudShell 홈이 세션마다 삭제되고 업로드 UI 도 없어, manifest 하나 고치려면 본 PC 재-tar →

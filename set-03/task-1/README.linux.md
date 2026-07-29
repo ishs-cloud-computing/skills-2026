@@ -5,21 +5,20 @@
 설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
 주의/함정·설계 이력은 [NOTES.md](NOTES.md).
 
-### 0) [본 PC] 도구 준비 + 작업용 IAM 사용자 + 사전 변수
+### 0) [본 PC] 도구 준비 + 콘솔 자격증명 로그인 + 사전 변수
 
-필요 도구: AWS CLI v2 · Terraform · eksctl · jq · gettext(envsubst) ·
-session-manager-plugin(bastion SSM 접속) (Docker 불필요).
+필요 도구: AWS CLI v2 **2.32.0 이상**(`aws login` 요건) · Terraform · eksctl · jq ·
+gettext(envsubst) · session-manager-plugin(bastion SSM 접속) (Docker 불필요).
+
+> **모든 단계를 지급받은 root 로 수행한다.** 채점도 root 콘솔 세션으로 진행되므로 클러스터 생성자·
+> KMS·S3 신원이 채점 셸과 어긋나지 않는다. 액세스 키는 만들지 않는다.
 
 ```bash
-# root 자격증명으로 1회만 실행
-aws iam create-user --user-name wsc2026-admin
-aws iam attach-user-policy --user-name wsc2026-admin \
-  --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
-aws iam create-access-key --user-name wsc2026-admin \
-  --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text
+aws --version                          # 2.32.0 이상
 
-# 출력된 키로 프로파일 등록 — CloudShell 단계(2·4)에서도 같은 키를 입력하므로 잘 보관
-aws configure --profile wsc2026        # region = ap-northeast-2
+# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행
+aws login --profile wsc2026            # region = ap-northeast-2
+aws configure list --profile wsc2026   # TYPE 열이 login (~/.aws/credentials 가 남아 있으면 그쪽이 이긴다)
 
 # local .env (작업 규칙 6, .gitignore 등록됨)
 cat > .env <<'EOF'
@@ -27,7 +26,14 @@ export AWS_PROFILE=wsc2026
 export AWS_DEFAULT_REGION=ap-northeast-2
 EOF
 source .env
-aws sts get-caller-identity            # arn:...:user/wsc2026-admin 확인
+aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root 확인
+# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login --profile wsc2026 재실행
+
+# terraform·eksctl 이 login 프로파일을 못 읽으면(SDK 미지원) 아래를 ~/.aws/config 에 덧붙이고
+# AWS_PROFILE 을 wsc2026-proc 으로 바꾼다. CLI 가 자격증명을 대신 넘겨준다.
+#   [profile wsc2026-proc]
+#   credential_process = aws configure export-credentials --profile wsc2026 --format process
+#   region = ap-northeast-2
 
 # 배포파일을 이 과제의 app/ 로 복사 — s3.tf 와 이미지 빌드가 app/ 를 직접 읽는다 (원본은 shared, 수정 금지)
 cp ../../shared/provided/task-1/* app/
@@ -134,7 +140,8 @@ terraform apply -var="enable_cdn=true" -var="enable_bastion=false"   # bastion �
 
 ### 10) 전체 destroy (채점 종료 후)
 
-10-1(ingress 삭제)은 README.md step 10 과 같다. 본 PC 명령만 bash 로 옮긴다.
+10-1(퍼블릭 전환 + ingress 삭제)은 aws CLI·kubectl 이라 bash 에서도 README.md step 10 과
+명령이 동일하다. 그 뒤는 bash 로 옮긴다.
 
 ```bash
 cd ../eksctl                                     # step 7 이후 cwd = terraform

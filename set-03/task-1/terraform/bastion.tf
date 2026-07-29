@@ -9,10 +9,11 @@
 #
 # - SG 는 mark-sg 재사용: eks-cp-extra-sg 가 이미 mark-sg → private API 443 을 허용한다.
 #   새 SG·새 CP 인그레스가 0개이고, 채점자가 쓸 경로를 배포 내내 검증하게 된다.
-# - app(private) 서브넷 배치: SSM·kubectl/helm 다운로드가 NAT 로 해결되어 Interface
-#   Endpoint 가 필요 없다 (endpoints.tf 의 "S3 Gateway 만 둔다" 결정과 충돌하지 않음).
+# - app(private) 서브넷 배치: SSM·kubectl/helm 다운로드와 aws login 의 signin 엔드포인트가
+#   NAT 로 해결되어 Interface Endpoint 가 필요 없다
+#   (endpoints.tf 의 "S3 Gateway 만 둔다" 결정과 충돌하지 않음).
 # - 접속은 SSM Session Manager → 인바운드 규칙 0개, public IP·EIP·SSH 불필요.
-# - EKS 권한은 인스턴스 역할이 아니라 bastion 에서 aws configure 한 wsc2026-admin 이 갖는다
+# - EKS 권한은 인스턴스 역할이 아니라 bastion 에서 aws login --remote 한 root 가 갖는다
 #   (cluster.yaml bootstrapClusterCreatorAdminPermissions=true 이므로 access entry 불필요).
 # ---------------------------------------------------------------------------
 
@@ -36,7 +37,7 @@ resource "aws_iam_role" "bastion" {
   assume_role_policy = data.aws_iam_policy_document.bastion_assume.json
 }
 
-# SSM 접속에 필요한 최소 권한만. AWS 작업 권한은 aws configure 로 받는다.
+# SSM 접속에 필요한 최소 권한만. AWS 작업 권한은 aws login --remote 로 받는다.
 resource "aws_iam_role_policy_attachment" "bastion_ssm" {
   count      = var.enable_bastion ? 1 : 0
   role       = aws_iam_role.bastion[0].name
@@ -66,7 +67,7 @@ resource "aws_instance" "bastion" {
   }
 
   root_block_device {
-    encrypted = true # aws configure 자격증명이 올라가므로 암호화
+    encrypted = true # aws login 캐시 토큰(~/.aws/login/cache)이 올라가므로 암호화
   }
 
   # NAT 준비 전에 부팅하면 user_data 의 curl 이 실패한다
