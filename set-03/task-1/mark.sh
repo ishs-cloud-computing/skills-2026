@@ -170,7 +170,7 @@ echo
 
 echo =====11-4=====
 echo "수동 채점: Alert 확인"
-echo "Alerts 로우에서 아래 5개가 빨간색(Firing)으로 표시되는지 확인"
-echo "  PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / HighLatency"
+echo "Alerts 로우에서 아래 6개가 빨간색(Firing)으로 표시되는지 확인"
+echo "  PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / HighLatency / PodCrashLooping"
 echo
 echo

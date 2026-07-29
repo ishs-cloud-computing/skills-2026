@@ -49,8 +49,8 @@
 - 미해결:
   - **11-4 HighLatency 는 실발화가 불가능하다.** 제공 book 바이너리에 `/delay` 엔드포인트가 없다
     (로컬 실측 — 404, µs 응답). 채점 스크립트의 latency-gen 으로 평균 3초 초과를 만들 수 없다.
-    채점 11-4 가 요구하는 5종 중 나머지 4종(PodHighCPU/PodHighMemory/PodNotReady/HighErrorRate)은
-    부하 파드로 발화된다. `PodCrashLooping` 룰은 구현돼 있지만 채점 대상이 아니다.
+    채점 11-4 가 요구하는 6종(채점지 사진 기준, PodCrashLooping 포함) 중 나머지 5종은
+    부하 파드로 발화된다.
   - **mark 5-5 오타 대응이 임시 상태다.** 채점지 5-5 가 클러스터를 `wsi2026-xxxxx` 형식으로 조회하는
     오류가 있어 저장소 `mark.sh` 를 `wsc2026-eks-cluster` 로 고쳤다. 마이스터넷 질의 답변 대기 중.
   - **메트릭 실명을 배포 후 다시 확인해야 한다.** README step 8 에서 `:2021/metrics` 를 grep 해
@@ -91,7 +91,7 @@
 - [x] 11-1 부하/장애 파드 생성 후 observability 파드 Running 수
 - [x] 11-2 Grafana datasource 목록 + `wsc2026` 대시보드 검색
 - [x] 11-3 (수동) 대시보드 Row 구성 + 로그 패널 형식
-- [~] 11-4 (수동) 알람 5종 Firing — **4종만 가능**. HighLatency 는 `/delay` 부재로 실발화 불가
+- [~] 11-4 (수동) 알람 6종 Firing — **5종만 가능**. HighLatency 는 `/delay` 부재로 실발화 불가
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거가 된다. -->
@@ -103,6 +103,23 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-07-29 대시보드를 채점지 사진 기준으로 정렬, Active Alerts 는 alertlist 패널로
+- 맥락: 채점지 사진 2장을 입수했다. 11-3·11-4 는 "채점지 사진과 일치" 가 채점 기준인데, 기존
+  구현은 task.md 표기("All Node CPU" 등)를 따랐고 Active Alerts 는 `ALERTS{alertstate="firing"}`
+  table 패널이라 사진(불꽃 아이콘·"Firing for"·"View alert rule")과 형태가 달랐다.
+- 채택: 사진을 우선한다. 패널 제목·범례·단위·레이아웃을 사진대로 재작성(Pod CPU 는 raw cores
+  무단위, Pod Memory 는 raw bytes, Available Nodes·Pod/App Restarts 는 그룹별/pod별 스탯,
+  Status Codes 는 2XX/4XX/5XX + CloudWatch `AWS/ApplicationELB` ELB 4XX/5XX 혼합). Active Alerts
+  는 `alertlist` 패널(stateFilter firing-only, datasource "prometheus") — Grafana 13.1.0(차트
+  87.2.1 동봉)의 alertlist 는 data-source-managed(Prometheus) 룰을 네이티브로 표시하고
+  datasource `manageAlerts` 기본값이 true 라 values 변경이 없다. 사진에 PodCrashLooping 이
+  Firing 으로 있어 채점 알람을 5종 → 6종으로 정정(mark.sh 11-4 안내 포함).
+- 기각: 6종 룰을 Grafana-managed 알람으로 이중 프로비저닝(sidecar.alerts) → PrometheusRule 과
+  중복 정의가 되고 채점 대상인 Prometheus Alert 사양의 단일 근원이 깨진다.
+- 대가: task.md Reference02 의 패널 표기와는 어긋난다(채점은 사진 대조라 사진을 따름). ELB 4XX/5XX
+  는 ALB 이름을 미리 알 수 없어 dimension 와일드카드(`LoadBalancer: *`)+`matchExact: false` 에
+  의존한다 — 배포 리허설에서 시리즈가 뜨는지 확인 필요.
 
 ### 2026-07-29 신원을 wsc2026-admin(액세스 키) → root(`aws login`)로, KMS 키 정책을 계정 위임으로
 - 맥락: 채점지(`mark.md`·`task.md`)에 "사전에 IAM 사용자를 만들어 그 신원으로 진행하라"는 문구가 없다.
