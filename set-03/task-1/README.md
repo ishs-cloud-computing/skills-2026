@@ -376,13 +376,14 @@ terraform apply -var="enable_cdn=true" -var="enable_bastion=false"
 
 생성 역순으로 지운다. ALB 와 클러스터가 남아 있으면 Terraform 이 서브넷·SG 를 못 지운다.
 
-```bash
-# 10-1) [VPC CloudShell] ingress 삭제 → LBC 가 ALB 를 회수한다
-#       bastion 은 step 9-3 에서 지웠으므로 9-2 의 CloudShell 에서 실행한다
-kubectl delete ingress -n wsc2026 --all
-```
-
 ```powershell
+# 10-1) [본 PC] 클러스터 API 퍼블릭 전환 후 ingress 삭제 → LBC 가 ALB 를 회수한다
+#       채점(mark 4-1 fully-private)이 끝난 시점이라 전환해도 무방. 전환은 수 분 걸린다.
+#       전환 직후 kubectl 이 잠시 실패하면 잠깐 기다렸다 재시도한다.
+aws eks update-cluster-config --name wsc2026-eks-cluster --resources-vpc-config endpointPublicAccess=true,endpointPrivateAccess=true
+aws eks wait cluster-active --name wsc2026-eks-cluster
+aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
+kubectl delete ingress -n wsc2026 --all
 # 10-2) [본 PC] 클러스터 (step 9-3 이후 cwd = terraform)
 cd ..\eksctl
 eksctl delete cluster -f cluster.rendered.yaml

@@ -39,7 +39,8 @@
     렌더 단계에서 ConfigMap yaml 로 만들어 `rendered/monitoring/99-dashboard-cm.yaml` 로 들어간다.
   - **kubectl 은 bastion 에서만 된다.** 클러스터가 fully private 이라 본 PC 는 API 에 닿지 않는다.
     본 PC PowerShell 은 terraform·eksctl 전용. 채점 경로(CloudShell + `mark-sg`)는 제출 전
-    mark.sh 1회로 따로 확인한다(README step 9-2).
+    mark.sh 1회로 따로 확인한다(README step 9-2). 예외: destroy 10-1 은 엔드포인트를
+    퍼블릭으로 전환해 본 PC 에서 kubectl 을 쓴다.
   - **bastion 은 채점 대상이 아니다.** `terraform/bastion.tf`, 채점 전
     `apply -var="enable_bastion=false"` 로 제거한다. 지우기 전 README step 9 로 작업물을 회수한다.
   - **이름 변수화는 절반만 돼 있다.** `name_prefix` 변수(기본 `wsc2026`)가 있지만 `vpc_name` 과
@@ -103,6 +104,18 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-07-29 destroy 10-1 을 CloudShell 재진입 대신 엔드포인트 퍼블릭 전환으로
+- 맥락: bastion 은 9-3 에서 지워지고 클러스터는 fully private 라, ingress 삭제 하나를 위해
+  VPC CloudShell 에 재진입(홈 초기화 → kubectl 재설치·kubeconfig 재설정)해야 했다.
+- 채택: 채점 종료 후에는 fully-private(mark 4-1)를 유지할 이유가 없다. AWS CLI
+  `update-cluster-config` 로 `endpointPublicAccess=true` 를 켜고 본 PC PowerShell 에서
+  ingress 삭제 → destroy 전 과정이 본 PC 한 곳에서 끝난다. `endpointPrivateAccess=true` 는
+  유지해 teardown 중 노드 통신을 깨지 않는다.
+- 기각: eksctl `utils update-cluster-vpc-config` → fully-private 로 만든 클러스터의 endpoint
+  변경에 제약이 있고 버전별 동작이 변한다(작업 규칙 7). EKS API 직접 호출이 확실하다.
+- 대가: 전환에 수 분 대기. 전환 후에는 mark 4-1(private 검사)이 통과하지 않는 상태가 된다 —
+  채점 종료 후 단계라 무방하다.
 
 ### 2026-07-29 대시보드를 채점지 사진 기준으로 정렬, Active Alerts 는 alertlist 패널로
 - 맥락: 채점지 사진 2장을 입수했다. 11-3·11-4 는 "채점지 사진과 일치" 가 채점 기준인데, 기존
