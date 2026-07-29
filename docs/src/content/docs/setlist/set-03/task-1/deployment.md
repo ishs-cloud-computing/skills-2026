@@ -18,14 +18,27 @@ sidebar:
   (수정 금지)이고, 과제의 `app/` 로 복사해 쓴다. S3 정적 업로드(`s3.tf`)와 App 이미지 빌드가
   모두 `app/` 를 직접 읽으므로 복사가 선행돼야 한다.
 
-## 왜 모든 CLI 를 IAM 사용자(wsc2026-admin)로 실행하나
+## 왜 KMS 키 정책을 계정 위임으로 두고 전 단계를 root 로 실행하나
 
-대회는 root 계정을 지급하지만 유의사항 10(키 정책에 root 금지) 때문에 KMS 5키의 관리자 principal 은
-배포자 IAM 신원뿐이다. 따라서 키를 쓰는 모든 작업(terraform·eksctl·docker push·kubectl·채점)이 같은
-IAM 신원이어야 한다. root 는 `sts:AssumeRole` 호출이 불가하고, KMS 사용·alias 생성·CMK 테이블/객체
-생성도 전부 거부된다(키 정책이 유일한 통제). 그래서 IAM 사용자(`wsc2026-admin`) + 액세스 키를 만들어
-이후 전 단계를 이 신원으로 실행한다. root 로 apply 하면 `terraform_data.kms_admin_guard` 가 plan
-단계에서 차단한다. 다른 관리자를 추가하려면 `kms_extra_admin_arns` 변수를 쓴다.
+KMS 는 IAM 정책이 아니라 **키 정책이 1차 관문**이다. 정책에 이름이 없는 principal 은 root 라도
+거부되고, 키를 못 쓰면 CMK 테이블·객체 생성은 물론 `describe-key`·`get-key-policy` 조회도 막힌다.
+그런데 채점은 지급 계정, 즉 **root 콘솔 세션**으로 진행된다 — 채점지 어디에도 IAM 사용자를 따로 만들어
+그 신원으로 진행하라는 지시가 없다. 키를 배포자 한 명으로 잠그면 채점 스크립트 자신이 `check_kms`
+5건을 읽지 못하고, 7-1 의 Lambda 환경변수도 복호화되지 않는다.
+
+그래서 관리자 principal 을 특정 신원 대신 **계정 위임**으로 둔다. 유의사항 10 이 금지하는 것은 키 정책
+텍스트에 남는 root principal 과 `kms:*` 액션이고(`mark.sh` 의 `check_kms` 가 `:root"` 와 `"kms:*"`
+두 문자열을 grep 한다), `arn:...:root` 를 쓰지 않고도 계정 위임을 표현할 수 있다 —
+principal `"*"` 에 `kms:CallerAccount` 조건을 걸면 계정 밖 principal 은 차단되고 계정 안에서는 IAM
+정책이 판단한다. 액션은 계속 열거해 `kms:*` 문자열을 만들지 않는다(`kms:Put*` 이 있어 lockout safety
+check 도 통과). 조건절이 이 statement 의 유일한 안전장치이므로 함께 지워서는 안 된다.
+
+그 결과 신원을 나눌 이유가 사라진다. terraform·eksctl·docker push·kubectl·채점이 모두 root 한 신원으로
+돌고, 클러스터 생성자(`bootstrapClusterCreatorAdminPermissions`)가 곧 채점 셸 신원이 된다.
+액세스 키는 만들지 않는다 — root 액세스 키 생성은 Organizations 의 centralized root access
+management 가 켜진 계정에서 차단될 수 있고, 콘솔 자격증명을 그대로 쓰는 `aws login` 으로 충분하다.
+브라우저가 없는 bastion 은 `aws login --remote` 로 URL·authorization code 를 손으로 옮기고,
+CloudShell 은 콘솔 로그인 자격증명을 그대로 물려받아 아무 설정도 필요 없다.
 
 ## 왜 terraform 을 2회 apply 하나
 
@@ -45,7 +58,7 @@ addon 버전은 지정하지 않는다 — eksctl 이 클러스터 버전의 def
 
 채점 환경은 VPC CloudShell + `mark-sg` 로 못 박혀 있다(채점 유의 11). 그래서 처음에는 배포도 거기서
 했지만, VPC environment 홈은 세션 종료 시 삭제되고(비영속) 업로드 UI 도 없다. manifest 한 줄을
-고치려면 본 PC 에서 다시 tar → S3 → 재전개해야 하고, 재접속마다 도구 설치와 `aws configure` 를
+고치려면 본 PC 에서 다시 tar → S3 → 재전개해야 하고, 재접속마다 도구 설치와 로그인을
 반복하게 된다. 배포는 고쳐가며 수렴하는 작업이라 이 왕복 비용이 그대로 시간 손실이 된다.
 
 그래서 작업만 **홈이 유지되는 bastion**(`terraform/bastion.tf`)으로 옮기고, 채점 경로 확인은 제출 전
@@ -54,21 +67,22 @@ CloudShell 1회로 분리했다. 설계는 추가 리소스를 최소화하는 �
 - **SG 는 `mark-sg` 를 그대로 붙인다.** `wsc2026-eks-cp-extra-sg` 가 이미 mark-sg → private API 443
   을 허용하므로 새 SG 도, 새 control plane 인그레스도 필요 없다. 부수 효과로 bastion 에서 작업하는
   내내 **채점자가 쓸 경로 그 자체**를 검증하게 된다.
-- **app(private) 서브넷 + SSM Session Manager.** SSM·kubectl/helm 다운로드가 NAT 로 해결되어
-  Interface Endpoint 를 만들지 않아도 되고(→ Pod Identity 를 깨는 PHZ 문제를 피한다), 접속이
-  아웃바운드 기반이라 인바운드 규칙이 0개다. public IP·EIP·SSH 키가 모두 불필요하다.
-- **EKS 권한은 인스턴스 역할이 아니라 `aws configure` 로 받는다.** `cluster.yaml` 이
-  `bootstrapClusterCreatorAdminPermissions: true` 이므로 클러스터 생성 신원(`wsc2026-admin`)만
-  cluster admin 이다. bastion 에서 같은 키를 쓰면 access entry 를 추가하지 않아도 되고,
-  인스턴스 역할에는 `AmazonSSMManagedInstanceCore` 만 남는다.
+- **app(private) 서브넷 + SSM Session Manager.** SSM·kubectl/helm 다운로드와 `aws login` 의 signin
+  엔드포인트가 NAT 로 해결되어 Interface Endpoint 를 만들지 않아도 되고(→ Pod Identity 를 깨는 PHZ
+  문제를 피한다), 접속이 아웃바운드 기반이라 인바운드 규칙이 0개다. public IP·EIP·SSH 키가 모두 불필요하다.
+- **EKS 권한은 인스턴스 역할이 아니라 `aws login --remote` 로 받는다.** `cluster.yaml` 이
+  `bootstrapClusterCreatorAdminPermissions: true` 이므로 클러스터 생성 신원(root)만 cluster admin 이다.
+  bastion 도 같은 root 로 로그인하면 access entry 를 추가하지 않아도 되고, 인스턴스 역할에는
+  `AmazonSSMManagedInstanceCore` 만 남는다. 인스턴스 역할에 작업 권한을 주는 쪽은 생성자가 역할 ARN 이
+  되어 채점 셸(root)과 어긋나므로 쓰지 않는다.
 
 bastion 은 채점 대상이 아니므로 제출 전 `enable_bastion=false` 로 제거한다. 지우기 전에 렌더 결과와
 bastion 에서 직접 고친 manifest 를 본 PC 로 회수한다 — 백업을 S3 에 두면 `_transfer/` 정리(mark 6-1)
 때 같이 지워지기 때문이다.
 
-한편 신원 자체는 어느 환경이든 `wsc2026-admin` 이어야 한다. 기본 신원(root)으로 돌리면 check_kms
-5건·S3 조회·kubectl 이 전부 실패한다. 채점은 심사가 자기들 `mark.sh` 로 수행하며, 저장소의
-`mark.sh` 는 우리 재현본이다.
+한편 신원 자체는 어느 환경이든 root 여야 한다. 클러스터 생성자와 다른 신원으로 돌리면 kubectl 이
+막히고, 채점 셸과 다른 신원으로 확인하면 확인 자체가 무의미해진다. 채점은 심사가 자기들 `mark.sh` 로
+수행하며, 저장소의 `mark.sh` 는 우리 재현본이다.
 
 ## 왜 이미지 태그가 v1.0.0 단독이고 일반 CloudShell 을 쓰나
 

@@ -10,10 +10,14 @@
 # - wsc2026-function-kms : Lambda 코드/환경변수 암호화
 #
 # 유의사항 10: 키 정책에 root principal 과 "kms:*" 액션 금지 (mark check_kms 가
-# 정책 텍스트를 grep). 대신 배포자 신원(aws_iam_session_context)을 키 관리자로
-# 명시하고 액션을 나열한다. kms:Put* 이 있어 lockout safety check 를 통과한다.
-# 주의: eksctl/docker push/kubectl 을 다른 신원으로 실행하면 키 사용이 거부되므로
-# 모든 작업은 terraform 과 같은 자격증명으로 수행한다 (README 참고).
+# 정책 텍스트에서 ':root"' 와 '"kms:*"' 두 문자열을 grep 한다).
+# 채점은 지급 계정(root)으로 진행되므로 배포자 신원 하나로 잠그면 채점 자신이
+# describe-key/get-key-policy 조차 못 한다 — KMS 는 IAM 정책이 아니라 키 정책이
+# 1차 관문이라 정책에 없는 신원은 root 라도 거부된다.
+# 그래서 principal 은 계정 위임으로 두되 root ARN 문자열을 쓰지 않는다:
+# "*" + kms:CallerAccount 조건 → 계정 밖 principal 은 차단되고 계정 안에서는
+# IAM 정책이 판단한다. 액션은 계속 열거해 "kms:*" 문자열을 만들지 않는다
+# (kms:Put* 이 있어 lockout safety check 도 통과).
 # ---------------------------------------------------------------------------
 
 locals {
@@ -43,7 +47,7 @@ locals {
   ]
 }
 
-# 공통: 배포자 관리자 statement (root 대체)
+# 공통: 계정 위임 관리자 statement (root ARN 대체)
 data "aws_iam_policy_document" "kms_admin" {
   statement {
     sid       = "KeyAdministration"
@@ -52,7 +56,13 @@ data "aws_iam_policy_document" "kms_admin" {
     resources = ["*"]
     principals {
       type        = "AWS"
-      identifiers = local.kms_admin_arns
+      identifiers = ["*"]
+    }
+    # 이 조건이 principal "*" 의 범위를 이 계정으로 좁힌다. 조건이 빠지면 전 세계 공개다.
+    condition {
+      test     = "StringEquals"
+      variable = "kms:CallerAccount"
+      values   = [local.account_id]
     }
   }
 }

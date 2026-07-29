@@ -89,15 +89,6 @@ variable "bucket_suffix" {
   }
 }
 
-# 유의사항 10: KMS 키 정책에 root / kms:* 금지 → 배포자(terraform 실행 신원)를
-# 키 관리자 principal 로 명시한다. 기본은 현재 신원(aws_iam_session_context)이며,
-# 다른 관리자(예: 콘솔용 role)를 추가하려면 여기에 ARN 을 넣는다.
-variable "kms_extra_admin_arns" {
-  description = "KMS 키 정책에 추가할 관리자 principal ARN 목록"
-  type        = list(string)
-  default     = []
-}
-
 # CloudFront/WAF 는 LBC 가 만드는 ALB(wsc2026-app-alb)에 의존하므로 2차 apply 로 미룬다.
 # 1차: enable_cdn=false(기본) → VPC/KMS/DDB/ECR/S3/Lambda/IAM 생성
 # 2차: 클러스터·ingress 생성 후 enable_cdn=true 로 재-apply → CloudFront/WAF/버킷정책 생성

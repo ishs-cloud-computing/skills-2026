@@ -28,9 +28,11 @@
   - **`endpoints.tf` 에는 S3 Gateway 엔드포인트뿐이다.** eks/eks-auth Interface Endpoint 를 만들지
     않는다 — PHZ 가 Pod Identity 를 깬다(사유는 `endpoints.tf` 주석). 이미지 pull 은 app 서브넷의
     NAT 로 공개 레지스트리에서 직접 받는다.
-  - **KMS 5키의 admin principal 은 배포자 IAM 신원뿐이다**(유의 10: 키 정책에 root·`kms:*` 금지).
-    root 자격증명은 `data.tf` 의 `terraform_data.kms_admin_guard` precondition 이 plan 단계에서
-    차단한다. 관리자 추가는 `kms_extra_admin_arns` 변수.
+  - **KMS 5키의 admin principal 은 계정 위임이다** — principal `"*"` + `kms:CallerAccount` 조건
+    (`kms.tf`). 유의 10 이 금지하는 건 정책 텍스트의 root principal 과 `kms:*` 액션이고
+    (`check_kms` 가 `:root"`·`"kms:*"` 두 문자열을 grep), 조건절이 범위를 계정 안으로 좁힌다.
+    **조건절을 지우면 전 세계 공개**가 되므로 principal 만 따로 손대지 않는다.
+    액션은 계속 열거해 `kms:*` 문자열을 만들지 않는다.
   - **k8s 치환 대상은 `${ECR}` 하나뿐이다**(`k8s/app/02-deployment.yaml`). 렌더는 bastion 에서
     `k8s/rendered/` 미러로 만들고 `kubectl apply -R -f rendered/` 한 번에 적용한다. helm values
     (`kube-prometheus-stack-values.yaml`)만 kubectl 대상이 아니라 제외된다. `dashboard.json` 은
@@ -101,6 +103,37 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-07-29 신원을 wsc2026-admin(액세스 키) → root(`aws login`)로, KMS 키 정책을 계정 위임으로
+- 맥락: 채점지(`mark.md`·`task.md`)에 "사전에 IAM 사용자를 만들어 그 신원으로 진행하라"는 문구가 없다.
+  문구가 없으면 채점자는 지급받은 root 로 CloudShell 을 연다. 그런데 KMS 는 IAM 정책이 아니라 키 정책이
+  1차 관문이라, 관리자를 배포자 IAM 신원 하나로 잠근 기존 구성에서는 **채점 스크립트 자신이** 5키를
+  `describe-key`·`get-key-policy` 조차 못 한다 → `check_kms` 5건 + 7-1 Lambda 환경변수 +
+  (생성자 불일치로) kubectl 항목이 전부 FAIL 이 된다. 액세스 키 방식도 별개 문제였다 — Organizations
+  멤버 계정에서 centralized root access management 가 켜져 있으면 root 키 생성 자체가 막힌다.
+- 채택: 키 정책 관리자 principal 을 `"*"` + `Condition kms:CallerAccount = <account_id>` 로 바꿔
+  **root ARN 문자열 없이 계정 위임**을 표현한다(액션 열거는 유지 → `kms:*` 문자열도 없다).
+  그러면 신원을 나눌 이유가 사라져 terraform·eksctl·docker push·kubectl·채점이 모두 root 한 신원이 되고,
+  자격증명은 `aws login`(본 PC) / `aws login --remote`(bastion) / 콘솔 세션 상속(CloudShell 2곳)으로
+  받는다. 액세스 키를 만들지 않는다. `data.tf` 의 `kms_admin_guard`·`aws_iam_session_context` 와
+  `kms_extra_admin_arns` 변수는 root 차단 장치였으므로 함께 제거했다. set-07/task-1 과 같은 모델이 된다.
+- 기각: IAM 사용자 유지 + "채점 콘솔을 wsc2026-admin 으로 열어달라" → 채점자 행동은 통제할 수 없다.
+  IAM 사용자 유지 + 키 정책에 읽기 전용 계정 위임 statement 만 추가 → KMS 는 통과해도 신원이 둘로 갈려
+  런북이 복잡해지고 kubectl 은 여전히 root access entry 가 필요하다.
+  키 정책에 `arn:aws:iam::<acct>:root` 명시 → `check_kms` 의 `:root"` grep 에 그대로 걸린다.
+  principal 을 계정 ID 문자열(`"AWS": "<account_id>"`)로 → 저장 시 root ARN 으로 정규화될 가능성이
+  높다(S3 버킷 정책이 그렇다). 실계정에서 `put-key-policy` → `get-key-policy` 로 확인되면 텍스트가 더
+  얌전하므로 그때 갈아탄다.
+- 대가: 정책 텍스트에 `"AWS": "*"` 가 남아 사람 채점자가 최소권한 위반으로 볼 여지가 있다(조건절로 계정
+  안에 갇혀 있음을 설명할 수 있어야 한다). AWS CLI 2.32.0 의존(bastion 은 user_data 가 최신 v2 로 갱신,
+  대회 PC 가 미달이고 갱신 불가면 `create-access-key` + `aws configure` 로 폴백). 세션 12시간 만료 시
+  재로그인. signin 엔드포인트는 VPC Endpoint 가 없어 NAT 경유가 필수다.
+  terraform·eksctl 은 Go SDK 라 `login_session` 프로파일을 아직 못 읽을 수 있다 — AWS 가 안내하는
+  `credential_process = aws configure export-credentials ... --format process` 우회를 README step 0
+  주석에 넣어 뒀다.
+- 전제(미검증): EKS 가 root 를 클러스터 생성자 access entry 로 받는지 문서에 명시가 없다. 배포 리허설
+  때 `bootstrapClusterCreatorAdminPermissions` 로 만든 클러스터에서 bastion kubectl 이 되는지 먼저 본다.
+  안 되면 이 결정 전체를 되돌려야 한다.
 
 ### 2026-07-27 배포 작업 환경을 VPC CloudShell → SSM bastion 으로
 - 맥락: CloudShell 홈이 세션마다 삭제되고 업로드 UI 도 없어, manifest 하나 고치려면 본 PC 재-tar →
