@@ -356,6 +356,10 @@ aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
 BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
 aws s3 cp "s3://$BUCKET/_transfer/mark.sh" . && chmod +x mark.sh
 ./mark.sh       # 저장소 재현본. 심사는 자기들 원본으로 채점한다
+
+# 확인 후 부하 파드 정리 — stress-mem 은 1시간 뒤 Completed 로 죽는데, 남아 있으면
+# 채점자 mark.sh 의 kubectl run 이 AlreadyExists 로 조용히 실패해 PodHighMemory 가 안 뜬다
+kubectl delete pod not-ready error-gen latency-gen crash-test stress-cpu stress-mem -n wsc2026 --ignore-not-found
 ```
 
 ### 9-3) [본 PC·PowerShell] 채점 전 정리 (_transfer + bastion 제거)
