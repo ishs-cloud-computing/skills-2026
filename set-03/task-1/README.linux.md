@@ -136,8 +136,8 @@ terraform apply -var="enable_cdn=true" -var="enable_bastion=false"   # bastion �
 
 ### 10) 전체 destroy (채점 종료 후)
 
-10-1(퍼블릭 전환 + ingress 삭제)은 aws CLI·kubectl 이라 bash 에서도 README.md step 10 과
-명령이 동일하다. 그 뒤는 bash 로 옮긴다.
+10-1(퍼블릭 전환)은 aws CLI 라 bash 에서도 README.md step 10 과 명령이 동일하다.
+그 뒤는 bash 로 옮긴다.
 
 ```bash
 cd ../eksctl                                     # step 7 이후 cwd = terraform

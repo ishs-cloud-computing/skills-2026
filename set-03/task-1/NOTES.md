@@ -105,6 +105,18 @@
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
 
+### 2026-07-30 mark.sh 는 S3 릴레이 대신 vim 붙여넣기, destroy 10-1 의 ingress 삭제 제거
+- 맥락: step 1 이 mark.sh 를 `_transfer/` 로 올리고 step 9-2 가 다시 내려받았다. 파일 하나를
+  위해 릴레이 왕복이 붙고 9-3 정리 대상도 늘었다. destroy 10-1 은 퍼블릭 전환 후
+  `update-kubeconfig` + `kubectl delete ingress` 로 ALB 를 회수했다.
+- 채택: mark.sh 는 VPC CloudShell 에서 `vim mark.sh` 로 붙여넣는다(`:set paste`). destroy 는
+  퍼블릭 전환 → `eksctl delete cluster` 만 남긴다 — eksctl 의 ELB cleanup 이
+  `ingressClassName: alb` 인 ingress 를 스스로 지우고 ALB 삭제 완료까지 기다린다
+  (`pkg/elb/cleanup.go`: ingress class `alb` 필터 + 2초 폴링 대기).
+- 기각: 10-1 에서 kubectl 을 유지 → eksctl 이 같은 일을 하므로 kubectl 설치·kubeconfig 가 순전히 중복.
+- 대가: eksctl 이 K8s API 에 붙어야 하므로 퍼블릭 전환은 그대로 필수다. eksctl 의 고아 SG 정리는
+  `k8s-elb-*` + 클러스터 태그만 대상이라 Terraform 의 `wsc2026-app-alb-sg` 는 건드리지 않는다.
+
 ### 2026-07-30 `aws login` 을 named profile(wsc2026) → default 프로파일로
 - 맥락: 지급 계정의 root 가 이미 유일한 신원인데(2026-07-29 항목) 런북은 `--profile wsc2026` 로
   프로파일을 따로 만들고 `AWS_PROFILE` 을 셸·`.env`·step 3 의 `$keep` 목록까지 끌고 다녔다.
