@@ -105,6 +105,30 @@
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
 
+### 2026-07-30 mark.sh 는 S3 릴레이 대신 vim 붙여넣기, destroy 10-1 의 ingress 삭제 제거
+- 맥락: step 1 이 mark.sh 를 `_transfer/` 로 올리고 step 9-2 가 다시 내려받았다. 파일 하나를
+  위해 릴레이 왕복이 붙고 9-3 정리 대상도 늘었다. destroy 10-1 은 퍼블릭 전환 후
+  `update-kubeconfig` + `kubectl delete ingress` 로 ALB 를 회수했다.
+- 채택: mark.sh 는 VPC CloudShell 에서 `vim mark.sh` 로 붙여넣는다(`:set paste`). destroy 는
+  퍼블릭 전환 → `eksctl delete cluster` 만 남긴다 — eksctl 의 ELB cleanup 이
+  `ingressClassName: alb` 인 ingress 를 스스로 지우고 ALB 삭제 완료까지 기다린다
+  (`pkg/elb/cleanup.go`: ingress class `alb` 필터 + 2초 폴링 대기).
+- 기각: 10-1 에서 kubectl 을 유지 → eksctl 이 같은 일을 하므로 kubectl 설치·kubeconfig 가 순전히 중복.
+- 대가: eksctl 이 K8s API 에 붙어야 하므로 퍼블릭 전환은 그대로 필수다. eksctl 의 고아 SG 정리는
+  `k8s-elb-*` + 클러스터 태그만 대상이라 Terraform 의 `wsc2026-app-alb-sg` 는 건드리지 않는다.
+
+### 2026-07-30 `aws login` 을 named profile(wsc2026) → default 프로파일로
+- 맥락: 지급 계정의 root 가 이미 유일한 신원인데(2026-07-29 항목) 런북은 `--profile wsc2026` 로
+  프로파일을 따로 만들고 `AWS_PROFILE` 을 셸·`.env`·step 3 의 `$keep` 목록까지 끌고 다녔다.
+  신원이 하나뿐이면 프로파일 분리가 사는 일이 없다 — 대회장에서 손만 더 간다.
+- 채택: `aws login` / `aws configure list` 를 default 프로파일로 실행하고 `AWS_PROFILE` 을 전부 뺀다.
+  `.env`·`.env.ps1` 에는 `AWS_DEFAULT_REGION` 만 남는다.
+- 함께 정정: SDK 폴백을 `credential_process` 프로파일(2026-07-29 항목의 대가 절) → 임시 크레덴셜
+  env 주입(`aws configure export-credentials --format env`)으로 바꿨다. default 프로파일에
+  `credential_process` 를 걸면 자기 자신을 호출하는 꼴이라 성립하지 않는다.
+- 함께 정정: step 0 의 `aws configure list` 는 두 줄 아래 `get-caller-identity` 와 검증이 겹쳐 지웠다.
+  `~/.aws/credentials` 잔존 경고는 `get-caller-identity` 주석으로 옮겼다(ARN 이 root 가 아니면 그것).
+
 ### 2026-07-29 destroy 10-1 을 CloudShell 재진입 대신 엔드포인트 퍼블릭 전환으로
 - 맥락: bastion 은 9-3 에서 지워지고 클러스터는 fully private 라, ingress 삭제 하나를 위해
   VPC CloudShell 에 재진입(홈 초기화 → kubectl 재설치·kubeconfig 재설정)해야 했다.

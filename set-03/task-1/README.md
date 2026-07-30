@@ -49,24 +49,21 @@ README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7·9·10 �
 ```powershell
 aws --version                          # 2.32.0 이상 (aws login 요건)
 
-# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행
-aws login --profile wsc2026            # region = ap-northeast-2
-aws configure list --profile wsc2026   # TYPE 열이 login (~/.aws/credentials 가 남아 있으면 그쪽이 이긴다)
+# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행 (default 프로파일)
+aws login              # region = ap-northeast-2
 
 # local .env.ps1 — 셸 재시작에도 재사용 (작업 규칙 6, .gitignore 등록됨)
 @'
-$env:AWS_PROFILE = "wsc2026"
 $env:AWS_DEFAULT_REGION = "ap-northeast-2"
 '@ | Set-Content .env.ps1
 . .\.env.ps1   # 새 터미널로 이어서 할 땐 set-03/task-1 에서 이 줄만 다시 실행
 aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root 확인
-# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login --profile wsc2026 재실행
+# root 가 아니면 ~/.aws/credentials 의 잔존 키가 login 크레덴셜을 이긴 것 — 그 파일을 지운다
+# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login 재실행
 
-# terraform·eksctl 이 login 프로파일을 못 읽으면(SDK 미지원) 아래를 ~/.aws/config 에 덧붙이고
-# $env:AWS_PROFILE 을 wsc2026-proc 으로 바꾼다. CLI 가 자격증명을 대신 넘겨준다.
-#   [profile wsc2026-proc]
-#   credential_process = aws configure export-credentials --profile wsc2026 --format process
-#   region = ap-northeast-2
+# terraform·eksctl 이 login 자격증명을 못 읽으면(SDK 미지원) 임시 크레덴셜을 env 로 직접 넘긴다.
+# aws configure export-credentials --format env-no-export |
+#   ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$k" $v }
 
 # 배포파일을 이 과제의 app/ 로 복사 (원본은 shared, 수정 금지)
 Copy-Item ..\..\shared\provided\task-1\* .\app\
@@ -93,7 +90,6 @@ $BUCKET = $o.s3_bucket_name.value
 aws s3 cp ..\outputs.json "s3://$BUCKET/_transfer/outputs.json"
 tar czf "$env:TEMP\wsc2026-cs.tgz" -C .. k8s
 aws s3 cp "$env:TEMP\wsc2026-cs.tgz" "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
-aws s3 cp ..\mark.sh "s3://$BUCKET/_transfer/mark.sh"   # step 9-2 용 (VPC CloudShell 은 업로드 UI 없음)
 ```
 
 ### 2) [일반 CloudShell] 컨테이너 이미지 빌드 & ECR push (v1.0.0 단일 태그)
@@ -154,7 +150,7 @@ $c | Set-Content cluster.rendered.yaml
 Select-String '\$\{' cluster.rendered.yaml
 
 # 셸 재시작 대비 — .env.ps1 통째로 재작성 (덮어쓰기라 중복 누적 없음, 작업 규칙 6)
-$keep = @('AWS_PROFILE','AWS_DEFAULT_REGION') + $vars
+$keep = @('AWS_DEFAULT_REGION') + $vars
 $keep | ForEach-Object { "`$env:$_ = `"$((Get-Item "env:$_").Value)`"" } | Set-Content ..\.env.ps1
 
 eksctl create cluster -f cluster.rendered.yaml   # 약 20분. 완료 시 자동 private 전환
@@ -347,14 +343,14 @@ tar xzf ..\_backup.tgz -C ..\_backup
 aws configure set default.region ap-northeast-2
 aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root
 # root 가 아니면 여기서 교정한다 (콘솔 로그아웃 없이)
-# aws login --remote --profile wsc2026 && export AWS_PROFILE=wsc2026
+# aws login --remote
 
 sudo curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo chmod +x /usr/local/bin/kubectl
 aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
 
-# VPC environment 는 업로드 UI 가 없다 — mark.sh 도 step 1 릴레이로 받는다
-BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
-aws s3 cp "s3://$BUCKET/_transfer/mark.sh" . && chmod +x mark.sh
+# VPC environment 는 업로드 UI 가 없다 — mark.sh 는 vim 으로 붙여넣는다
+# (:set paste 후 본 PC 에서 mark.sh 전문 복사 → 붙여넣기 → :wq)
+vim mark.sh && chmod +x mark.sh
 ./mark.sh       # 저장소 재현본. 심사는 자기들 원본으로 채점한다
 
 # 확인 후 부하 파드 정리 — stress-mem 은 1시간 뒤 Completed 로 죽는데, 남아 있으면
@@ -377,14 +373,13 @@ terraform apply -var="enable_cdn=true" -var="enable_bastion=false"
 생성 역순으로 지운다. ALB 와 클러스터가 남아 있으면 Terraform 이 서브넷·SG 를 못 지운다.
 
 ```powershell
-# 10-1) [본 PC] 클러스터 API 퍼블릭 전환 후 ingress 삭제 → LBC 가 ALB 를 회수한다
-#       채점(mark 4-1 fully-private)이 끝난 시점이라 전환해도 무방. 전환은 수 분 걸린다.
-#       전환 직후 kubectl 이 잠시 실패하면 잠깐 기다렸다 재시도한다.
+# 10-1) [본 PC] 클러스터 API 퍼블릭 전환. 채점(mark 4-1 fully-private)이 끝난 시점이라
+#       전환해도 무방. 전환은 수 분 걸린다. eksctl 이 K8s API 로 ingress 를 지워야 하므로 필수.
 aws eks update-cluster-config --name wsc2026-eks-cluster --resources-vpc-config endpointPublicAccess=true,endpointPrivateAccess=true
 aws eks wait cluster-active --name wsc2026-eks-cluster
-aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
-kubectl delete ingress -n wsc2026 --all
+
 # 10-2) [본 PC] 클러스터 (step 9-3 이후 cwd = terraform)
+#       eksctl 이 ingressClassName=alb 인 ingress 를 먼저 지우고 ALB 회수를 기다린다 → 별도 kubectl 불필요
 cd ..\eksctl
 eksctl delete cluster -f cluster.rendered.yaml
 
