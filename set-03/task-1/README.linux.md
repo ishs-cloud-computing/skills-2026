@@ -16,24 +16,20 @@ gettext(envsubst) · session-manager-plugin(bastion SSM 접속) (Docker 불필�
 ```bash
 aws --version                          # 2.32.0 이상
 
-# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행
-aws login --profile wsc2026            # region = ap-northeast-2
-aws configure list --profile wsc2026   # TYPE 열이 login (~/.aws/credentials 가 남아 있으면 그쪽이 이긴다)
+# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행 (default 프로파일)
+aws login              # region = ap-northeast-2
 
 # local .env (작업 규칙 6, .gitignore 등록됨)
 cat > .env <<'EOF'
-export AWS_PROFILE=wsc2026
 export AWS_DEFAULT_REGION=ap-northeast-2
 EOF
 source .env
 aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root 확인
-# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login --profile wsc2026 재실행
+# root 가 아니면 ~/.aws/credentials 의 잔존 키가 login 크레덴셜을 이긴 것 — 그 파일을 지운다
+# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login 재실행
 
-# terraform·eksctl 이 login 프로파일을 못 읽으면(SDK 미지원) 아래를 ~/.aws/config 에 덧붙이고
-# AWS_PROFILE 을 wsc2026-proc 으로 바꾼다. CLI 가 자격증명을 대신 넘겨준다.
-#   [profile wsc2026-proc]
-#   credential_process = aws configure export-credentials --profile wsc2026 --format process
-#   region = ap-northeast-2
+# terraform·eksctl 이 login 자격증명을 못 읽으면(SDK 미지원) 임시 크레덴셜을 env 로 직접 넘긴다.
+# eval "$(aws configure export-credentials --format env)"
 
 # 배포파일을 이 과제의 app/ 로 복사 — s3.tf 와 이미지 빌드가 app/ 를 직접 읽는다 (원본은 shared, 수정 금지)
 cp ../../shared/provided/task-1/* app/
@@ -88,7 +84,7 @@ missing=$(for v in $(grep -oh '\${[A-Za-z_][A-Za-z0-9_]*}' cluster.yaml | tr -d 
 grep -n '\${' cluster.rendered.yaml && echo '치환 누락!' || echo OK
 
 # 셸 재시작 대비 — .env 통째로 재작성 (작업 규칙 6)
-for v in AWS_PROFILE AWS_DEFAULT_REGION VPC_ID CP_EXTRA_SG_ID NODE_SHARED_SG_ID \
+for v in AWS_DEFAULT_REGION VPC_ID CP_EXTRA_SG_ID NODE_SHARED_SG_ID \
   PRIV_SUBNET_A PRIV_SUBNET_B EKS_KMS_ARN BOOK_POD_ROLE_ARN LBC_ROLE_ARN \
   FLUENTBIT_ROLE_ARN GRAFANA_ROLE_ARN; do echo "export $v=\"${!v}\""; done > ../.env
 

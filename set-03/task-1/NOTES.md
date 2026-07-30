@@ -105,6 +105,18 @@
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
 
+### 2026-07-30 `aws login` 을 named profile(wsc2026) → default 프로파일로
+- 맥락: 지급 계정의 root 가 이미 유일한 신원인데(2026-07-29 항목) 런북은 `--profile wsc2026` 로
+  프로파일을 따로 만들고 `AWS_PROFILE` 을 셸·`.env`·step 3 의 `$keep` 목록까지 끌고 다녔다.
+  신원이 하나뿐이면 프로파일 분리가 사는 일이 없다 — 대회장에서 손만 더 간다.
+- 채택: `aws login` / `aws configure list` 를 default 프로파일로 실행하고 `AWS_PROFILE` 을 전부 뺀다.
+  `.env`·`.env.ps1` 에는 `AWS_DEFAULT_REGION` 만 남는다.
+- 함께 정정: SDK 폴백을 `credential_process` 프로파일(2026-07-29 항목의 대가 절) → 임시 크레덴셜
+  env 주입(`aws configure export-credentials --format env`)으로 바꿨다. default 프로파일에
+  `credential_process` 를 걸면 자기 자신을 호출하는 꼴이라 성립하지 않는다.
+- 함께 정정: step 0 의 `aws configure list` 는 두 줄 아래 `get-caller-identity` 와 검증이 겹쳐 지웠다.
+  `~/.aws/credentials` 잔존 경고는 `get-caller-identity` 주석으로 옮겼다(ARN 이 root 가 아니면 그것).
+
 ### 2026-07-29 destroy 10-1 을 CloudShell 재진입 대신 엔드포인트 퍼블릭 전환으로
 - 맥락: bastion 은 9-3 에서 지워지고 클러스터는 fully private 라, ingress 삭제 하나를 위해
   VPC CloudShell 에 재진입(홈 초기화 → kubectl 재설치·kubeconfig 재설정)해야 했다.

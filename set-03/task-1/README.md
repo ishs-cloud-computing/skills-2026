@@ -49,24 +49,21 @@ README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7·9·10 �
 ```powershell
 aws --version                          # 2.32.0 이상 (aws login 요건)
 
-# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행
-aws login --profile wsc2026            # region = ap-northeast-2
-aws configure list --profile wsc2026   # TYPE 열이 login (~/.aws/credentials 가 남아 있으면 그쪽이 이긴다)
+# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행 (default 프로파일)
+aws login              # region = ap-northeast-2
 
 # local .env.ps1 — 셸 재시작에도 재사용 (작업 규칙 6, .gitignore 등록됨)
 @'
-$env:AWS_PROFILE = "wsc2026"
 $env:AWS_DEFAULT_REGION = "ap-northeast-2"
 '@ | Set-Content .env.ps1
 . .\.env.ps1   # 새 터미널로 이어서 할 땐 set-03/task-1 에서 이 줄만 다시 실행
 aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root 확인
-# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login --profile wsc2026 재실행
+# root 가 아니면 ~/.aws/credentials 의 잔존 키가 login 크레덴셜을 이긴 것 — 그 파일을 지운다
+# 세션은 최대 12시간(15분마다 자동 갱신). ExpiredToken 이 뜨면 aws login 재실행
 
-# terraform·eksctl 이 login 프로파일을 못 읽으면(SDK 미지원) 아래를 ~/.aws/config 에 덧붙이고
-# $env:AWS_PROFILE 을 wsc2026-proc 으로 바꾼다. CLI 가 자격증명을 대신 넘겨준다.
-#   [profile wsc2026-proc]
-#   credential_process = aws configure export-credentials --profile wsc2026 --format process
-#   region = ap-northeast-2
+# terraform·eksctl 이 login 자격증명을 못 읽으면(SDK 미지원) 임시 크레덴셜을 env 로 직접 넘긴다.
+# aws configure export-credentials --format env-no-export |
+#   ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$k" $v }
 
 # 배포파일을 이 과제의 app/ 로 복사 (원본은 shared, 수정 금지)
 Copy-Item ..\..\shared\provided\task-1\* .\app\
@@ -154,7 +151,7 @@ $c | Set-Content cluster.rendered.yaml
 Select-String '\$\{' cluster.rendered.yaml
 
 # 셸 재시작 대비 — .env.ps1 통째로 재작성 (덮어쓰기라 중복 누적 없음, 작업 규칙 6)
-$keep = @('AWS_PROFILE','AWS_DEFAULT_REGION') + $vars
+$keep = @('AWS_DEFAULT_REGION') + $vars
 $keep | ForEach-Object { "`$env:$_ = `"$((Get-Item "env:$_").Value)`"" } | Set-Content ..\.env.ps1
 
 eksctl create cluster -f cluster.rendered.yaml   # 약 20분. 완료 시 자동 private 전환
@@ -347,7 +344,7 @@ tar xzf ..\_backup.tgz -C ..\_backup
 aws configure set default.region ap-northeast-2
 aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root
 # root 가 아니면 여기서 교정한다 (콘솔 로그아웃 없이)
-# aws login --remote --profile wsc2026 && export AWS_PROFILE=wsc2026
+# aws login --remote
 
 sudo curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo chmod +x /usr/local/bin/kubectl
 aws eks update-kubeconfig --name wsc2026-eks-cluster --region ap-northeast-2
