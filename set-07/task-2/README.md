@@ -6,7 +6,7 @@
 |------|------|------|-------------|------|
 | [module-1-nosql](module-1-nosql/) | NoSQL | ap-southeast-1 | DynamoDB(Streams·GSI) + Lambda + EC2 | CloudShell |
 | [module-2-cdn-function](module-2-cdn-function/) | CDN Function | us-east-1 | S3 + CloudFront Functions + KVS | CloudShell |
-| module-3 (미착수) | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | - |
+| [module-3-eks-scaling](module-3-eks-scaling/) | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | CloudShell |
 | module-4 (미착수) | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | - |
 
 ## 공통 워크플로
@@ -18,6 +18,14 @@
 cd module-<n>-<name>/terraform
 terraform init && terraform apply -auto-approve
 # 이후 모듈별 README 의 "배포 순서" 를 따른다.
+```
+
+EKS 모듈(3·4)은 클러스터가 각각 있으므로 **모듈 전용 터미널**에서 kubeconfig를 모듈 경로로 고정하고 시작한다
+(터미널 1개 = 클러스터 1개 — `use-context` 전환 실수로 엉뚱한 클러스터에 apply 하는 사고를 원천 차단):
+
+```powershell
+cd module-<n>-<name>
+$env:KUBECONFIG = "$PWD\kubeconfig"   # 이후 이 터미널의 eksctl·kubectl·helm 은 이 클러스터에만 붙는다
 ```
 
 공식 채점 스크립트는 `mark/`(mark1~4.sh)에, 제공 배포파일은 `provided/`에 있다. 제공 배포파일은 수정하지 않으며 각 모듈 terraform이 직접 참조한다.

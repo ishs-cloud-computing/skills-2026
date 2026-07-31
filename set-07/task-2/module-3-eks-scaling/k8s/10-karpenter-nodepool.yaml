@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Karpenter EC2NodeClass / NodePool (과제지 3-5)
+# - Pending Pod 발생 시 t3.small/t3.medium 노드를 자동 프로비저닝.
+# - taint dedicated=app: App(toleration 보유)과 DaemonSet 외 워크로드 진입 차단
+#   (과제지 "App, DaemonSet 을 제외한 워크로드가 실행되어선 안 됨" + 채점 3-5 taints>=1).
+# - 유휴/저활용 노드는 60초 후 반환 (채점 3-5: WhenEmptyOrUnderutilized 60s 정확 일치).
+# subnet: karpenter.sh/discovery 태그(terraform private 서브넷)로 디스커버리
+# securityGroup: 클러스터 SG(aws:eks:cluster-name 태그)로 디스커버리
+# role: terraform 이 만든 KarpenterNodeRole-skm-eks-cluster
+# Deployment 보다 먼저 apply 해 채점 전 상시 상태(앱 Pod 1개가 Karpenter 노드 위)를 만든다.
+# ---------------------------------------------------------------------------
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: skm-app-nodeclass
+spec:
+  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: "KarpenterNodeRole-skm-eks-cluster"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "skm-eks-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        aws:eks:cluster-name: "skm-eks-cluster"
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: skm-app-nodepool
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: skm-app-nodeclass
+      taints:
+        - key: dedicated
+          value: app
+          effect: NoSchedule
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        # 채점 3-5 가 sort 후 "t3.medium,t3.small" 정확 일치로 검사
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t3.small", "t3.medium"]
+      expireAfter: 720h
+  limits:
+    cpu: "20"
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 60s

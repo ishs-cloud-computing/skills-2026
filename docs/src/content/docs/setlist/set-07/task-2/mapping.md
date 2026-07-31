@@ -32,3 +32,17 @@ sidebar:
 | 2-6-A | 1.5 | weight 1.0→`/version-b/index.html`, 0.0→`/version-a/index.html` (test-function, KVS 실시간 반영) | `cloudfront/req-fn.js`(매 실행 KVS read, 하드코딩 없음) |
 
 주의: 2-2-A는 키 목록 **정확 일치**라 KVS에 여분 키를 넣으면 실패한다(`keys_exclusive`가 구조적으로 방지). 2-3-A는 distribution을 **Comment 값**(`skillsphone-cdn-ab-distribution`)으로 식별하므로 comment를 비우면 0점이다. 2-6-A는 채점 스크립트가 weight를 직접 변경 후 0.3으로 복원한다 — 채점 직후 plan에서 KVS drift가 보여도 복원 완료면 무시한다.
+
+## 모듈 3 — EKS Scaling (mark3.sh)
+
+| 항목 | 배점 | 검사 내용 | 구현 위치 |
+|------|------|-----------|-----------|
+| 3-1-A | 0.35 | 큐 URL `.../skm-order-queue` | `terraform/sqs.tf` |
+| 3-2-A | 0.75 | 클러스터 `skm-eks-cluster 1.35 ACTIVE`, NG `t3.medium 1 1 1`, 인스턴스 `tag:Name=skm-cluster-addon-ng-node` | `eksctl/cluster.yaml` (Name 태그는 `instanceName` 필드) |
+| 3-3-A | 1.0 | 앱 Pod의 노드에 `karpenter.sh/nodepool=skm-app-nodepool` 라벨, replicas 1·8080·500m/512Mi, env 3개 정렬 덤프 정확 일치 | `k8s/20-deployment.yaml` (nodeSelector+toleration) |
+| 3-4-A | 1.2 | `keda` ns에 keda-operator Pod, ScaledObject `1 5 aws-sqs-queue 5` | helm KEDA 2.20.1 + `k8s/30-keda-scaledobject.yaml` |
+| 3-5-A | 1.2 | kube-system에 karpenter Pod, NodePool `WhenEmptyOrUnderutilized 60s`·`t3.medium,t3.small`·taints ≥1, EC2NodeClass 존재 | helm Karpenter 1.14.0 + `k8s/10-karpenter-nodepool.yaml` |
+| 3-6-A/B | 1.5 | 메시지 100건 주입 → 2분 내 Ready Pod ≥5, Karpenter 노드 ≥2 | KEDA queueLength 5 + 용량 계산(500m×5 > 노드 1대 allocatable) |
+| 3-7-A/B | 1.5 | purge → 150초 내 Pod 1·노드 1 | ScaledObject scaleDown behavior 오버라이드 + consolidateAfter 60s |
+
+주의: 3-3-A는 env 전체를 sort 덤프해 **정확 일치**로 비교하므로 env를 하나라도 추가하면 실패한다. 3-2-A의 노드 Name 태그는 MNG `tags`가 아니라 eksctl `instanceName`으로만 인스턴스에 붙는다. 3-4·3-5·3-6 중 하나라도 틀리면 3-7은 채점되지 않는다. 채점 전 상시 상태는 Pod 1개·Karpenter 노드 1대·빈 큐다.

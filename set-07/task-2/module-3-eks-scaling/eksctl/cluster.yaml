@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ===========================================================================
+# eksctl Cluster Manifest — EKS Scaling (과제지 3-2)
+#
+# ${ACCOUNT_ID} ${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_C} 는 terraform output
+# 값으로 치환 후 사용한다 (README 런북 2단계 — PS7 .Replace() / bash envsubst).
+#
+#   eksctl create cluster -f cluster.rendered.yaml
+# ===========================================================================
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: skm-eks-cluster
+  region: ap-northeast-2
+  version: "1.35"
+  tags:
+    karpenter.sh/discovery: skm-eks-cluster
+
+# Auto Mode 명시적 비활성화: autoModeConfig 미지정 시 최신 eksctl 이 Auto Mode 를
+# 기본 활성화해 managedNodeGroups / 기본 addon 을 생성하지 않을 수 있다.
+# 본 과제는 관리형 노드그룹 + Karpenter/KEDA 설계이므로 고정한다.
+autoModeConfig:
+  enabled: false
+
+# Karpenter 노드 역할 access entry 내장: Karpenter 가 띄우는 노드는 Terraform 이 만든
+# KarpenterNodeRole 로 부팅되는데, eksctl 은 자신이 만들지 않은 이 역할에 access entry 를
+# 자동 생성하지 않는다. 누락 시 신규 노드가 인증 실패로 조인하지 못한다(채점 3-6).
+# API_AND_CONFIG_MAP: CloudShell 채점 주체가 클러스터 생성자와 다를 때
+# access entry 를 추가로 만들 수 있게 한다(README 런북 7단계 fallback).
+accessConfig:
+  authenticationMode: API_AND_CONFIG_MAP
+  accessEntries:
+    - principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/KarpenterNodeRole-skm-eks-cluster"
+      type: EC2_LINUX
+
+# ----- 기존(Terraform 생성) VPC / Private Subnet 재사용 -----
+# 채점(mark3.sh)이 일반 CloudShell 에서 kubectl 을 실행하므로 public 엔드포인트 필수.
+# 노드는 private 서브넷에서 NAT 아웃바운드 (Karpenter 디스커버리 태그 부착).
+vpc:
+  id: "${VPC_ID}"
+  subnets:
+    private:
+      skm-eks-sn-priv-a:
+        id: "${PRIV_SUBNET_A}"
+        az: ap-northeast-2a
+      skm-eks-sn-priv-c:
+        id: "${PRIV_SUBNET_C}"
+        az: ap-northeast-2c
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+# ----- OIDC + IRSA ServiceAccount -----
+# KEDA / Karpenter / order-processor 앱이 AWS 권한을 IRSA 로 사용하도록 SA 를 사전 생성.
+# helm 설치 시에는 serviceAccount.create=false 로 이 SA 를 재사용한다 (README 참조).
+# Karpenter SA 는 kube-system: 과제지 "Karpenter Controller 는 kube-system 에서 동작".
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: keda-operator
+        namespace: keda
+      attachPolicyARNs:
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/skm-keda-policy"
+    - metadata:
+        name: karpenter
+        namespace: kube-system
+      attachPolicyARNs:
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/skm-karpenter-policy"
+    - metadata:
+        name: order-processor
+        namespace: skillsmkt
+      attachPolicyARNs:
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/skm-app-sqs-policy"
+
+# ===========================================================================
+# Addon Managed Node Group (과제지 3-2)
+# - t3.medium, 1/1/1. taint 로 App 진입 차단 (과제지 "taint 를 통해 Addon NodeGroup
+#   에서 App 이 실행되지 않도록").
+# - taint 키는 CriticalAddonsOnly: CoreDNS(addon 기본 toleration)와 Karpenter
+#   chart(기본 toleration)가 무설정으로 스케줄되고, KEDA 만 helm 값으로 추가한다.
+# - instanceName: EC2 인스턴스 Name 태그(채점 3-2). MNG tags 는 인스턴스에 전파되지
+#   않으므로 tags 가 아닌 instanceName 을 써야 한다.
+# ===========================================================================
+managedNodeGroups:
+  - name: skm-cluster-addon-ng
+    amiFamily: AmazonLinux2023
+    instanceType: t3.medium
+    minSize: 1
+    maxSize: 1
+    desiredCapacity: 1
+    privateNetworking: true
+    instanceName: skm-cluster-addon-ng-node
+    labels:
+      role: addon
+    taints:
+      - key: CriticalAddonsOnly
+        value: "true"
+        effect: NoSchedule
+
+# ----- 필수 Addon (버전 미핀 — 작업 규칙 2: 최신 안정) -----
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy

@@ -1,84 +1,46 @@
----
-title: 배포 런북
-description: 7세트 2과제 모듈별 배포·채점·teardown 절차
-sidebar:
-  order: 2
----
+# Module 3 — EKS Scaling (ap-northeast-2)
 
-모듈은 서로 독립이라 순서 없이 배포한다. 본 PC 단계는 **PowerShell 7 기준**(대회 환경 Windows 11), 채점은 CloudShell(bash). 저장소 `set-07/task-2/` 각 모듈 README와 동일한 절차이며, 본 PC가 Linux면 각 모듈의 README.linux.md를 따른다.
+SQS 주문 큐 + EKS 1.35(tainted Addon NG) + ECR 이미지 앱 + KEDA(Pod 스케일링) + Karpenter(노드 스케일링). 채점은 CloudShell에서 `mark/mark3.sh` 실행.
+본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
 
-## 모듈 1 — NoSQL (ap-southeast-1)
+## 디렉토리 구조
 
-### 1) [본 PC·PowerShell] 배포
+```
+module-3-eks-scaling/
+├── terraform/
+│   ├── vpc.tf               # 자체 VPC + pub/priv 서브넷 + NAT (priv 에 karpenter.sh/discovery 태그)
+│   ├── sqs.tf               # skm-order-queue
+│   ├── ecr.tf               # skm-order-processor 저장소
+│   ├── iam.tf               # KEDA·앱·Karpenter 정책 + KarpenterNodeRole
+│   └── {versions,variables,data,outputs}.tf
+├── eksctl/
+│   └── cluster.yaml         # skm-eks-cluster 1.35 + IRSA SA 3개 + tainted addon NG
+├── k8s/                     # 번호 순 apply
+│   ├── 00-namespace.yaml
+│   ├── 10-karpenter-nodepool.yaml
+│   ├── 20-deployment.yaml
+│   └── 30-keda-scaledobject.yaml
+└── README.md
+
+# 앱 소스: task-2/provided/module-3/{app.py,Dockerfile,requirements.txt} (제공 원본, 수정 금지)
+# 채점: task-2/mark/mark3.sh (CloudShell, ap-northeast-2)
+```
+
+## 배포 순서
+
+본 PC 단계는 이 모듈 **전용 PowerShell 탭**에서 진행하고, 시작 시 kubeconfig를 모듈 경로로 고정한다.
+클러스터가 2개인 과제이므로(module-4: ap-northeast-1) 터미널 1개 = 클러스터 1개 — 이 터미널의 eksctl·kubectl·helm은 skm-eks-cluster에만 붙는다.
 
 ```powershell
-cd set-07/task-2/module-1-nosql/terraform
-terraform init
-terraform apply -auto-approve
-```
-
-### 2) [본 PC·PowerShell] 앱 기동 대기 (부팅 + pip 설치 ~2-3분)
-
-```powershell
-$URL = terraform output -raw healthcheck_url
-while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 $URL) -ne "200") { Start-Sleep 10 }
-```
-
-### 3) [CloudShell] 셀프 채점 (1-6-A 는 sleep 30×2 로 약 70초 소요)
-
-```bash
-bash mark/mark1.sh
-```
-
-### Teardown [본 PC·PowerShell]
-
-```powershell
-cd set-07/task-2/module-1-nosql/terraform
-terraform destroy -auto-approve
-```
-
-## 모듈 2 — CDN Function (us-east-1)
-
-### 1) [본 PC·PowerShell] 배포 (distribution 배포 대기 포함 ~5-7분)
-
-```powershell
-cd set-07/task-2/module-2-cdn-function/terraform
-terraform init
-terraform apply -auto-approve
-```
-
-### 2) [본 PC·PowerShell] A/B 동작 검증
-
-```powershell
-$URL = terraform output -raw landing_url
-# 쿠키 강제: 해당 버전 본문 + Set-Cookie 없음이 기대 출력
-curl.exe -si -b "x-sp-ab=a" $URL | Select-String "version-badge|set-cookie"
-curl.exe -si -b "x-sp-ab=b" $URL | Select-String "version-badge|set-cookie"
-# 첫 방문: Set-Cookie x-sp-ab=<a|b>; Path=/; Max-Age=86400 + 해당 버전 본문이 기대 출력
-curl.exe -si $URL | Select-String "version-badge|set-cookie"
-```
-
-### 3) [CloudShell] 셀프 채점 (2-6-A 는 KVS 전파 대기로 최대 ~2분)
-
-```bash
-bash mark/mark2.sh
-```
-
-### Teardown [본 PC·PowerShell]
-
-```powershell
-cd set-07/task-2/module-2-cdn-function/terraform
-terraform destroy -auto-approve
-```
-
-## 모듈 3 — EKS Scaling (ap-northeast-2)
-
-본 PC 단계는 이 모듈 **전용 PowerShell 탭**에서 진행하며, 시작 시 kubeconfig를 모듈 경로로 고정한다
-(클러스터 2개 과제 — 터미널 1개 = 클러스터 1개). 재부팅 후엔 같은 두 줄 + `aws eks update-kubeconfig --kubeconfig $env:KUBECONFIG`로 복구.
-
-```powershell
-cd set-07/task-2/module-3-eks-scaling
+cd module-3-eks-scaling
 $env:KUBECONFIG = "$PWD\kubeconfig"
+```
+
+재부팅·새 터미널에서 복구(클러스터 생성 이후):
+
+```powershell
+$env:KUBECONFIG = "$PWD\kubeconfig"
+aws eks update-kubeconfig --name skm-eks-cluster --region ap-northeast-2 --kubeconfig $env:KUBECONFIG
 ```
 
 ### 1) [본 PC·PowerShell] Terraform (~3분)
@@ -89,7 +51,7 @@ terraform init
 terraform apply -auto-approve
 ```
 
-### 2) [본 PC·PowerShell] EKS 클러스터 생성 (~15분 — 3단계와 병렬)
+### 2) [본 PC·PowerShell] EKS 클러스터 생성 (~15분 — 3단계와 병렬 진행)
 
 ```powershell
 cd ../eksctl
@@ -103,12 +65,12 @@ $Y = $Y.Replace('${ACCOUNT_ID}', $ACCOUNT_ID).Replace('${VPC_ID}', $VPC_ID)
 $Y = $Y.Replace('${PRIV_SUBNET_A}', $SN.'skm-eks-sn-priv-a').Replace('${PRIV_SUBNET_C}', $SN.'skm-eks-sn-priv-c')
 $Y | Set-Content cluster.rendered.yaml
 if (Select-String -Pattern '\$\{' cluster.rendered.yaml) { throw "미치환 값 존재" }
-eksctl create cluster -f cluster.rendered.yaml
+eksctl create cluster -f cluster.rendered.yaml   # kubeconfig 는 $env:KUBECONFIG(모듈 경로)에 기록됨
 ```
 
 ### 3) [CloudShell — 2단계 대기 중 병렬] 이미지 빌드 & ECR push
 
-`provided/module-3/{app.py,Dockerfile,requirements.txt}` 업로드 후:
+`provided/module-3/{app.py,Dockerfile,requirements.txt}` 를 CloudShell 에 업로드(Actions → Upload file) 후:
 
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -126,7 +88,7 @@ helm repo update
 helm upgrade --install keda kedacore/keda -n keda --create-namespace --version 2.20.1 `
   --set serviceAccount.operator.create=false --set serviceAccount.operator.name=keda-operator `
   --set-json 'tolerations=[{"key":"CriticalAddonsOnly","operator":"Exists"}]'
-kubectl get pods -n keda    # 3개 모두 Running 확인
+kubectl get pods -n keda    # operator·metrics·webhooks 3개 모두 Running 확인
 ```
 
 ### 5) [본 PC·PowerShell] Karpenter 설치 (kube-system)
@@ -155,24 +117,53 @@ Get-ChildItem *.yaml | ForEach-Object {
 }
 if (Select-String -Pattern '\$\{' rendered\*.yaml) { throw "미치환 값 존재" }
 kubectl apply -f rendered/    # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
-kubectl get pod -n skillsmkt -o wide -w    # Karpenter 노드에서 Running 까지 ~2분
 ```
 
-### 7) [CloudShell] 접속 확인 + 셀프 채점 (3-6·3-7 스케일 테스트로 ~5분)
+앱 Pod 가 Karpenter 노드에서 Running 될 때까지 대기 (노드 프로비저닝 ~2분):
+
+```powershell
+kubectl get pod -n skillsmkt -o wide -w
+```
+
+### 7) [CloudShell] 클러스터 접속 확인
 
 ```bash
 aws eks update-kubeconfig --name skm-eks-cluster --region ap-northeast-2
-kubectl get nodes    # Unauthorized 시 모듈 README 7단계 access entry fallback
-bash mark/mark3.sh   # 사전 상태: Pod 1개·Karpenter 노드 1대·빈 큐
+kubectl get nodes
 ```
 
-### Teardown [본 PC·PowerShell]
+`Unauthorized` 가 나오면(채점 주체 ≠ 클러스터 생성자) CloudShell 의 IAM ARN 을 확인 후 본 PC 에서 access entry 를 추가한다:
+
+```bash
+aws sts get-caller-identity --query Arn --output text   # CloudShell 에서 ARN 확인
+```
 
 ```powershell
-cd set-07/task-2/module-3-eks-scaling/k8s
+aws eks create-access-entry --cluster-name skm-eks-cluster --principal-arn <CLOUDSHELL_IAM_ARN> --region ap-northeast-2
+aws eks associate-access-policy --cluster-name skm-eks-cluster --principal-arn <CLOUDSHELL_IAM_ARN> `
+  --policy-arn arn:aws:eks:aws:cluster-access-policy/AmazonEKSClusterAdminPolicy `
+  --access-scope type=cluster --region ap-northeast-2
+```
+
+### 8) [CloudShell] 셀프 채점 (3-6·3-7 스케일 테스트로 ~5분 소요)
+
+사전 상태 확인: 앱 Pod 1개, Karpenter 노드 1대, 큐 비어 있음.
+
+```bash
+kubectl get deploy order-processor -n skillsmkt
+kubectl get nodes -l karpenter.sh/nodepool=skm-app-nodepool
+bash mark/mark3.sh
+```
+
+## Teardown
+
+### [본 PC·PowerShell]
+
+```powershell
+cd k8s
 kubectl delete -f rendered/30-keda-scaledobject.yaml
 kubectl delete -f rendered/20-deployment.yaml
-kubectl delete -f rendered/10-karpenter-nodepool.yaml   # Karpenter 노드 종료 대기 ~2분
+kubectl delete -f rendered/10-karpenter-nodepool.yaml   # Karpenter 노드 드레인·종료 대기 (~2분)
 cd ../eksctl
 eksctl delete cluster -f cluster.rendered.yaml
 cd ../terraform

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Namespace (과제지 3-3: skillsmkt 에 배포)
+# eksctl IRSA(order-processor SA)가 먼저 생성해 두지만 apply 는 idempotent.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: skillsmkt

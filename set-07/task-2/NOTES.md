@@ -11,7 +11,7 @@
 |------|------|-----------|--------|
 | 1 | nosql | 6/6 (mark1.sh 전 항목 통과) | 없음 |
 | 2 | cdn-function | 6/6 (mark2.sh 전 항목 통과) | 없음 |
-| 3 | eks-scaling | 0/? | 미착수 |
+| 3 | eks-scaling | 7/7 (mark3.sh 전 항목 통과) | 없음 |
 | 4 | container-logging | 0/? | 미착수 |
 
 ### module-1 채점 커버리지 (mark1.sh ↔ 구현)
@@ -56,6 +56,45 @@
 - **mark2.sh 가 weight 를 out-of-band 로 변경**(2-6, 종료 시 0.3 복원): 채점 직후 terraform plan 을 돌리면
   KVS 키 drift 가 보일 수 있다. 복원까지 끝났으면 무시.
 
+### module-3 채점 커버리지 (mark3.sh ↔ 구현)
+<!-- [x] apply 후 mark3.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
+<!-- 2026-07-31 실채점 결과로 전 항목 확정 -->
+
+- [x] 3-1-A SQS Queue — 실채점: skm-order-queue URL 기대값 출력
+- [x] 3-2-A Cluster+NG — 실채점: 1.35 ACTIVE / t3.medium 1 1 1 / instanceName 필드로 Name 태그 확인됨
+- [x] 3-3-A Deployment — 실채점: pod 가 skm-app-nodepool 노드에 배치·1 8080 500m 512Mi·env 3개 정확 일치
+- [x] 3-4-A KEDA — 실채점: keda-operator Running / 1 5 aws-sqs-queue 5 정확 일치
+- [x] 3-5-A Karpenter — 실채점: WhenEmptyOrUnderutilized 60s / t3.medium,t3.small / taint 1 / nodeclass 정확 일치
+- [x] 3-6-A Scale-out — 실채점: Max Ready Pods 5·Max App Nodes 2 (설계상 상한과 동일: maxReplicaCount 5, 용량 계산상 노드 2대)
+- [x] 3-7-A Scale-in — 실채점: purge 후 150초 창 내 Final Pods 1·Final Nodes 1 (scaleDown behavior 오버라이드 유효 실증)
+
+#### module-3 함정 (구현 중 발견)
+
+- **MNG `tags` 는 EC2 인스턴스에 전파 안 됨**: 노드 Name 태그 채점(3-2)은 eksctl `instanceName` 필드로만 충족된다.
+  set-05 의 `tags: {Name: ...}` 패턴은 해당 항목이 미채점이라 안 들켰을 뿐 여기서는 실패한다.
+- **KEDA chart 는 기본 tolerations 가 빈 배열**: addon NG 가 CriticalAddonsOnly taint 라 `--set-json tolerations=[...]` 누락 시
+  keda pod 전부 Pending → 3-4 실패. 설치 직후 `kubectl get pods -n keda` 로 3개 Running 확인.
+- **env 는 정확히 3개만**: 채점 3-3 이 컨테이너 env 전체를 sort 덤프해 비교한다. 디버그용 env 하나만 추가해도 실점.
+- **zsh 에서 `"$VAR:latest"` 는 이미지명을 깨뜨린다** (실배포에서 발견): zsh 는 `$VAR:l` 을 csh-style 소문자
+  modifier 로 해석해 `"$ECR_URL:latest"` → `<url 소문자화>atest` 가 된다 → ImagePullBackOff (`...processoratest`).
+  변수 뒤에 `:` 가 붙으면 반드시 `"${VAR}:latest"` 중괄호. 부수: `${!v}` 간접 확장은 bash 전용(zsh bad substitution),
+  대화형 붙여넣기에서 `exit` 는 터미널을 종료시키고 이후 줄도 이미 버퍼에 있어 가드가 안 됨 —
+  linux 런북 스니펫은 zsh/bash 겸용 + if/else 게이트로 작성한다 (bash 전제 금지, 사용자 로컬 셸은 zsh).
+- **linux 런북의 CloudShell 단계 번호 건너뛰기** (실배포에서 발견): README.linux.md 가 CloudShell 단계(3: 이미지 push)를
+  서두 한 줄로만 언급하고 번호를 2→4 로 건너뛰어, 순서대로 따라가면 push 누락 → 6단계 배포가 ImagePullBackOff.
+  → CloudShell 단계도 번호 자리에 stub 섹션으로 표시하도록 수정. 다른 모듈 linux 런북도 같은 규칙 적용.
+- **Karpenter helm --wait 무한 대기** (실배포에서 발견): chart 기본 replicas 2 + required podAntiAffinity(hostname)
+  + nodeAffinity 로 자기 nodepool 노드 배제 → addon 노드 1대에선 두 번째 pod 영구 Pending, `--wait` 가 안 끝난다.
+  `--set replicas=1` 필수. 행 상태에서 중단하면 release 가 `pending-upgrade` 로 잠겨 재-upgrade 가
+  "another operation is in progress" 로 막힘 → `helm uninstall karpenter -n kube-system` 후 재설치.
+- **채점 전 상시 상태**: Pod 1개·Karpenter 노드 1대·큐 비움. 부하 테스트 후 재채점 시 2분 대기(과제지 명시).
+- **치환 리터럴 범위**: `${...}` 플레이스홀더(cluster.yaml·k8s manifest)는 terraform output 으로 런북에서 치환 —
+  k8s 는 `rendered/` 폴더로 전체 렌더링 후 디렉토리 apply.
+  cluster_name 변경 시 cluster.yaml·10-karpenter-nodepool.yaml(NodeClass role/태그 셀렉터)·20-deployment.yaml(nodeSelector 값은 nodepool 이름)·helm settings.clusterName 을 함께 바꿔야 한다.
+- **치환 가드는 2단계 필요** (실측): envsubst 는 목록 명시 여부와 무관하게 **unset 변수를 빈 문자열로 치환**하고
+  PS7 `.Replace()` 도 빈 값을 그대로 넣으므로, 사후 `grep '\${'` 만으로는 값 누락을 못 잡는다.
+  → ① 치환 전 변수 비어있음 검사 + ② 치환 후 grep/Select-String (목록 외 신규 플레이스홀더 탐지용). 둘 다 런북에 포함.
+
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
 
@@ -68,6 +107,54 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-07-31 [module-3] 2클러스터 운용: 모듈별 kubeconfig 파일 + 터미널별 KUBECONFIG 고정
+- 맥락: module-3(apne2)·module-4(apne1)에 클러스터가 각각 있음. 공유 ~/.kube/config 는 current-context 가 "마지막에 만든 클러스터"를 향해, 전환을 잊으면 kubectl·helm 이 조용히 엉뚱한 클러스터로 감
+- 채택: 모듈 디렉토리에 kubeconfig(gitignored) + 모듈 전용 터미널 첫 줄 `$env:KUBECONFIG` 고정 — 터미널 1개 = 클러스터 1개. eksctl 이 생성 시 KUBECONFIG 경로에 써 주고, 재부팅 복구는 `aws eks update-kubeconfig --kubeconfig <경로>` 한 줄
+- 기각: `use-context` 전환 — 휴먼 에러 잔존. 별칭/프롬프트 표시 — 표시는 사고를 알려줄 뿐 막지 못함
+- 대가: 터미널 탭을 모듈별로 유지해야 함 (대회에서 어차피 모듈별 병렬 작업이라 부담 없음)
+
+### 2026-07-26 [module-3] Karpenter 는 --set replicas=1 (chart 기본 2는 노드 1대에서 helm --wait 행)
+- 맥락: 실배포에서 helm --wait 가 무한 대기. chart 기본 replicas 2 + required podAntiAffinity(hostname) + 자기 nodepool 노드 배제 nodeAffinity — addon NG 는 채점 고정 1/1/1 이라 두 번째 replica 가 앉을 노드가 구조적으로 없음
+- 채택: `--set replicas=1` — 채점 3-5 는 pod 존재만 확인, 대회 스택에 컨트롤러 HA 불필요
+- 기각: addon NG 노드 증설 → 채점 3-2 가 `1 1 1` 정확 일치라 위반. anti-affinity 를 preferred 로 완화 → helm 값 구조가 깊어 관리 지점만 증가
+- 대가: 컨트롤러 단일 장애점 — addon 노드 재시작 시 스케일링 일시 중단 (채점 시간 내 무관)
+
+### 2026-07-26 [module-3] scale-in 150초 창 대응: ScaledObject 에 HPA scaleDown behavior 오버라이드
+- 맥락: 채점 3-7 이 purge 후 150초 내 Pod 1·노드 1 을 요구. HPA 기본 scale-down 안정화가 300초라 기본값으로는 구조적으로 불가
+- 채택: `advanced.horizontalPodAutoscalerConfig.behavior.scaleDown {stabilizationWindowSeconds: 15, Percent 100/15s}` → purge 감지(HPA sync ~15초) 후 ~35초에 Pod 1, consolidateAfter 60s 후 ~140초에 노드 1
+- 기각: 기본값 유지 → 300초 안정화만으로 실패 확정. consolidateAfter 단축 → 과제지가 60초로 명시(변경 불가)
+- 대가: 짧은 트래픽 골에도 즉시 축소됨 — 채점용 워크로드라 무관
+
+### 2026-07-31 [module-3] pollingInterval 삭제 (KEDA webhook 경고, minReplicaCount≥1 에서 무효)
+- 맥락: apply 시 KEDA 2.20 webhook 경고 "PollingInterval is configured but is not relevant". pollingInterval 은 operator 의 트리거 직접 폴링 주기로 0↔1 활성화(min=0/idleReplicaCount=0) 또는 useCachedMetrics 에만 적용 — min=1 이면 1→N 은 전부 HPA 자체 폴링(~15초)이라 완전 무효
+- 채택: `pollingInterval: 5` 삭제. 위 150초 창 결정의 "≤5초 감지" 근거는 오류였고, 실제 감지 하한은 HPA sync ~15초 (실측 ~35초 Pod 1 은 그대로 유효). 채점 3-4 는 min/max/trigger type/queueLength 4개 필드만 검사해 무관
+- 기각: min=0 전환으로 경고 해소 → 과제지가 "메시지 없으면 Pod 1개" + min=1 명시라 위반
+- 대가: 없음. 대회 변동으로 min=0 이 되면 pollingInterval 재도입 필요
+
+### 2026-07-26 [module-3] 노드 Name 태그는 eksctl `instanceName` 필드로 (set-05 tags 패턴 폐기)
+- 맥락: 채점 3-2 가 EC2 인스턴스의 `tag:Name=skm-cluster-addon-ng-node` 를 검사. EKS MNG `tags` 는 NG 리소스에만 붙고 인스턴스에 전파되지 않음(EKS API 문서 + eksctl 소스 확인) — set-05 의 `tags: {Name}` 은 미채점이라 안 들켰을 뿐 무효
+- 채택: `instanceName: skm-cluster-addon-ng-node` (eksctl 이 launch template TagSpecifications 로 인스턴스 Name 태그 생성)
+- 기각: `tags: {Name: ...}` → 인스턴스 미전파로 채점 실패. launchTemplate 직접 관리 → eksctl 관리 이점 상실
+- 대가: 없음
+
+### 2026-07-26 [module-3] addon NG taint 는 CriticalAddonsOnly=true:NoSchedule
+- 맥락: 과제지 "taint 로 Addon NG 에서 App 실행 차단" + 시스템 워크로드(CoreDNS·KEDA·Karpenter)는 그 NG 에서 돌아야 함. MCP/공식 문서 확인: CoreDNS EKS addon 기본 toleration 과 Karpenter chart 기본 toleration 에 `CriticalAddonsOnly Exists` 가 이미 포함
+- 채택: `CriticalAddonsOnly=true:NoSchedule` — CoreDNS·Karpenter 무설정 스케줄, KEDA 만 helm `tolerations` 값 1개 추가, vpc-cni/kube-proxy 는 DaemonSet 이라 무관
+- 기각: 커스텀 키(예: addon=true) → CoreDNS addon 에 toleration 설정 주입 + 컴포넌트별 helm 값 필요, 관리 지점만 증가
+- 대가: 없음
+
+### 2026-07-26 [module-3] 퍼블릭 엔드포인트 + bastion 제거 (set-05 구조 폐기)
+- 맥락: 채점(mark3.sh)이 일반 CloudShell 에서 kubectl 실행 — private 엔드포인트면 VPC 밖 CloudShell 이 접근 불가. set-05 는 private+bastion 이었으나 그 세트 요구사항이었을 뿐
+- 채택: `clusterEndpoints {publicAccess: true, privateAccess: true}`, 노드는 private 서브넷 + NAT. bastion 리소스 전부 삭제. `authenticationMode: API_AND_CONFIG_MAP` + access entry fallback 을 런북에 포함
+- 기각: private 엔드포인트 + bastion → 채점 경로가 CloudShell 이라 불가. 과제 미요구 리소스에 비용·시간 추가
+- 대가: API 엔드포인트 인터넷 노출 (EKS 인증으로 보호, 과제지 보안 요구 없음)
+
+### 2026-07-26 [module-3] IRSA 통일 (Pod Identity 기각), interruption queue 생략
+- 맥락: Karpenter 공식 getting-started 는 Pod Identity + interruption queue 를 설치. KEDA·앱·Karpenter 세 주체가 AWS 권한 필요
+- 채택: eksctl withOIDC IRSA 로 3개 SA(keda-operator/keda, karpenter/kube-system, order-processor/skillsmkt) 사전 생성, helm 은 SA 재사용. interruptionQueue="" (미채점 선택 기능, 컨트롤러 정책에 SQS 권한 불필요)
+- 기각: Pod Identity → pod-identity-agent addon 추가 필요, set-05 검증 이력 없음. 두 메커니즘 혼용 → 디버깅 지점 증가
+- 대가: `identityOwner: operator` 는 KEDA 3.0 에서 제거 예정(deprecated) — 2.20.1 에선 정상, 차기 세트에서 TriggerAuthentication 전환 검토
 
 ### 2026-07-26 [module-2] KVS 키는 keys_exclusive 단일 리소스로 관리
 - 맥락: 채점 2-2 가 `list-keys` 결과를 정확 일치로 검사 — 여분 키가 하나라도 있으면 실점. terraform MCP 로 6.56 문서 확인

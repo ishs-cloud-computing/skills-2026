@@ -16,7 +16,7 @@ sidebar:
 |------|------|------|-------------|------|
 | 1 | NoSQL | ap-southeast-1 | DynamoDB(Streams·GSI) + Lambda + EC2 | 구현 완료 |
 | 2 | CDN Function | us-east-1 | S3 + CloudFront Functions + KVS | 구현 완료 |
-| 3 | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | 미착수 |
+| 3 | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | 구현 완료 (실채점 전) |
 | 4 | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | 미착수 |
 
 ## 모듈 1 — NoSQL 한눈에
@@ -35,3 +35,13 @@ SkillsPhone 랜딩 페이지의 엣지 A/B 테스팅. Terraform 단일 apply로 
 - **KeyValueStore**: 노출 비율(`weight=0.3`)과 버전별 경로를 보관 — 비율 변경이 코드 재배포 없이 반영되는 지점
 - **CloudFront Functions**(js-2.0, LIVE): viewer-request가 쿠키/무작위로 버전을 배정해 URI 재작성, viewer-response가 첫 배정에만 `x-sp-ab` 쿠키 발급
 - **Distribution**: redirect-to-https, 커스텀 캐시 정책(쿠키 `x-sp-ab` 캐시 키 포함, TTL 0/300/3600) + 커스텀 Security Header 정책
+
+## 모듈 3 — EKS Scaling 한눈에
+
+SkillsMarket 주문 처리의 큐 기반 오토스케일링. Terraform + eksctl + helm + kubectl 순서로 쌓는다.
+
+- **SQS**: 주문 큐 `skm-order-queue` — KEDA 스케일링의 트리거이자 지급 앱(Consumer)의 입력
+- **EKS**: `skm-eks-cluster` 1.35. Addon NodeGroup(t3.medium 1대 고정)은 `CriticalAddonsOnly` taint로 시스템 컴포넌트 전용
+- **App**: 지급 Flask SQS Consumer를 CloudShell에서 빌드해 ECR로, `order-processor` Deployment(1 replica, 500m/512Mi)는 Karpenter 노드에서만 구동
+- **KEDA**(ns `keda`): 메시지 5건당 Pod 1개, 1~5 replica — 큐가 비면 1개로 축소
+- **Karpenter**(kube-system): Pending Pod 감지 시 t3.small/medium 노드 자동 증설, 유휴 60초 후 반환
