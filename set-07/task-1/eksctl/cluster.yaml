@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ===========================================================================
 # eksctl Cluster Manifest (요구사항 8)
 # 적용: terraform output 값을 env 로 export → envsubst 로 치환해 적용한다.

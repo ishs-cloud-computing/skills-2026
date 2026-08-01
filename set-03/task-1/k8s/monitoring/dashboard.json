@@ -62,7 +62,7 @@
     },
     {
       "type": "timeseries",
-      "title": "All Node CPU",
+      "title": "Node CPU (%)",
       "id": 2,
       "datasource": {
         "type": "prometheus",
@@ -70,7 +70,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
+        "w": 12,
         "x": 0,
         "y": 1
       },
@@ -118,7 +118,7 @@
     },
     {
       "type": "timeseries",
-      "title": "All Node Memory",
+      "title": "Node Memory (%)",
       "id": 3,
       "datasource": {
         "type": "prometheus",
@@ -126,8 +126,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 9,
+        "w": 12,
+        "x": 12,
         "y": 1
       },
       "fieldConfig": {
@@ -167,24 +167,24 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg by (nodename) ((100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * on(instance) group_left(nodename) node_uname_info) * on(nodename) group_left() label_replace(kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\"}, \"nodename\", \"$1\", \"node\", \"(.*)\")",
-          "legendFormat": "{{nodename}}"
+          "expr": "(100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * on(instance) group_left(nodename) node_uname_info * on(nodename) group_left() label_replace(kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\"}, \"nodename\", \"$1\", \"node\", \"(.*)\")",
+          "legendFormat": "{{instance}}"
         }
       ]
     },
     {
       "type": "stat",
-      "title": "All Available Nodes",
+      "title": "Available Nodes",
       "id": 4,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 1
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -202,8 +202,8 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
+        "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -217,8 +217,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(kube_node_status_condition{condition=\"Ready\", status=\"true\"} * on(node) group_left() kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\"})",
-          "legendFormat": "All Available Nodes"
+          "expr": "sum by (label_eks_amazonaws_com_nodegroup) (kube_node_status_condition{condition=\"Ready\", status=\"true\"} * on(node) group_left(label_eks_amazonaws_com_nodegroup) kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\"})",
+          "legendFormat": "{{label_eks_amazonaws_com_nodegroup}}"
         }
       ]
     },
@@ -231,13 +231,13 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 13
       },
       "panels": []
     },
     {
       "type": "timeseries",
-      "title": "All Pod CPU",
+      "title": "Pod CPU",
       "id": 6,
       "datasource": {
         "type": "prometheus",
@@ -245,34 +245,21 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 7,
+        "w": 12,
         "x": 0,
-        "y": 10
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         },
         "overrides": []
@@ -284,14 +271,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\", image!=\"\", namespace=~\"$namespace\"}[2m])) / sum by (namespace, pod) (kube_pod_container_resource_limits{resource=\"cpu\", namespace=~\"$namespace\"})",
-          "legendFormat": "{{namespace}}/{{pod}}"
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{container!=\"\", image!=\"\", namespace=~\"$namespace\"}[2m]))",
+          "legendFormat": "{{pod}}"
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "All Pod Memory",
+      "title": "Pod Memory",
       "id": 7,
       "datasource": {
         "type": "prometheus",
@@ -299,34 +286,21 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 7,
-        "x": 7,
-        "y": 10
+        "w": 12,
+        "x": 12,
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "bytes",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         },
         "overrides": []
@@ -338,24 +312,24 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\", image!=\"\", namespace=~\"$namespace\"}) / sum by (namespace, pod) (kube_pod_container_resource_limits{resource=\"memory\", namespace=~\"$namespace\"})",
-          "legendFormat": "{{namespace}}/{{pod}}"
+          "expr": "sum by (pod) (container_memory_working_set_bytes{container!=\"\", image!=\"\", namespace=~\"$namespace\"})",
+          "legendFormat": "{{pod}}"
         }
       ]
     },
     {
       "type": "stat",
-      "title": "All Pending Pods",
+      "title": "Pending Pods",
       "id": 8,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 5,
-        "x": 14,
-        "y": 10
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 22
       },
       "fieldConfig": {
         "defaults": {
@@ -373,8 +347,8 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
+        "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -389,23 +363,23 @@
             "uid": "prometheus"
           },
           "expr": "sum(kube_pod_status_phase{phase=\"Pending\", namespace=~\"$namespace\"}) or vector(0)",
-          "legendFormat": "All Pending Pods"
+          "legendFormat": "Pending Pods"
         }
       ]
     },
     {
       "type": "stat",
-      "title": "All Pod restarts",
+      "title": "Pod Restarts",
       "id": 9,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 5,
-        "x": 19,
-        "y": 10
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 22
       },
       "fieldConfig": {
         "defaults": {
@@ -427,8 +401,8 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
+        "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -442,8 +416,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(kube_pod_container_status_restarts_total{namespace=~\"$namespace\"}) or vector(0)",
-          "legendFormat": "All Pod restarts"
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
+          "legendFormat": "{{pod}}"
         }
       ]
     },
@@ -456,7 +430,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 27
       },
       "panels": []
     },
@@ -470,34 +444,21 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
+        "w": 12,
         "x": 0,
-        "y": 19
+        "y": 28
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         },
         "overrides": []
@@ -509,7 +470,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * sum by (pod) (rate(container_cpu_usage_seconds_total{container!=\"\", image!=\"\", namespace=\"wsc2026\", pod=~\"wsc2026-book-deploy-.*\"}[2m])) / sum by (pod) (kube_pod_container_resource_limits{resource=\"cpu\", namespace=\"wsc2026\", pod=~\"wsc2026-book-deploy-.*\"})",
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{container!=\"\", image!=\"\", namespace=\"wsc2026\"}[2m]))",
           "legendFormat": "{{pod}}"
         }
       ]
@@ -524,34 +485,21 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
-        "x": 6,
-        "y": 19
+        "w": 12,
+        "x": 12,
+        "y": 28
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "bytes",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         },
         "overrides": []
@@ -563,7 +511,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * sum by (pod) (container_memory_working_set_bytes{container!=\"\", image!=\"\", namespace=\"wsc2026\", pod=~\"wsc2026-book-deploy-.*\"}) / sum by (pod) (kube_pod_container_resource_limits{resource=\"memory\", namespace=\"wsc2026\", pod=~\"wsc2026-book-deploy-.*\"})",
+          "expr": "sum by (pod) (container_memory_working_set_bytes{container!=\"\", image!=\"\", namespace=\"wsc2026\"})",
           "legendFormat": "{{pod}}"
         }
       ]
@@ -577,10 +525,10 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 12,
-        "y": 19
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -598,8 +546,8 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
+        "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -613,24 +561,24 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(kube_pod_status_phase{phase=\"Running\", namespace=\"wsc2026\", pod=~\"wsc2026-book-deploy-.*\"}) or vector(0)",
+          "expr": "sum(kube_pod_status_phase{phase=\"Running\", namespace=\"wsc2026\"}) or vector(0)",
           "legendFormat": "App Running"
         }
       ]
     },
     {
       "type": "stat",
-      "title": "App restarts",
+      "title": "App Restarts",
       "id": 14,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 16,
-        "y": 19
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -652,8 +600,8 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
+        "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -667,8 +615,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(kube_pod_container_status_restarts_total{namespace=\"wsc2026\", pod=~\"wsc2026-book-deploy-.*\"}) or vector(0)",
-          "legendFormat": "App restarts"
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"wsc2026\"})",
+          "legendFormat": "{{pod}}"
         }
       ]
     },
@@ -681,10 +629,10 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
-        "x": 20,
-        "y": 19
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -702,8 +650,8 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
+        "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -717,7 +665,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(kube_pod_status_phase{phase=\"Pending\", namespace=\"wsc2026\", pod=~\"wsc2026-book-deploy-.*\"}) or vector(0)",
+          "expr": "sum(kube_pod_status_phase{phase=\"Pending\", namespace=\"wsc2026\"}) or vector(0)",
           "legendFormat": "App Pending"
         }
       ]
@@ -731,13 +679,13 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 40
       },
       "panels": []
     },
     {
       "type": "timeseries",
-      "title": "App Request Count",
+      "title": "Request Count",
       "id": 17,
       "datasource": {
         "type": "prometheus",
@@ -747,7 +695,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 28
+        "y": 41
       },
       "fieldConfig": {
         "defaults": {
@@ -760,11 +708,6 @@
                 "value": null
               }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         },
         "overrides": []
@@ -776,14 +719,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (method, path, status) (increase(log_metric_counter_wsc2026_requests_total[1m]))",
-          "legendFormat": "{{method}} {{path}} {{status}}"
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total[1m]))",
+          "legendFormat": "Requests/min"
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "App Response Time",
+      "title": "Response Time",
       "id": 18,
       "datasource": {
         "type": "prometheus",
@@ -793,7 +736,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 28
+        "y": 41
       },
       "fieldConfig": {
         "defaults": {
@@ -806,11 +749,6 @@
                 "value": null
               }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         },
         "overrides": []
@@ -823,23 +761,23 @@
             "uid": "prometheus"
           },
           "expr": "sum(rate(log_metric_histogram_wsc2026_request_duration_seconds_sum[5m])) / sum(rate(log_metric_histogram_wsc2026_request_duration_seconds_count[5m]))",
-          "legendFormat": "avg"
+          "legendFormat": "Avg Response Time"
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "App Status Code",
+      "title": "Status Codes",
       "id": 19,
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 28
+        "y": 41
       },
       "fieldConfig": {
         "defaults": {
@@ -852,11 +790,6 @@
                 "value": null
               }
             ]
-          },
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
           }
         },
         "overrides": []
@@ -868,24 +801,80 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status) (increase(log_metric_counter_wsc2026_requests_total[1m]))",
-          "legendFormat": "{{status}}"
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"2..\"}[1m]))",
+          "legendFormat": "2XX"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"4..\"}[1m]))",
+          "legendFormat": "4XX"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"5..\"}[1m]))",
+          "legendFormat": "5XX"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_ELB_4XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "ap-northeast-2",
+          "label": "ELB 4XX"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "queryMode": "Metrics",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_ELB_5XX_Count",
+          "statistic": "Sum",
+          "dimensions": {
+            "LoadBalancer": [
+              "*"
+            ]
+          },
+          "matchExact": false,
+          "region": "ap-northeast-2",
+          "label": "ELB 5XX"
         }
       ]
     },
     {
       "type": "logs",
-      "title": "App Application Logs",
+      "title": "Application Logs",
       "id": 20,
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
       },
       "gridPos": {
-        "h": 10,
+        "h": 8,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 49
       },
       "options": {
         "showTime": true,
@@ -915,58 +904,47 @@
     },
     {
       "type": "row",
-      "title": "Alert",
+      "title": "Alerts",
       "id": 21,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 57
       },
       "panels": []
     },
     {
-      "type": "table",
+      "type": "alertlist",
       "title": "Active Alerts",
       "id": 22,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 58
       },
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "ALERTS{alertstate=\"firing\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "{{alertname}}"
+      "options": {
+        "viewMode": "list",
+        "groupMode": "default",
+        "maxItems": 20,
+        "sortOrder": 1,
+        "dashboardAlerts": false,
+        "alertName": "",
+        "alertInstanceLabelFilter": "",
+        "datasource": "prometheus",
+        "folder": null,
+        "showInactiveAlerts": false,
+        "stateFilter": {
+          "firing": true,
+          "pending": false,
+          "recovering": false,
+          "noData": false,
+          "normal": false,
+          "error": false
         }
-      ]
+      }
     }
   ]
 }

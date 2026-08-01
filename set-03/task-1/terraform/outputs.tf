@@ -104,3 +104,10 @@ output "app_log_group" {
 output "cluster_arn" {
   value = local.cluster_arn
 }
+
+# aws ssm start-session --target <이 값> (README step 4).
+# enable_bastion=false 일 때도 output/destroy 가 깨지지 않도록 try 로 감싼다.
+output "bastion_instance_id" {
+  description = "작업용 bastion 인스턴스 ID (SSM 접속 대상)"
+  value       = try(aws_instance.bastion[0].id, null)
+}

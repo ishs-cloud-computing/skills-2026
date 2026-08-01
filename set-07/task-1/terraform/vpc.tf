@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC / Subnet / Routing (요구사항 3)
 # - unicorn-vpc 10.97.0.0/16, 3 AZ(a,b,c)

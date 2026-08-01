@@ -1,5 +1,5 @@
-# eksctl cluster.yaml 렌더링(envsubst)과 k8s manifest 치환(sed)에 사용하는 값들.
-# README 런북의 export 블록이 이 출력을 jq 로 읽는다.
+# eksctl cluster.yaml / k8s manifest 의 ${VAR} 렌더링에 사용하는 값들.
+# README 런북 §1 의 env 블록이 이 출력을 읽어 .env(.ps1) 로 영구화한다.
 
 output "account_id" {
   value = local.account_id
@@ -70,6 +70,16 @@ output "grafana_alb_dns" {
 
 output "cloudfront_domain" {
   value = aws_cloudfront_distribution.cdn.domain_name
+}
+
+# k8s kube-prometheus-stack values 렌더(§6)에 사용 (요구사항 12, mark 10)
+output "grafana_admin_user" {
+  value = "skills-${var.player_number}-admin"
+}
+
+output "grafana_admin_password" {
+  value     = var.grafana_admin_password
+  sensitive = true
 }
 
 # eksctl iam.serviceAccounts.attachPolicyARNs 에 사용

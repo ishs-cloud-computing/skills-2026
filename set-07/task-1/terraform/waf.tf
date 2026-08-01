@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # WAF (요구사항 10-3)
 # - unicorn-waf : scope=CLOUDFRONT (us-east-1), 기본 동작 Allow

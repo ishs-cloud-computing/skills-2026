@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # DynamoDB (요구사항 6)
 # - unicorn-concert-db : PAY_PER_REQUEST, PK booking_id

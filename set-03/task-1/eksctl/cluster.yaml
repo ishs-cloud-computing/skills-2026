@@ -3,11 +3,12 @@
 
 # ===========================================================================
 # eksctl Cluster Manifest (요구사항 7)
-# 적용: 본 PC 에서 terraform outputs 로 ${...} 플레이스홀더를 치환해 렌더 후 create 한다.
+# 적용: 본 PC 에서 terraform outputs 로 플레이스홀더를 치환해 렌더 후 create 한다.
 #   렌더/변수 목록: ../README.md step 3 (PowerShell) 또는 ../README.linux.md step 3 (bash)
 #   eksctl create cluster -f cluster.rendered.yaml
+#   이 주석에 플레이스홀더 리터럴을 쓰지 않는다 — 렌더 후 잔여 치환 검사가 이 줄을 잡는다.
 # fully-private 여도 생성은 본 PC 에서 가능 — eksctl 이 생성 중 퍼블릭 엔드포인트를
-# 임시로 켰다가 완료 시 닫는다. 생성 후 kubectl 은 VPC CloudShell 에서만 된다.
+# 임시로 켰다가 완료 시 닫는다. 생성 후 kubectl 은 bastion 에서만 된다 (bastion.tf).
 # 주의: eksctl 은 terraform 과 같은 자격증명으로 실행한다 (wsc2026-eks-kms
 #       키 정책이 배포자 신원에만 CreateGrant 를 허용 — 유의사항 10).
 # ===========================================================================

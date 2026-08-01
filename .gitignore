@@ -9,10 +9,13 @@ outputs.json
 crash.log
 crash.*.log
 __pycache__/
-**/eksctl/*.rendered.yaml
+**/*.rendered.yaml
 **/k8s/rendered/
 # 모듈별 kubeconfig (터미널 1개 = 클러스터 1개 운용)
 **/kubeconfig
+# bastion 작업물 회수분 (set-03/task-1 README step 9)
+**/_backup/
+**/_backup.tgz
 # set-02 module-4: sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
 **/lambda/sensor_consumer/*
 !**/lambda/sensor_consumer/index.py
