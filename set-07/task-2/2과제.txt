@@ -1,0 +1,22 @@
+수정 내역
+
+2026-07-31
+
+=== 공통 ===
+1) (채점지) 채점 상의 유의 사항 17번으로 "채점기준표에는 Timestamp의 TZ가 UTC 기준이나, 채점 시 KST 기준으로 확인하도록 합니다"를 추가합니다. 
+
+=== Module 1; NoSQL ===
+
+
+=== Module 2; CDN ===
+1) (과제지) 5번의 "Distribution Name" -> "Distribution Comment"로 수정합니다.
+
+
+=== Module 3; EKS Scaling
+1) (과제지) Module 3 최하단 "Scale in/out 채점 시 2분 대기함에 유의합니다." -> "Pod/Node level Scale in/out 모두 2분 내로 이루어져야 합니다."로 변경합니다. 수정 시 강조, 밑줄 처리 유지 부탁드립니다.
+2) (채점지, 예상 출력 결과) 3-3-A의 "57m", ".5-eks-3385e9b", 3-5-A의 "-8c66dbc4-r4fnp" 부분을 채점 시 유의사항 16번에 따라 파란색 글씨로 변경합니다.
+3) (채점지,채점스크립트) 3-6-A의 "for i in $(seq 1 24); do"를 "for i in $(seq 1 30); do"으로 변경하여 Scale out 대기 시간을 30초 연장합니다.
+
+
+=== Module 4; EKS 
+1) (제공파일) Dockerfile line 3(WORKDIR /app 다음 줄)에 "RUN pip install --no-cache-dir Flask==3.1.3" 구문을 삽입합니다.
