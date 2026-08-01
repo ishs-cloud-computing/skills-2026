@@ -71,7 +71,7 @@ CloudFront의 flat-rate 요금 플랜(2025-11 출시)은 콘솔 전용 opt-in �
 
 - **terraform** — VPC·SQS·ECR·IAM 정책/롤 등 클러스터 밖 리소스. 이름 정확 일치 채점 항목이라 변수화가 필요하고(30% 변동 대비), 클러스터 생성(~15분)과 수명주기가 달라 독립적으로 빠르게 재적용할 수 있어야 한다.
 - **eksctl (`cluster.yaml`)** — 생성 시점에 굳는 것 전부: 클러스터 버전, Managed NodeGroup(이름·taint·`instanceName`), addons, OIDC/IRSA ServiceAccount, access entry, 엔드포인트. 생성 후 변경이 불가하거나(OIDC·엔드포인트) 곤란한 축이라 한 파일에 선언한다. terraform `aws_eks_cluster`로도 가능하지만 MNG·IRSA·access entry 보일러플레이트가 크고, eksctl은 이들을 선언 한 번으로 묶는다 — 대회 시간 제약에서 결정적.
-- **helm** — 컨트롤러(모듈 3의 KEDA·Karpenter)만. 자체 CRD·RBAC를 가진 배포물은 매니페스트 직접 관리가 더 비싸다. 컨트롤러가 없는 모듈 4는 이 층을 생략할 수 있다.
+- **helm** — 컨트롤러·차트 배포물(모듈 3의 KEDA·Karpenter, 모듈 4의 Load Balancer Controller·Loki·Grafana)만. 자체 CRD·RBAC·설정 템플릿을 가진 배포물은 매니페스트 직접 관리가 더 비싸다. 단 chart가 채점 요구(이름 정확 일치)를 만족 못 하면 raw manifest로 내린다 — 모듈 4의 OTel Collector가 그 예다.
 - **kubectl** — 워크로드·CRD 인스턴스 매니페스트. 번호 prefix(`00-`, `10-`, …)로 apply 순서를 강제한다.
 
 ### 왜 두 클러스터를 완전히 분리하나
@@ -109,3 +109,29 @@ t3.medium(2 vCPU)의 allocatable은 약 1930m, DaemonSet(aws-node·kube-proxy)�
 ### IAM 범위
 
 유의사항 11에 따라 세 주체를 분리한다: KEDA는 큐 길이 조회(`GetQueueAttributes`·`GetQueueUrl`), 앱은 소비(`ReceiveMessage`·`DeleteMessage`·`GetQueueAttributes`) — 모두 해당 큐 ARN 한정. Karpenter 컨트롤러는 공식 정책 기반으로 인스턴스 생성·삭제를 클러스터/nodepool 태그 조건으로 스코프한다. 셋 다 IRSA로 바인딩해 노드 롤에는 아무 SQS 권한도 두지 않는다.
+
+## 모듈 4 — Container Logging
+
+### 왜 ALB·TG를 Terraform이 만들고 등록만 컨트롤러에 맡기나
+
+채점 4-2는 TG를 `describe-target-groups --names o11y-app-tg`처럼 **이름으로 조회**하고, healthy 타깃 수가 pod 수와 일치해야 한다(app 2·grafana 1). Load Balancer Controller의 Ingress 경로는 ALB·TG를 자동 생성하지만 TG 이름이 `k8s-…` 랜덤이라 이름 채점을 통과할 수 없다. 반대로 인스턴스(NodePort) 타입 TG를 ASG에 붙이면 노드 단위 등록이라 healthy 수가 pod 수와 어긋난다(grafana 1이 불가능). 그래서 역할을 자른다: Terraform이 정확한 이름의 ALB·TG(ip type)·listener·SG를 만들고, 컨트롤러는 TargetGroupBinding으로 **pod IP 등록만** 담당한다. TGB의 `targetGroupName` 참조(LBC v2.10+) 덕에 TG ARN을 매니페스트에 주입할 필요가 없고, `spec.networking`의 소스 SG 참조로 ALB→pod SG 개방도 컨트롤러가 자동 관리한다 — k8s 렌더 치환값이 `${ECR_IMAGE}`·`${ALB_SG_ID}` 2개로 끝나는 이유다.
+
+### 왜 OTel Collector만 raw manifest인가
+
+채점 4-3이 `kubectl get ds o11y-otel` 이름 정확 일치를 요구하는데, 공식 opentelemetry-collector chart는 DaemonSet 이름에 `-agent` 접미사를 하드코딩해 `fullnameOverride`로도 이 이름을 만들 수 없다. chart를 쓰는 이유(검증된 설정 템플릿)는 유지하고 싶으므로, chart의 logsCollection·kubernetesAttributes preset 설정을 그대로 복제한 단일 매니페스트(SA·RBAC·ConfigMap·DaemonSet)로 내렸다. filelog의 `container` parser가 CRI 로그 포맷을 벗겨 body가 앱의 원본 JSON 라인으로 남는 것이 핵심이다 — 채점 4-5의 `| json` 파싱이 이를 전제한다.
+
+### 왜 Loki가 Monolithic + filesystem인가
+
+과제지가 "Single Binary 모드, chunks·index는 PV"를 명시한다. chart 18.x의 `deploymentMode: Monolithic`이 그 모드(구명 SingleBinary의 현행 표기)이고, `storage.type: filesystem` + StatefulSet persistence가 PV 요구를 그대로 구현한다 — S3 object storage는 과제지 위반이다. release 이름을 `o11y-loki`로 주면 svc 이름·포트(3100)가 채점 4-3과 일치한다. OTLP ingestion은 Loki 3.x에서 `k8s.namespace.name`·`k8s.pod.name`을 기본 인덱스 라벨로 승격하므로, 채점 4-5의 `{k8s_namespace_name="o11y"}` 필터와 과제지의 "namespace·pod 단위 필터"가 추가 설정 없이 성립한다. chart 기본값이 프로덕션(마이크로서비스·s3·캐시 8Gi) 지향이라 다섯 항목을 명시로 눌러야 하는 대가는 저장소 NOTES.md 함정 절에 기록했다.
+
+### 왜 StorageClass를 직접 만드나
+
+EKS 1.30부터 gp2 StorageClass에 default annotation이 붙지 않는다. `storageClass` 미지정 PVC는 영원히 Pending이고, Loki StatefulSet이 그 상태로 채점 4-3(READY)을 무너뜨린다. EBS CSI driver addon(+관리형 정책 IRSA)과 gp3 StorageClass(`o11y-gp3`)를 명시 생성하고 Loki values에서 이름으로 참조한다.
+
+### 왜 노드 KST가 preBootstrapCommands인가
+
+과제지가 "모든 노드 KST"를 요구한다. AL2023 노드에서 부팅 시 `timedatectl set-timezone Asia/Seoul` 한 줄이 가장 작은 구현이고, eksctl `preBootstrapCommands`가 이를 cloud-init에 주입한다(AL2023 지원은 eksctl 0.198.0에서 수정된 이력이 있어 NOTES에 기록). 노드가 재생성돼도 자동 적용된다 — DaemonSet이나 수동 SSH 설정은 부팅 타이밍·재생성 대응이 더 복잡해 기각.
+
+### IAM 범위
+
+유의사항 11에 따라: Load Balancer Controller는 공식 배포 정책(vendored `iam_policy.json`, 조건 키 스코프 포함) 그대로 IRSA 바인딩, EBS CSI driver는 AWS 관리형 `AmazonEBSCSIDriverPolicy`를 addon IRSA로 바인딩한다. 앱·OTel·Loki·Grafana는 AWS API를 호출하지 않으므로 아무 IAM 권한도 갖지 않는다 — OTel의 메타데이터 조회는 k8s RBAC(ClusterRole)이지 IAM이 아니다.

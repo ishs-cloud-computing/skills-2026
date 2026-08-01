@@ -1,0 +1,106 @@
+{
+  "title": "Log Overview",
+  "uid": "log-overview",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Log Count Over Time",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 9 },
+      "interval": "1m",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": { "mode": "normal", "group": "A" },
+            "lineWidth": 1,
+            "barAlignment": 0,
+            "barWidthFactor": 0.9,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": "/^error$/i" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#E24D42" } }] },
+          { "matcher": { "id": "byRegexp", "options": "/^warn$/i" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#EAB839" } }] },
+          { "matcher": { "id": "byRegexp", "options": "/^info$/i" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#7EB26D" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (level) (count_over_time({k8s_namespace_name=\"o11y\"} | json | __error__=\"\" [$__auto]))",
+          "legendFormat": "{{level}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Log Level Distribution",
+      "type": "piechart",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 9 },
+      "interval": "1m",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": "/^error$/i" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#E24D42" } }] },
+          { "matcher": { "id": "byRegexp", "options": "/^warn$/i" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#EAB839" } }] },
+          { "matcher": { "id": "byRegexp", "options": "/^info$/i" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#7EB26D" } }] }
+        ]
+      },
+      "options": {
+        "pieType": "pie",
+        "displayLabels": [],
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "values": [] },
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (level) (count_over_time({k8s_namespace_name=\"o11y\"} | json | __error__=\"\" [$__auto]))",
+          "legendFormat": "{{level}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Recent Logs",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 9, "w": 24, "h": 10 },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "showCommonLabels": false,
+        "wrapLogMessage": false,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{k8s_namespace_name=\"o11y\"} |= \"log generated\"",
+          "queryType": "range"
+        }
+      ]
+    }
+  ]
+}

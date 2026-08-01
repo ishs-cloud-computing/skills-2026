@@ -17,7 +17,7 @@ sidebar:
 | 1 | NoSQL | ap-southeast-1 | DynamoDB(Streams·GSI) + Lambda + EC2 | 구현 완료 |
 | 2 | CDN Function | us-east-1 | S3 + CloudFront Functions + KVS | 구현 완료 |
 | 3 | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | 구현 완료 (실채점 전) |
-| 4 | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | 미착수 |
+| 4 | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | 구현 완료 (실채점 전) |
 
 ## 모듈 1 — NoSQL 한눈에
 
@@ -45,3 +45,14 @@ SkillsMarket 주문 처리의 큐 기반 오토스케일링. Terraform + eksctl 
 - **App**: 지급 Flask SQS Consumer를 CloudShell에서 빌드해 ECR로, `order-processor` Deployment(1 replica, 500m/512Mi)는 Karpenter 노드에서만 구동
 - **KEDA**(ns `keda`): 메시지 5건당 Pod 1개, 1~5 replica — 큐가 비면 1개로 축소
 - **Karpenter**(kube-system): Pending Pod 감지 시 t3.small/medium 노드 자동 증설, 유휴 60초 후 반환
+
+## 모듈 4 — Container Logging 한눈에
+
+EKS 워크로드 로그의 수집·저장·시각화 파이프라인. Terraform + eksctl + helm + kubectl 순서로 쌓는다.
+
+- **EKS**: `o11y-cluster` 1.35, t3.medium 2대 Multi-AZ(1a/1c) 고정, 전 노드 KST — taint 없음(DaemonSet이 전 노드에 떠야 함)
+- **App**: 지급 Flask 로그 생성기(`/log?level=&count=`)를 CloudShell에서 빌드해 ECR로, `log-generator` Deployment 2 replica (ns `o11y`)
+- **ALB 2대**(`o11y-app-alb`·`o11y-grafana-alb`): Terraform이 고정 이름 TG(ip type)까지 만들고, Load Balancer Controller의 TargetGroupBinding이 pod IP를 등록
+- **OTel Collector**(DaemonSet `o11y-otel`, ns `monitoring`): filelog(`/var/log/pods`) → k8sattributes → OTLP HTTP로 Loki 전송
+- **Loki**(Single Binary, svc `o11y-loki`:3100): chunks·index를 EBS PV(gp3)에 저장, OTLP ingestion으로 `k8s_namespace_name` 라벨 필터 제공
+- **Grafana**(`o11y-grafana`): Loki datasource + `Log Overview` 대시보드(bar·pie·logs 3패널) 프로비저닝, admin `skills<등번호>`

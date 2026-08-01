@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# TargetGroupBinding — app (채점 4-2 o11y-app-tg healthy 2)
+# - Terraform 이 만든 TG(o11y-app-tg)에 log-generator pod IP 를 등록.
+#   targetGroupName 참조라 TG ARN 플레이스홀더가 필요 없다 (LBC v2.10+).
+# - networking: LBC 가 ALB SG → pod ENI SG 인바운드 규칙을 자동 관리.
+# - CRD 는 LBC helm 설치(런북 6단계) 후 존재 → 이 파일은 7단계에 apply.
+# 플레이스홀더: ${ALB_SG_ID} (terraform output alb_sg_id)
+# ---------------------------------------------------------------------------
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: o11y-app-tgb
+  namespace: o11y
+spec:
+  serviceRef:
+    name: log-generator
+    port: 8080
+  targetGroupName: o11y-app-tg
+  targetType: ip
+  networking:
+    ingress:
+      - from:
+          - securityGroup:
+              groupID: "${ALB_SG_ID}"
+        ports:
+          - protocol: TCP

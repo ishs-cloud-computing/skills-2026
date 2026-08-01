@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Grafana (grafana-community/grafana chart 12.x) — 과제지 4-5, 채점 4-3·4-6
+# - fullnameOverride 로 Deployment/svc 이름을 o11y-grafana 로 고정 (채점 4-3).
+# - adminUser/adminPassword 는 선수 등번호 포함이라 여기 두지 않고 런북 6단계
+#   --set 으로 주입한다 (30% 변동 + git 에 비밀번호 미기록).
+# - 대시보드 JSON 은 --set-file dashboards.default.log-overview.json 으로 주입.
+# ---------------------------------------------------------------------------
+
+fullnameOverride: o11y-grafana
+
+service:
+  type: ClusterIP
+  # TG(o11y-grafana-tg)·TGB serviceRef 와 포트 일치 (채점 4-2)
+  port: 3000
+
+# Loki datasource 사전 등록 (채점 4-6 "Save & Test")
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        uid: loki
+        access: proxy
+        url: http://o11y-loki.monitoring.svc.cluster.local:3100
+        isDefault: true
+
+# 파일 기반 대시보드 프로비저닝 (채점 4-6 "Log Overview")
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default

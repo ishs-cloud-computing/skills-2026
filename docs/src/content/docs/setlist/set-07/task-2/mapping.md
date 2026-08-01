@@ -46,3 +46,16 @@ sidebar:
 | 3-7-A/B | 1.5 | purge → 150초 내 Pod 1·노드 1 | ScaledObject scaleDown behavior 오버라이드 + consolidateAfter 60s |
 
 주의: 3-3-A는 env 전체를 sort 덤프해 **정확 일치**로 비교하므로 env를 하나라도 추가하면 실패한다. 3-2-A의 노드 Name 태그는 MNG `tags`가 아니라 eksctl `instanceName`으로만 인스턴스에 붙는다. 3-4·3-5·3-6 중 하나라도 틀리면 3-7은 채점되지 않는다. 채점 전 상시 상태는 Pod 1개·Karpenter 노드 1대·빈 큐다.
+
+## 모듈 4 — Container Logging (mark4.sh)
+
+| 항목 | 배점 | 검사 내용 | 구현 위치 |
+|------|------|-----------|-----------|
+| 4-1-A | 1.0 | 클러스터 `o11y-cluster 1.35 ACTIVE`, NG `t3.medium 2 2 2`, 노드 zone 2종 이상 | `eksctl/cluster.yaml` (priv 서브넷 1a/1c + `privateNetworking`) |
+| 4-2-A | 1.0 | ALB 2대 `active application internet-facing`, TG `o11y-app-tg` healthy 2·`o11y-grafana-tg` healthy 1 | `terraform/alb.tf`(고정 이름) + `k8s/30·40-tgb-*.yaml`(pod IP 등록) |
+| 4-3-A | 1.0 | deploy `log-generator`(o11y) 2, ds `o11y-otel` DESIRED=READY, svc `o11y-loki` ClusterIP 3100, deploy `o11y-grafana` 1 | `k8s/10-app.yaml`·`k8s/20-otel-collector.yaml` + helm release 명/`fullnameOverride` |
+| 4-4-A | 1.5 | ALB 경유 `/healthz` = `{"status":"ok"}`, `/log?level=error&count=3` → `error`/`3` | 지급 `provided/module-4/app.py` 무수정 + `app/Dockerfile`(flask 설치 수정본) |
+| 4-5-A | 1.5 | port-forward `svc/o11y-loki` 후 LogQL `{k8s_namespace_name="o11y"} \| json \| level="ERROR"` 3분 내 로그 | `k8s/20-otel-collector.yaml`(filelog→k8sattributes→otlphttp) + `helm/loki-values.yaml`(OTLP) |
+| 4-6-A | 1.5 | Grafana 로그인(`skills<등번호>`), `Log Overview` 3패널·plain 범례, Loki datasource Save & Test | `helm/grafana-values.yaml` + `helm/dashboards/log-overview.json`(legendFormat `{{level}}`) |
+
+주의: 4-2-A의 TG는 채점이 **이름으로 조회**하므로 LBC Ingress의 자동 생성 TG(`k8s-…`)로는 불가 — Terraform 고정 이름 TG + TargetGroupBinding 구조가 전제다. healthy 수는 pod 수와 일치해야 한다(app 2·grafana 1). 4-6-A는 범례가 `{level="ERROR"}` 형태면 오답 — 쿼리의 `legendFormat`이 `{{level}}`이어야 한다. 지급 Dockerfile은 flask를 설치하지 않으므로 반드시 `app/Dockerfile` 수정본으로 빌드한다. 4-2를 틀리면 4-6은 채점되지 않는다.

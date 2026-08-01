@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ===========================================================================
+# eksctl Cluster Manifest — Container Logging (과제지 4-1)
+#
+# ${ACCOUNT_ID} ${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_C} 는 terraform output
+# 값으로 치환 후 사용한다 (README 런북 2단계 — PS7 .Replace() / bash envsubst).
+#
+#   eksctl create cluster -f cluster.rendered.yaml
+# ===========================================================================
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: o11y-cluster
+  region: ap-northeast-1
+  version: "1.35"
+
+# Auto Mode 명시적 비활성화: autoModeConfig 미지정 시 최신 eksctl 이 Auto Mode 를
+# 기본 활성화해 managedNodeGroups / 기본 addon 을 생성하지 않을 수 있다.
+autoModeConfig:
+  enabled: false
+
+# API_AND_CONFIG_MAP: CloudShell 채점 주체가 클러스터 생성자와 다를 때
+# access entry 를 추가로 만들 수 있게 한다(README 런북 9단계 fallback).
+accessConfig:
+  authenticationMode: API_AND_CONFIG_MAP
+
+# ----- 기존(Terraform 생성) VPC / Private Subnet 재사용 -----
+# 채점(mark4.sh)이 일반 CloudShell 에서 kubectl 을 실행하므로 public 엔드포인트 필수.
+# 노드는 private 서브넷에서 NAT 아웃바운드. 서브넷 2개(1a/1c)가 Multi-AZ 채점
+# (4-1 zone 2종 출력)을 충족한다.
+vpc:
+  id: "${VPC_ID}"
+  subnets:
+    private:
+      o11y-sn-priv-a:
+        id: "${PRIV_SUBNET_A}"
+        az: ap-northeast-1a
+      o11y-sn-priv-c:
+        id: "${PRIV_SUBNET_C}"
+        az: ap-northeast-1c
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+# ----- OIDC + IRSA ServiceAccount -----
+# AWS Load Balancer Controller(TGB 로 pod IP 를 TG 에 등록, 채점 4-2)용 SA 사전 생성.
+# helm 설치 시 serviceAccount.create=false 로 이 SA 를 재사용한다 (README 6단계).
+# 정책은 Terraform 이 생성(o11y-lbc-policy, iam.tf).
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      attachPolicyARNs:
+        - "arn:aws:iam::${ACCOUNT_ID}:policy/o11y-lbc-policy"
+
+# ===========================================================================
+# Managed Node Group (과제지 4-1)
+# - t3.medium, 2/2/2, Multi-AZ (private 서브넷 1a/1c 에 분산).
+# - taint 없음: o11y-otel DaemonSet 이 전 노드에 떠야 채점 4-3(DESIRED=READY) 통과.
+# - preBootstrapCommands 로 노드 TimeZone KST 설정 (과제지 "모든 노드 KST").
+#   AL2023 에서 preBootstrapCommands 는 eksctl 0.198.0+ 에서 동작 (issue #7903).
+# ===========================================================================
+managedNodeGroups:
+  - name: o11y-ng
+    amiFamily: AmazonLinux2023
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 2
+    desiredCapacity: 2
+    privateNetworking: true
+    preBootstrapCommands:
+      - timedatectl set-timezone Asia/Seoul
+
+# ----- 필수 Addon (버전 미핀 — 작업 규칙 2: 최신 안정) -----
+# aws-ebs-csi-driver: Loki chunks/index PV(gp3) 프로비저닝 (과제지 4-4).
+# withOIDC + attachPolicyARNs 로 eksctl 이 IRSA 역할을 자동 생성한다.
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
+    attachPolicyARNs:
+      - "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"

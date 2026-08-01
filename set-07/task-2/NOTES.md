@@ -12,7 +12,7 @@
 | 1 | nosql | 6/6 (mark1.sh 전 항목 통과) | 없음 |
 | 2 | cdn-function | 6/6 (mark2.sh 전 항목 통과) | 없음 |
 | 3 | eks-scaling | 7/7 (mark3.sh 전 항목 통과) | 없음 |
-| 4 | container-logging | 0/? | 미착수 |
+| 4 | container-logging | 6/6 (mark4.sh 전 항목 통과, 7.5/7.5) | 없음 |
 
 ### module-1 채점 커버리지 (mark1.sh ↔ 구현)
 <!-- [x] apply 후 mark1.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
@@ -95,6 +95,36 @@
   PS7 `.Replace()` 도 빈 값을 그대로 넣으므로, 사후 `grep '\${'` 만으로는 값 누락을 못 잡는다.
   → ① 치환 전 변수 비어있음 검사 + ② 치환 후 grep/Select-String (목록 외 신규 플레이스홀더 탐지용). 둘 다 런북에 포함.
 
+### module-4 채점 커버리지 (mark4.sh ↔ 구현)
+<!-- [x] apply 후 mark4.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
+<!-- 2026-08-01 실채점 결과로 전 항목 확정 (4-5·4-6 은 mark4.sh 가 manual marking 만 출력 → 주석 블록 쿼리·육안으로 직접 확인) -->
+
+- [x] 4-1-A Cluster/NG/Multi-AZ — 실채점: `o11y-cluster 1.35 ACTIVE` / `t3.medium 2 2 2` / zone 1a·1c 2종
+- [x] 4-2-A ALB/TG — 실채점: ALB 2개 `active application internet-facing`, app-tg `healthy healthy`(pod 2) / grafana-tg `healthy`(pod 1)
+- [x] 4-3-A 워크로드 이름 — 실채점: log-generator 2 / o11y-otel 2 2 / o11y-loki ClusterIP 3100 / o11y-grafana 1
+- [x] 4-4-A App API — 실채점: `{"status":"ok"}` / `error` / `3` 정확 일치. `{"status":"ok"}` 뒤 빈 줄은 지급 app.py jsonify trailing newline + 스크립트 `; echo` 중복이라 전 선수 공통 (module-1 1-5-A 와 같은 현상)
+- [x] 4-5-A 로그 파이프라인 — 실채점: mark4.sh 주석 블록 쿼리(`{k8s_namespace_name="o11y"} | json | level="ERROR"`)로 ERROR 라인 조회 확인. Loki OTLP 기본 인덱스 라벨 의존이 실환경에서 성립 → `limits_config.otlp_config` 명시 승격 불필요(결정 로그 3번 비용 미발생)
+- [x] 4-6-A Grafana — 실채점: 3패널 표시·범례 plain text(ERROR/WARN/INFO)·Recent Logs 에 4-5 로그·Save&Test 성공 전부 확인. `| __error__=""` 가드 추가 후 재배포 기준(함정 절)
+
+#### module-4 함정 (구현 중 발견)
+
+- **지급 Dockerfile 은 flask 미설치**: `python:3.12-slim` + `COPY app.py` 뿐인데 app.py 가 flask import (requirements.txt 도 미지급) → 그대로 빌드하면 ModuleNotFoundError CrashLoop. provided/ 수정 금지라 `app/Dockerfile` 수정본을 커밋 — CloudShell 빌드는 반드시 수정본 사용.
+- **Loki/Grafana helm chart 는 grafana-community 로 이관**: 구 `grafana/loki`(6.x)·`grafana/grafana` repo 는 동결. `grafana-community/loki` 는 18.x 로 리넘버링, `deploymentMode: SingleBinary` 는 `Monolithic` 의 deprecated 별칭.
+- **Loki chart 18.x 기본값 함정 5종** (전부 loki-values.yaml 에서 오버라이드): ① `singleBinary.replicas` 기본 0 — 아무것도 안 뜸 ② `auth_enabled` 기본 true — 무인증 push/query 401 ③ `storage.type` 기본 s3 — 버킷 없이 기동 실패 ④ `schemaConfig` 기본 빈 값 — 기동 실패 ⑤ chunksCache 기본 memcached requests/limits 9830Mi(`allocatedMemory` 8192MB × 1.2, resultsCache 는 1229Mi) — t3.medium 스케줄 불가. 캐시를 살려야 하면 `resources` 오버라이드가 아니라 `chunksCache.allocatedMemory` 를 낮춘다. 추가: backend/read/write 기본 replicas 가 0이 아니라 Monolithic 과 공존 검증 에러 — 명시적 0 필요 (helm template 실렌더에서 발견).
+- **OTel 공식 chart 는 DaemonSet 이름에 `-agent` 접미사 강제**: fullnameOverride 로도 `o11y-otel` 정확 일치 불가 → raw manifest (결정 로그 참조).
+- **EKS 1.30+ 는 기본 StorageClass 없음**: gp2 SC 는 존재하나 default annotation 이 없어 storageClass 미지정 PVC 는 Pending → `o11y-gp3` SC 명시 생성 + values 에서 이름 참조.
+- **StorageClass 는 helm 보다 먼저** (실배포에서 발견): `05-storageclass.yaml` 을 7단계에서 apply 하면 6단계 Loki `--wait` 가 PVC Pending(`storageclass ... "o11y-gp3" not found`)으로 영구 대기. 화면은 `Release "o11y-loki" does not exist. Installing it now.` 에서 멈춘 것처럼 보이지만 이건 설치 시작 안내지 에러가 아니다 — 리소스는 이미 생성됐고 `--wait` 가 pod Ready 를 기다리는 중. → 5단계에서 `00-namespace` 와 함께 apply. 중단 시 release 가 `pending-install` 로 잠기므로 `helm uninstall o11y-loki -n monitoring` + `kubectl delete pvc -n monitoring --all` 후 재시도 (module-3 Karpenter 와 동일 패턴).
+- **치환과 적용을 한 코드 블록에 두지 않는다**: ① 값 확인 ② 치환 ③ 치환 확인 ④ 적용 을 4블록으로 분리. 한 덩어리면 붙여넣기 한 번에 `eksctl create cluster`·`kubectl apply` 까지 나가 렌더 결과를 볼 기회가 없고 실패 지점도 불분명하다. 2·5단계 모두 적용, 다른 모듈 런북도 같은 규칙.
+- **mark.md 4-0 의 `source kubectl-connect o11y-cluster`**: 채점자 측 헬퍼로 추정 — mark4.sh 는 자체적으로 `aws eks update-kubeconfig` 수행(작업 규칙 4: 스크립트가 기준). 대응은 CloudShell 에서 update-kubeconfig 가 되도록 access entry fallback(런북 9단계)뿐.
+- **LogQL `| json` 뒤에 `| __error__=""` 가드 필수** (실배포에서 발견): 지급 app.py 가 werkzeug 액세스 로그(stderr, 평문)를 억제하지 않아 `o11y` 스트림은 JSON + 평문 혼합이다. JSON 은 `/log` 호출 시에만 나오는데 평문은 ALB health check(30s)+readinessProbe(10s)로 상시 다수. 가드 없이 `| json` 만 쓰면 평문 라인에 `__error__=JSONParserErr` 가 붙은 채 드롭되지 않아 → Recent Logs 는 빨간 `JSON Parse Err` 배지 + 액세스 로그 노출, `sum by (level)` 두 패널은 level 라벨을 가진 라인이 0건이라 **No Data**(채점 4-6-A 감점 항목). 세 패널 모두 `| json | __error__=""` 로 수정. `level=~"..."` 같은 일반 라벨 필터가 아니라 `__error__` 필터를 써야 한다 — 에러 라인은 뒤따르는 라벨 필터를 건너뛸 수 있고 `__error__` 필터만 항상 적용된다. 수집기에서 stderr 를 드롭하지 않는 이유: 채점 4-5-A 쿼리 `| json | level="ERROR"` 는 에러 라인의 level 이 비어 있어 이미 걸러지므로 얻는 게 없고, 로그 유실 + 과제지 "/var/log/pods 수집" 문구와 충돌한다.
+- **레벨 색은 Grafana 로그레벨 팔레트 hex 로 고정한다**: 색을 안 정하면 시리즈 등장 **순서**대로 배정돼 과제지 이미지와 어긋나고 구간에 한 레벨이 없으면 밀린다. `red`/`yellow`/`green` 같은 이름 색은 채도가 높아 이미지와 다르다 → Grafana 가 logs 패널 레벨 색으로 쓰는 classic 값 그대로 `#E24D42`(error)·`#EAB839`(warn)·`#7EB26D`(info) 를 `byRegexp /^error$/i` 등으로 고정. 세 패널 색이 서로 일치한다(Recent Logs 는 logs 패널이 detected_level 로 자동 색칠).
+- **Recent Logs 는 파서가 아니라 라인 필터**: `{k8s_namespace_name="o11y"} |= "log generated"`. 과제지 이미지 판독 근거 두 개가 동시에 걸린다 — ① 라벨 컬럼이 `k8s_pod_name·k8s_pod_uid·log_file_path·observed_timestamp·time` 5개(알파벳순)뿐이고 `level`·`msg`·`req_id`·`ts` 가 없다 → `| json` 을 쓰지 않았다(파서가 뽑은 라벨은 이 컬럼에 나온다) ② 그런데 보이는 행은 전부 `log generated` JSON 이고 werkzeug 액세스 로그가 없다 → 그냥 셀렉터만 쓴 것도 아니다. 라인 필터는 라벨을 추가하지 않으므로 둘 다 만족하는 유일한 형태. 파서가 없으니 `JSON Parse Err` 도 원천 차단되고, 레벨 색은 Loki `discover_log_levels` 의 detected_level 로 나온다. **`"log generated"` 는 지급 app.py 의 msg 리터럴** — 30% 변동으로 msg 가 바뀌면 이 필터도 같이 고친다. 메트릭 두 패널도 같은 이유(이미지에서 막대가 `/log` 시점에만·범례 3개)로 액세스 로그를 제외한다(`| json | __error__=""`).
+- **logs 패널 `showLabels: true`**: 이미지의 시간 옆 라벨 컬럼이 이것. 기본 false 라 안 켜면 이미지와 다르게 보인다.
+- **파이 패널에 Loki instant 쿼리를 쓰면 `Value #A` 한 조각으로 뜬다** (실배포에서 발견): instant 는 table 형태 프레임(Time·level·Value)으로 와서 piechart 가 문자열 라벨을 조각 이름으로 못 쓴다. → **range 쿼리 + `reduceOptions.calcs: ["sum"]`**. 시리즈별 프레임이 legendFormat 이름으로 오므로 조각 이름이 plain text `ERROR`/`WARN`/`INFO` (채점 4-6-A 범례 항목). step == 버킷 폭이라 `count_over_time([$__auto])` 를 sum 하면 총건수와 일치. 범례는 이미지대로 **하단**·이름만(`values: []`), 조각 위 라벨 없음(`displayLabels: []`).
+- **bars 로 그려도 점+선처럼 보인다**: `$__auto` 가 패널 폭 기준이라 버킷이 ~10초로 잘게 쪼개져 막대가 실선 두께가 되고, `showPoints` 기본 auto 가 그 위에 점을 찍는다. → 패널 `interval: "1m"` (최소 간격) + `showPoints: "never"`. drawStyle 문제가 아니다.
+- **대시보드는 `/log` 호출이 선행돼야 데이터가 있다**: 앱은 요청 없이 JSON 로그를 만들지 않는다. 기본 구간 `now-1h` 안에 `/log` 호출이 없으면 수정 후에도 세 패널이 정당하게 No Data — 육안 채점 직전에 런북 8단계 `curl /log` 를 먼저 친다.
+- **Grafana 비밀번호 `GoodJob!Skills<n>^^` 의 특수문자**: PS7 은 큰따옴표 안 `!`·`^^` 리터럴 처리라 안전, bash 는 `!` 히스토리 확장 위험 — linux 런북은 작은따옴표 조각 연결로 처리.
+
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
 
@@ -107,6 +137,36 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-07-31 [module-4] ALB·TG 는 Terraform 정확 이름 생성 + LBC TargetGroupBinding 으로 pod IP 등록
+- 맥락: 채점 4-2 가 `describe-target-groups --names o11y-app-tg` 로 TG 이름을 정확 조회하고, app-tg healthy 2·grafana-tg healthy 1 (pod 수와 일치)을 요구
+- 채택: Terraform 이 ALB 2·TG 2(target_type ip)·공유 SG·listener 를 정확한 이름으로 생성, LBC(chart 3.4.3) TargetGroupBinding 의 `targetGroupName` 참조로 pod IP 등록. `spec.networking.ingress` 의 소스 SG(${ALB_SG_ID})로 노드 SG 개방은 컨트롤러가 자동 관리 → k8s 플레이스홀더가 ${ECR_IMAGE} ${ALB_SG_ID} 2개로 끝남
+- 기각: LBC Ingress 리소스로 ALB 자동 생성 → TG 이름이 `k8s-…` 랜덤이라 이름 채점 불가. instance/NodePort TG + ASG attach → 노드 단위 등록이라 healthy 수가 pod 수와 불일치(grafana 1 불가). TG ARN 플레이스홀더 → LBC v2.10+ 의 targetGroupName 참조로 불필요
+- 대가: LBC 설치(helm)와 IRSA 정책(iam.tf vendored json) 관리 지점 추가 — 4-2 채점 구조상 대안 없음
+
+### 2026-07-31 [module-4] OTel Collector 는 raw manifest (공식 helm chart 기각)
+- 맥락: 채점 4-3 이 `kubectl get ds o11y-otel` 이름 정확 일치. 공식 opentelemetry-collector chart(0.165.0)는 daemonset 템플릿이 `<fullname>-agent` 접미사를 하드코딩 — fullnameOverride: o11y-otel 로도 `o11y-otel-agent` 가 됨
+- 채택: SA+RBAC+ConfigMap+DaemonSet 단일 파일(20-otel-collector.yaml) raw manifest. 설정은 chart 의 logsCollection·kubernetesAttributes preset(_config.tpl)을 복제 — filelog `container` parser 로 body 가 앱 원본 JSON 유지(4-5 `| json` 전제), 이미지는 contrib 0.156.0 핀
+- 기각: chart + 후처리 rename → helm 관리 이점 상실보다 못한 편법. Fluent Bit 등 대체 수집기 → 과제지가 OTel Collector·filelog·k8sattributes 를 명시
+- 대가: chart 업데이트 추종 없음 — 수집 설정 변경 시 ConfigMap 직접 수정 (대회 범위에선 무관)
+
+### 2026-07-31 [module-4] Loki 는 grafana-community chart 18.x Monolithic + filesystem/PV
+- 맥락: 과제지 "Single Binary 모드, Chunks·Index 는 PV, OTLP ingestion". 구 grafana repo 는 동결·grafana-community 로 이관됨(실측: index.yaml 로 18.7.1 확인). 채점 4-5 LogQL 이 `{k8s_namespace_name="o11y"}` 라벨 필터 사용
+- 채택: release 명 o11y-loki(→ svc 이름·3100 이 채점 4-3 일치, helm template 실렌더로 확인) + 기본값 함정 오버라이드(함정 절 참조) + `storage.type: filesystem` + singleBinary.persistence(o11y-gp3). OTLP 라벨은 Loki 3.x 기본 인덱스 라벨(k8s.namespace.name/k8s.pod.name 포함)에 의존 — otlp_config 불요
+- 기각: S3 object storage → 과제지가 PV 를 명시. gateway/캐시 활성 → 채점 무관 + t3.medium 용량 초과. raw manifest → schemaConfig·ring 등 자체 작성 비용이 chart 함정 대응보다 큼
+- 대가: Loki 차기 버전이 기본 인덱스 라벨을 줄이면 `limits_config.otlp_config` 추가 필요 (NOTES 함정 절 기록)
+
+### 2026-07-31 [module-4] 지급 Dockerfile 대신 app/Dockerfile 수정본으로 빌드
+- 맥락: 지급 Dockerfile 은 flask 를 설치하지 않는데 app.py 가 flask import (requirements.txt 미지급) — 그대로 빌드하면 CrashLoop. provided/ 는 수정 금지
+- 채택: `app/Dockerfile` 수정본(RUN pip install flask 추가) 커밋, CloudShell 빌드에 이것 사용. app.py 는 지급 원본 그대로
+- 기각: provided/ 직접 수정 → 저장소 규칙 위반. 런북에서 즉석 sed 수정 → 대회 당일 실수 지점만 추가
+- 대가: 지급본과 수정본 Dockerfile 이 공존 — 런북·NOTES 에 수정본 사용을 명시해 혼동 방지
+
+### 2026-07-31 [module-4] kubeconfig 격리를 3과제(task-3)까지 포함한 대회 전역 규칙으로 확장
+- 맥락: module-3 결정(모듈별 kubeconfig + 터미널별 KUBECONFIG)은 module-3·4 2클러스터 전제였으나, 당일 3과제(task-3, EKS Auto Mode·apne2)도 EKS 를 사용 — 대회 중 동시 운용 클러스터가 최대 3개
+- 채택: 동일 패턴을 module-4 런북에도 적용하고 "터미널 1개 = 클러스터 1개"를 과제 불문 전역 규칙으로 명문화 (README 서두). task-3 런북도 자체 KUBECONFIG 고정을 이미 사용
+- 기각: 공유 ~/.kube/config + context 전환 → 클러스터 3개에서 전환 실수 확률만 증가
+- 대가: 없음 (기존 결정의 적용 범위 확대)
 
 ### 2026-07-31 [module-3] 2클러스터 운용: 모듈별 kubeconfig 파일 + 터미널별 KUBECONFIG 고정
 - 맥락: module-3(apne2)·module-4(apne1)에 클러스터가 각각 있음. 공유 ~/.kube/config 는 current-context 가 "마지막에 만든 클러스터"를 향해, 전환을 잊으면 kubectl·helm 이 조용히 엉뚱한 클러스터로 감

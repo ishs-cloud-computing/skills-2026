@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Log Producer (과제지 4-2, 채점 4-3 "log-generator 2" · 4-4 API · 4-5 로그 소스)
+# - replicas 2 고정 (채점 4-3 READY 2, 4-2 app-tg healthy 2).
+# - readinessProbe: TGB 가 Ready pod 만 TG 에 등록 → 4-2 unhealthy 노출 방지.
+# 플레이스홀더: ${ECR_IMAGE} (terraform output ecr_repository_url + ":latest")
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-generator
+  namespace: o11y
+  labels:
+    app: log-generator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: log-generator
+  template:
+    metadata:
+      labels:
+        app: log-generator
+    spec:
+      containers:
+        - name: log-generator
+          image: "${ECR_IMAGE}"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: log-generator
+  namespace: o11y
+spec:
+  type: ClusterIP
+  selector:
+    app: log-generator
+  ports:
+    - port: 8080
+      targetPort: 8080
