@@ -11,6 +11,8 @@ crash.*.log
 __pycache__/
 **/eksctl/*.rendered.yaml
 **/k8s/rendered/
+# rendered/ 서브디렉토리 렌더링 (eksctl·k8s 공용, set-08 module-4부터)
+**/rendered/
 # 모듈별 kubeconfig (터미널 1개 = 클러스터 1개 운용)
 **/kubeconfig
 # set-02 module-4: sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
