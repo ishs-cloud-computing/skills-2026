@@ -107,6 +107,7 @@ SQS 메시지 수에 따라 KEDA가 worker Pod을 0~6개로 스케일, Pod은 Ka
 ## 6. 지도교사협의회(2026-07-31) 반영
 
 1. **채점지 예상 출력 별도 제공 예정** (8번 과제 명시 언급) → mark.md에 "공식 예상 출력 파일 추후 제공, 도착 시 대조" 추적 항목. 자체 예상 출력은 check 스크립트에서 도출해 임시 기재.
+2-0. **전제: IAM 생성 권한 지급** — "PowerUser 이상" 문구에도 불구하고 IAM Role/Policy 생성은 가능하다고 가정하고 설계 (IRSA·Karpenter 노드 role·Lambda role 전부 IAM 생성 필요. 불가면 과제 자체가 성립 안 함).
 2. **리소스 삭제 금지 정책 가능성** (PowerUser 지급, root 미지급) → destroy·재배포 의존 런북 단계 금지. 이름 충돌 시 삭제 대신 변수 리네임 우회 — 이름 전변수화가 보험. set-07의 "log group 선삭제 후 재apply" 해법은 대회에서 불가할 수 있음 → NOTES 함정 기록.
 3. **CloudShell kubectl 필수 요구 확정** (Identity 방식 자유) → public endpoint + API_AND_CONFIG_MAP + access entry fallback 설계 부합. 런북에 CloudShell kubectl 확인 단계 필수 배치.
 4. **2과제 당일 최대 +2모듈** (추첨 1인 세트의 4모듈 전체) → 모듈 독립성·전변수화 원칙 재확인. 구조 변경 없음.
