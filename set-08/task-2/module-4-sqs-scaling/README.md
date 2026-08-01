@@ -70,24 +70,34 @@ terraform output -json > outputs.json   # 커밋 금지 (.gitignore)
 주요 output을 세션 변수로 로드하고 `.env.ps1`(본 PC 재접속용)·`.env`(CloudShell 업로드용)로 저장한다:
 
 ```powershell
-$env:ACCOUNT_ID    = terraform output -raw account_id
-$env:REGION        = "us-west-2"
-$env:VPC_ID        = terraform output -raw vpc_id
-$SN                = terraform output -json private_subnet_ids | ConvertFrom-Json
-$env:PRIV_SUBNET_A = $SN.'skills-sqs-sn-priv-a'
-$env:PRIV_SUBNET_B = $SN.'skills-sqs-sn-priv-b'
-$env:QUEUE_URL     = terraform output -raw queue_url
-$env:ECR_IMAGE     = "$(terraform output -raw ecr_repo_url):latest"
+$env:ACCOUNT_ID           = terraform output -raw account_id
+$env:REGION               = "us-west-2"
+$env:VPC_ID               = terraform output -raw vpc_id
+$SN                       = terraform output -json private_subnet_ids | ConvertFrom-Json
+$env:PRIV_SUBNET_A        = $SN.'skills-sqs-sn-priv-a'
+$env:PRIV_SUBNET_B        = $SN.'skills-sqs-sn-priv-b'
+$env:QUEUE_URL            = terraform output -raw queue_url
+$env:ECR_IMAGE            = "$(terraform output -raw ecr_repo_url):latest"
+$env:KEDA_POLICY_ARN      = terraform output -raw keda_policy_arn
+$env:KARPENTER_POLICY_ARN = terraform output -raw karpenter_policy_arn
+$env:WORKER_POLICY_ARN    = terraform output -raw worker_policy_arn
+$env:NODE_ROLE_ARN        = terraform output -raw karpenter_node_role_arn
+$env:NODE_ROLE_NAME       = terraform output -raw karpenter_node_role_name
 cd ..
 
 @"
-`$env:ACCOUNT_ID    = "$env:ACCOUNT_ID"
-`$env:REGION        = "$env:REGION"
-`$env:VPC_ID        = "$env:VPC_ID"
-`$env:PRIV_SUBNET_A = "$env:PRIV_SUBNET_A"
-`$env:PRIV_SUBNET_B = "$env:PRIV_SUBNET_B"
-`$env:QUEUE_URL     = "$env:QUEUE_URL"
-`$env:ECR_IMAGE     = "$env:ECR_IMAGE"
+`$env:ACCOUNT_ID           = "$env:ACCOUNT_ID"
+`$env:REGION               = "$env:REGION"
+`$env:VPC_ID               = "$env:VPC_ID"
+`$env:PRIV_SUBNET_A        = "$env:PRIV_SUBNET_A"
+`$env:PRIV_SUBNET_B        = "$env:PRIV_SUBNET_B"
+`$env:QUEUE_URL            = "$env:QUEUE_URL"
+`$env:ECR_IMAGE            = "$env:ECR_IMAGE"
+`$env:KEDA_POLICY_ARN      = "$env:KEDA_POLICY_ARN"
+`$env:KARPENTER_POLICY_ARN = "$env:KARPENTER_POLICY_ARN"
+`$env:WORKER_POLICY_ARN    = "$env:WORKER_POLICY_ARN"
+`$env:NODE_ROLE_ARN        = "$env:NODE_ROLE_ARN"
+`$env:NODE_ROLE_NAME       = "$env:NODE_ROLE_NAME"
 "@ | Set-Content .env.ps1
 
 @"
@@ -103,15 +113,18 @@ export ECR_IMAGE=$env:ECR_IMAGE
 . .\.env.ps1   # 재접속 시: module-4-sqs-scaling 디렉터리에서 `. .\.env.ps1` 만 다시 실행
 ```
 
+`.env`(CloudShell 업로드용)는 docker build/push에만 필요한 값만 담는다 — ARN·role 계열은 본 PC의 `.env.ps1`에만 있으면 된다(CloudShell은 eksctl/k8s 렌더링을 하지 않는다).
+
 ## 2. cluster.yaml 렌더링 + eksctl create (~20분)
 
 ```powershell
 cd eksctl
-if (!$env:ACCOUNT_ID -or !$env:VPC_ID -or !$env:PRIV_SUBNET_A -or !$env:PRIV_SUBNET_B) { throw "STOP: terraform output 값 누락" }
+if (!$env:VPC_ID -or !$env:PRIV_SUBNET_A -or !$env:PRIV_SUBNET_B -or !$env:KEDA_POLICY_ARN -or !$env:KARPENTER_POLICY_ARN -or !$env:WORKER_POLICY_ARN -or !$env:NODE_ROLE_ARN) { throw "STOP: terraform output 값 누락" }
 New-Item -ItemType Directory -Force rendered | Out-Null
 $Y = Get-Content cluster.yaml -Raw
-$Y = $Y.Replace('${ACCOUNT_ID}', $env:ACCOUNT_ID).Replace('${VPC_ID}', $env:VPC_ID)
-$Y = $Y.Replace('${PRIV_SUBNET_A}', $env:PRIV_SUBNET_A).Replace('${PRIV_SUBNET_B}', $env:PRIV_SUBNET_B)
+$Y = $Y.Replace('${VPC_ID}', $env:VPC_ID).Replace('${PRIV_SUBNET_A}', $env:PRIV_SUBNET_A).Replace('${PRIV_SUBNET_B}', $env:PRIV_SUBNET_B)
+$Y = $Y.Replace('${KEDA_POLICY_ARN}', $env:KEDA_POLICY_ARN).Replace('${KARPENTER_POLICY_ARN}', $env:KARPENTER_POLICY_ARN)
+$Y = $Y.Replace('${WORKER_POLICY_ARN}', $env:WORKER_POLICY_ARN).Replace('${NODE_ROLE_ARN}', $env:NODE_ROLE_ARN)
 $Y | Set-Content rendered/cluster.yaml
 if (Select-String -Path rendered/cluster.yaml -Pattern '\$\{') { throw "STOP: 미치환 값 존재" }
 eksctl create cluster -f rendered/cluster.yaml   # kubeconfig 는 $env:KUBECONFIG(모듈 경로)에 기록됨
@@ -160,20 +173,21 @@ kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
 
 ```powershell
 cd k8s
-if (!$env:ECR_IMAGE -or !$env:QUEUE_URL -or !$env:REGION) { throw "STOP: terraform output 값 누락" }
+if (!$env:ECR_IMAGE -or !$env:QUEUE_URL -or !$env:REGION -or !$env:NODE_ROLE_NAME) { throw "STOP: terraform output 값 누락" }
 New-Item -ItemType Directory -Force rendered | Out-Null
 Get-ChildItem *.yaml | ForEach-Object {
-  (Get-Content $_ -Raw).Replace('${ECR_IMAGE}', $env:ECR_IMAGE).Replace('${QUEUE_URL}', $env:QUEUE_URL).Replace('${REGION}', $env:REGION) | Set-Content "rendered/$($_.Name)"
+  (Get-Content $_ -Raw).Replace('${ECR_IMAGE}', $env:ECR_IMAGE).Replace('${QUEUE_URL}', $env:QUEUE_URL).Replace('${REGION}', $env:REGION).Replace('${NODE_ROLE_NAME}', $env:NODE_ROLE_NAME) | Set-Content "rendered/$($_.Name)"
 }
 if (Select-String -Pattern '\$\{' rendered\*.yaml) { throw "STOP: 미치환 값 존재" }
 kubectl apply -f rendered/   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
 cd ..
 ```
 
-앱 Pod가 Karpenter 노드에서 Running 될 때까지 대기 (노드 프로비저닝 ~2분):
+큐가 비어 있으면 minReplicaCount 0이라 pod 0개가 정상이다 — scale-out 확인은 6단계에서 한다. apply 결과는 리소스 존재로만 확인:
 
 ```powershell
-kubectl get pod -n skills-sqs -o wide -w
+kubectl get scaledobject,triggerauthentication -n skills-sqs
+kubectl get nodepool,ec2nodeclass
 ```
 
 ## 6. 스케일 검증 (mark2-4.sh 4-6 시나리오 수동 재현)
@@ -220,15 +234,23 @@ aws eks associate-access-policy --cluster-name skills-sqs-cluster --principal-ar
   --access-scope type=cluster --region us-west-2
 ```
 
-## 8. 채점 전 상시 상태
+## 8. 채점 직전 사전 활성화
 
-큐를 비우고 pod 0·Karpenter 노드 0(min 0) 복귀를 확인한다:
+mark2-4.sh는 [4-5](Karpenter NodePool·EC2NodeClass·배치)를 [4-6](스케일아웃 검증, 12건 발송)보다 먼저 조회한다. minReplicaCount 0 설계상 큐가 비어 있으면 pod·노드가 0개인 상태가 정상이지만, 그 상태로 채점을 시작하면 4-5 시점에 아무 것도 조회되지 않는다. **purge는 하지 않는다** — 메시지는 5초/건으로 처리되고 cooldown 후 자연히 0으로 복귀하며, 채점 자체가 4-6에서 12건을 새로 발송한다. 대신 채점 시작 직전에 메시지를 미리 보내 pod·노드를 활성 상태로 만들어 둔다:
 
 ```powershell
-aws sqs purge-queue --region us-west-2 --queue-url $env:QUEUE_URL
-Start-Sleep -Seconds 120
-kubectl get pods -n skills-sqs -l app=sqs-worker
-kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool
+1..6 | ForEach-Object {
+  aws sqs send-message --region us-west-2 --queue-url $env:QUEUE_URL --message-body "pre-mark-$_" | Out-Null
+}
+# 노드 프로비저닝 포함 최대 3분 대기, Running pod 확인되면 즉시 진행
+for ($i = 0; $i -lt 18; $i++) {
+  Start-Sleep -Seconds 10
+  $running = kubectl get pods -n skills-sqs -l app=sqs-worker --field-selector=status.phase=Running --no-headers 2>$null
+  if ($running) { break }
+}
+kubectl get pods -n skills-sqs -l app=sqs-worker -o wide
+kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker -o wide
+# 위 두 명령에서 pod가 Running(≥1)이고 Karpenter 노드가 조회되면 채점 시작
 ```
 
 [CloudShell] 셀프 채점:

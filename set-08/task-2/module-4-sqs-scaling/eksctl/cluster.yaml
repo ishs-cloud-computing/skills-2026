@@ -3,8 +3,11 @@
 # ===========================================================================
 # eksctl Cluster Manifest — SQS Scaling (과제지 6-1·6-2·6-4)
 #
-# ${ACCOUNT_ID} ${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B} 는 terraform output
-# 으로 치환 후 사용 (README 2단계 — 치환 가드 2단계 필수).
+# ${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B} ${KEDA_POLICY_ARN}
+# ${KARPENTER_POLICY_ARN} ${WORKER_POLICY_ARN} ${NODE_ROLE_ARN} 는 terraform
+# output 으로 치환 후 사용 (README 2단계 — 치환 가드 2단계 필수). ARN 은
+# terraform output 을 그대로 쓰고 여기서 재조립하지 않는다 — 이름 변수가
+# 바뀌어도(30% 변동) cluster.yaml 을 고칠 필요가 없다.
 #   eksctl create cluster -f rendered/cluster.yaml
 #
 # - 노드그룹 없음: 컨트롤러(KEDA·Karpenter)는 Fargate, 워커는 Karpenter EC2.
@@ -34,7 +37,7 @@ accessConfig:
   accessEntries:
     # Karpenter 노드는 Terraform 생성 역할로 부팅 — eksctl 이 자동 등록하지
     # 않으므로 명시 (누락 시 노드 조인 실패 → 채점 4-6 실패)
-    - principalARN: "arn:aws:iam::${ACCOUNT_ID}:role/KarpenterNodeRole-skills-sqs-cluster"
+    - principalARN: "${NODE_ROLE_ARN}"
       type: EC2_LINUX
 
 vpc:
@@ -72,17 +75,17 @@ iam:
         name: keda-operator
         namespace: keda
       attachPolicyARNs:
-        - "arn:aws:iam::${ACCOUNT_ID}:policy/skills-sqs-keda-policy"
+        - "${KEDA_POLICY_ARN}"
     - metadata:
         name: karpenter
         namespace: karpenter
       attachPolicyARNs:
-        - "arn:aws:iam::${ACCOUNT_ID}:policy/skills-sqs-karpenter-policy"
+        - "${KARPENTER_POLICY_ARN}"
     - metadata:
         name: sqs-worker-sa
         namespace: skills-sqs
       attachPolicyARNs:
-        - "arn:aws:iam::${ACCOUNT_ID}:policy/skills-sqs-worker-policy"
+        - "${WORKER_POLICY_ARN}"
 
 # ----- Addons (버전 미핀 — 작업 규칙 2: 최신 안정) -----
 # coredns 는 Fargate 강제: 노드그룹이 없으므로 computeType 미지정 시 Pending.

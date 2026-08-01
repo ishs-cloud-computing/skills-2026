@@ -54,6 +54,11 @@ export QUEUE_URL=$(terraform output -raw queue_url)
 ECR_REPO_URL=$(terraform output -raw ecr_repo_url)
 # 중괄호 필수: zsh 는 "$ECR_REPO_URL:latest" 의 :l 을 소문자 modifier 로 해석해 이미지명이 깨진다
 export ECR_IMAGE="${ECR_REPO_URL}:latest"
+export KEDA_POLICY_ARN=$(terraform output -raw keda_policy_arn)
+export KARPENTER_POLICY_ARN=$(terraform output -raw karpenter_policy_arn)
+export WORKER_POLICY_ARN=$(terraform output -raw worker_policy_arn)
+export NODE_ROLE_ARN=$(terraform output -raw karpenter_node_role_arn)
+export NODE_ROLE_NAME=$(terraform output -raw karpenter_node_role_name)
 cd ..
 
 cat > .env <<EOF
@@ -64,6 +69,11 @@ export PRIV_SUBNET_A=${PRIV_SUBNET_A}
 export PRIV_SUBNET_B=${PRIV_SUBNET_B}
 export QUEUE_URL=${QUEUE_URL}
 export ECR_IMAGE=${ECR_IMAGE}
+export KEDA_POLICY_ARN=${KEDA_POLICY_ARN}
+export KARPENTER_POLICY_ARN=${KARPENTER_POLICY_ARN}
+export WORKER_POLICY_ARN=${WORKER_POLICY_ARN}
+export NODE_ROLE_ARN=${NODE_ROLE_ARN}
+export NODE_ROLE_NAME=${NODE_ROLE_NAME}
 EOF
 
 source .env   # 재접속 시: module-4-sqs-scaling 디렉터리에서 `source .env` 만 다시 실행
@@ -77,8 +87,8 @@ mkdir -p rendered
 # 가드 2단계: ① envsubst 는 unset 변수도 빈 문자열로 치환하므로 치환 전 비어있음 검사
 #            ② 변수 목록 명시 → 목록 외 신규 플레이스홀더는 남아서 grep 에 걸림
 # 스니펫은 zsh/bash 겸용 (붙여넣기 실행 대비: exit 금지, if 게이트로만 차단)
-if [ -n "$ACCOUNT_ID" ] && [ -n "$VPC_ID" ] && [ -n "$PRIV_SUBNET_A" ] && [ -n "$PRIV_SUBNET_B" ]; then
-  envsubst '${ACCOUNT_ID} ${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B}' < cluster.yaml > rendered/cluster.yaml
+if [ -n "$VPC_ID" ] && [ -n "$PRIV_SUBNET_A" ] && [ -n "$PRIV_SUBNET_B" ] && [ -n "$KEDA_POLICY_ARN" ] && [ -n "$KARPENTER_POLICY_ARN" ] && [ -n "$WORKER_POLICY_ARN" ] && [ -n "$NODE_ROLE_ARN" ]; then
+  envsubst '${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B} ${KEDA_POLICY_ARN} ${KARPENTER_POLICY_ARN} ${WORKER_POLICY_ARN} ${NODE_ROLE_ARN}' < cluster.yaml > rendered/cluster.yaml
   if grep -n '\${' rendered/cluster.yaml; then echo "STOP: 미치환 값 존재"
   else eksctl create cluster -f rendered/cluster.yaml; fi
 else echo "STOP: terraform output 값 누락"; fi
@@ -118,12 +128,12 @@ kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
 
 ```bash
 cd k8s
-if [ -z "$ECR_IMAGE" ] || [ -z "$QUEUE_URL" ] || [ -z "$REGION" ]; then
+if [ -z "$ECR_IMAGE" ] || [ -z "$QUEUE_URL" ] || [ -z "$REGION" ] || [ -z "$NODE_ROLE_NAME" ]; then
   echo "STOP: terraform output 값 누락"
 else
   mkdir -p rendered
   for f in *.yaml; do
-    sed -e "s|\${ECR_IMAGE}|${ECR_IMAGE}|g" -e "s|\${QUEUE_URL}|${QUEUE_URL}|g" -e "s|\${REGION}|${REGION}|g" "$f" > "rendered/$f"
+    sed -e "s|\${ECR_IMAGE}|${ECR_IMAGE}|g" -e "s|\${QUEUE_URL}|${QUEUE_URL}|g" -e "s|\${REGION}|${REGION}|g" -e "s|\${NODE_ROLE_NAME}|${NODE_ROLE_NAME}|g" "$f" > "rendered/$f"
   done
   if grep -rn '\${' rendered/; then echo "STOP: 미치환 값 존재"
   else kubectl apply -f rendered/; fi   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
@@ -131,10 +141,11 @@ fi
 cd ..
 ```
 
-앱 Pod가 Karpenter 노드에서 Running 될 때까지 대기 (노드 프로비저닝 ~2분):
+큐가 비어 있으면 minReplicaCount 0이라 pod 0개가 정상이다 — scale-out 확인은 6단계에서 한다. apply 결과는 리소스 존재로만 확인:
 
 ```bash
-kubectl get pod -n skills-sqs -o wide -w
+kubectl get scaledobject,triggerauthentication -n skills-sqs
+kubectl get nodepool,ec2nodeclass
 ```
 
 ## 6. 스케일 검증 (mark2-4.sh 4-6 시나리오 수동 재현)
@@ -172,15 +183,23 @@ aws eks associate-access-policy --cluster-name skills-sqs-cluster --principal-ar
   --access-scope type=cluster --region us-west-2
 ```
 
-## 8. 채점 전 상시 상태
+## 8. 채점 직전 사전 활성화
 
-큐를 비우고 pod 0·Karpenter 노드 0(min 0) 복귀를 확인한다:
+mark2-4.sh는 [4-5](Karpenter NodePool·EC2NodeClass·배치)를 [4-6](스케일아웃 검증, 12건 발송)보다 먼저 조회한다. minReplicaCount 0 설계상 큐가 비어 있으면 pod·노드가 0개인 상태가 정상이지만, 그 상태로 채점을 시작하면 4-5 시점에 아무 것도 조회되지 않는다. **purge는 하지 않는다** — 메시지는 5초/건으로 처리되고 cooldown 후 자연히 0으로 복귀하며, 채점 자체가 4-6에서 12건을 새로 발송한다. 대신 채점 시작 직전에 메시지를 미리 보내 pod·노드를 활성 상태로 만들어 둔다:
 
 ```bash
-aws sqs purge-queue --region us-west-2 --queue-url "$QUEUE_URL"
-sleep 120
-kubectl get pods -n skills-sqs -l app=sqs-worker
-kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool
+for i in $(seq 1 6); do
+  aws sqs send-message --region us-west-2 --queue-url "$QUEUE_URL" --message-body "pre-mark-${i}" >/dev/null
+done
+# 노드 프로비저닝 포함 최대 3분 대기, Running pod 확인되면 즉시 진행
+for i in $(seq 1 18); do
+  sleep 10
+  running=$(kubectl get pods -n skills-sqs -l app=sqs-worker --field-selector=status.phase=Running --no-headers 2>/dev/null)
+  [ -n "$running" ] && break
+done
+kubectl get pods -n skills-sqs -l app=sqs-worker -o wide
+kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker -o wide
+# 위 두 명령에서 pod가 Running(≥1)이고 Karpenter 노드가 조회되면 채점 시작
 ```
 
 [CloudShell] 셀프 채점: [README.md](README.md) 8단계 CloudShell 항목을 수행한다.
