@@ -16,7 +16,7 @@ $ARGUMENTS 를 해석한다:
 1. `_template/task-<N>/` 를 대상 과제 폴더로 복사했는지 확인. 아니면 먼저 복사.
 2. 이 과제의 `task.md`(또는 task.pdf)와 채점 스크립트를 읽는다.
    - task-1 → `mark.sh`
-   - task-2 → `mark/mark2-1.sh` ~ `mark2-4.sh` (모듈 4개 고정)
+   - task-2 → `mark/mark1.sh` ~ `markN.sh` (기본 4개, 당일 최대 6개)
 3. set-03/task-1 의 NOTES.md·README·docs 문서를 표준 형식으로 삼는다.
 
 ## 설계 순서
@@ -34,6 +34,9 @@ $ARGUMENTS 를 해석한다:
   Explanation. `docs/CONTRIBUTING.md`(Diátaxis) 준수. 사이트 발행됨.
 
 ## 30% 변동 대비
+당일 변동은 기존 문제 교체가 아니라 **문항 추가**다(1과제: 모니터링 도구 설치류,
+2과제: 하위 모듈 최대 2개). 추가 시간은 없다. 모듈 5·6이나 관측성 스택을 얹을 때
+기존 리소스를 안 건드리도록 경계를 끊어둔다.
 이름·CIDR·리전·인스턴스 타입·개수는 변수화. `name_prefix` 만으로 안 끝나는
 리터럴이 있으면 NOTES.md 에 치환 범위를 기록.
 
@@ -48,7 +51,9 @@ $ARGUMENTS 를 해석한다:
 - [ ] README 런북 순서가 실제 배포 순서와 일치
 - [ ] 결정 로그의 기각 대안이 실재하는지 확인
 - [ ] `terraform fmt`·`validate`·`plan` 클린
-- [ ] (task-2) 모듈 4개 각각 mark2-N.sh 대조, NOTES 모듈 현황 표 4행 채움
+- [ ] (EKS) 일반 CloudShell 에서 `aws eks update-kubeconfig` 1회로 `kubectl get nodes` 가 된다
+      (채점 중 허용되는 명령은 그 한 줄뿐이다)
+- [ ] (task-2) 모듈마다 markN.sh 대조, NOTES 모듈 현황 표를 모듈 수만큼 채움
 - [ ] (task-2) 모듈 간 리소스 경계가 안 섞였는지 확인
 
 ## 실행 방식
