@@ -5,7 +5,15 @@ sidebar:
   order: 2
 ---
 
-실제 배포·채점 명령은 각 모듈 README(`module-2-lattice/README.md`, `module-4-sqs-scaling/README.md`)가 소유한다. 이 페이지는 그 런북이 왜 이런 모양인지만 다룬다.
+실제 배포·채점 명령은 각 모듈 README(런북)가 소유한다. 이 페이지는 그 런북이 왜 이런 모양인지만 다룬다.
+
+## 왜 module-1 검증은 대기 루프로 시작하는가
+
+module-1의 user-data는 pip 설치 → CA bundle 다운로드 → systemd 기동 → seed·인덱스 재시도 루프 순서로 돌고, DocumentDB 접속이 초기 몇 분간 튕길 수 있어 완료 시점이 비결정적이다. 런북 3단계가 `/health` 200 폴링으로 시작하는 이유다 — 고정 sleep은 짧으면 거짓 실패, 길면 시간 낭비라 상태 기반 대기로 통일한다(module-2 런북과 같은 패턴).
+
+## 왜 module-3 검증이 두 갈래인가
+
+채점 3-5는 Lambda를 **직접 invoke**해 복구를 확인한다 — 이 경로는 CloudTrail·EventBridge를 전혀 타지 않는다. 반면 과제의 실제 의도(5-4)는 이벤트 실경로 자동 복구다. 그래서 런북은 검증 1(채점과 동일한 직접 invoke payload — 채점이 보는 그대로를 미리 본다)과 검증 2(실경로 — CloudTrail 전달 지연 수 분을 폴링으로 흡수)를 분리한다. 하나로 합치면 실경로 지연이 채점 형태의 확인을 가리거나, 직접 invoke 성공이 실경로 미동작을 가린다.
 
 ## 왜 치환 가드가 2단계인가
 

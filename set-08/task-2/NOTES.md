@@ -9,12 +9,21 @@
 
 | 모듈 | 이름 | 리전 | 채점 커버 | 미해결 |
 |------|------|------|-----------|--------|
-| 1 | nosql | ap-northeast-2 | 0/5 | 미착수 |
+| 1 | nosql | ap-northeast-2 | 5/5 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
 | 2 | lattice | ap-northeast-1 | 5/5 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
-| 3 | event-handling | ap-southeast-1 | 0/5 | 미착수 |
+| 3 | event-handling | ap-southeast-1 | 5/5 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
 | 4 | sqs-scaling | us-west-2 | 6/6 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
 
-module-2·module-4는 terraform/eksctl/k8s/runbook까지 구현 완료했으나 자격증명이 있는 로컬에서 `terraform plan`만 실행했다(module-2 24 add, module-4 30 add, 둘 다 0 errors). apply 이후 CloudShell `mark2-2.sh`·`mark2-4.sh` 실채점은 아직 수행하지 않았다 — 아래 커버리지 표의 `[~]`는 전부 이 수준을 의미한다.
+4개 모듈 전부 terraform(+module-4는 eksctl/k8s)/runbook까지 구현 완료했으나 자격증명이 있는 로컬에서 `terraform plan`만 실행했다(module-1 22 add, module-2 24 add, module-3 16 add, module-4 30 add, 전부 0 errors). apply 이후 CloudShell `mark2-N.sh` 실채점은 아직 수행하지 않았다 — 아래 커버리지 표의 `[~]`는 전부 이 수준을 의미한다.
+
+### module-1 채점 커버리지 (mark2-1.sh ↔ 구현)
+<!-- [x] apply 후 mark2-1.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
+
+- [~] 1-1 DocumentDB Cluster 및 Instance 구성 — `terraform/docdb.tf`: cluster `skills-nosql-docdb-cluster`(storage_encrypted + 전용 KMS `alias/skills-nosql-docdb`, backup 1일, port 27017) + instance `skills-nosql-docdb-instance-1`(db.t3.medium)
+- [~] 1-2 Secret 및 Client EC2 구성 — `terraform/secrets.tf`(`skills-nosql-docdb-secret`: username/password/host, host는 scheme·port 없는 cluster endpoint) + `terraform/ec2.tf`(`skills-nosql-client-ec2`, public 서브넷 Public IP)
+- [~] 1-3 Client Application 및 데이터 적재 — `terraform/userdata.sh.tftpl`: pip boto3·pymongo + `global-bundle.pem` 다운로드 + systemd `serve` + `seed` 재시도 루프(최대 ~10분). counts 8/6/3 + BSON Date 는 지급 앱 seed 가 보장
+- [~] 1-4 Index 및 TTL 구성 — `terraform/index_setup.py.tftpl`: 과제지 3-3 인덱스 8개(orders 3·products 2·sessions 3, `expiresAt` TTL `expireAfterSeconds: 0`) — 지급 앱엔 생성 코드가 없어 별도 스크립트 (결정 로그)
+- [~] 1-5 NoSQL 조회 기능 검증 — 지급 앱 조회 로직 + 1-3 적재·1-4 인덱스 전제. 엔드포인트 4개 200 은 README 3단계에서 사전 확인
 
 ### module-2 채점 커버리지 (mark2-2.sh ↔ 구현)
 <!-- [x] apply 후 mark2-2.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
@@ -24,6 +33,15 @@ module-2·module-4는 terraform/eksctl/k8s/runbook까지 구현 완료했으나 
 - [~] 2-3 VPC Lattice Service Network 및 Service 구성 — `terraform/lattice.tf`: `aws_vpclattice_service_network.this`(name=`skills-lattice-sn`) + `aws_vpclattice_service.order`(name=`skills-lattice-order-service`, dns_entry 노출) + SN-Service association
 - [~] 2-4 Target Group, Listener, Security Group 구성 — `terraform/lattice.tf`의 `aws_vpclattice_target_group.order`(INSTANCE, HTTP/8080, health check `/health`) + `aws_vpclattice_listener.http`(HTTP/80→TG forward) + `terraform/sg.tf`의 service SG(prefix list 소스만)
 - [~] 2-5 End-to-End 기능 검증 — `ec2.tf`의 client user-data가 `SERVICE_URL`을 `aws_vpclattice_service.order.dns_entry[0].domain_name`으로 terraform 참조 주입 → `client_app.py`가 `/v1/client/orders?id=1001` 호출 시 Lattice 경유로 `service_app.py`에 도달
+
+### module-3 채점 커버리지 (mark2-3.sh ↔ 구현)
+<!-- [x] apply 후 mark2-3.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
+
+- [~] 3-1 기본 VPC, EC2, Security Group 구성 — `terraform/vpc.tf`(`skills-ceh-vpc` 10.73.0.0/16, `skills-ceh-ec2` running + protected SG 연결) + `terraform/sg.tf`(`skills-ceh-protected-sg`)
+- [~] 3-2 보호 대상 SG 기준 상태 — `terraform/sg.tf`: ingress 리소스 미선언(Inbound 0개) + egress 는 별도 `aws_vpc_security_group_egress_rule`
+- [~] 3-3 SNS Topic 및 Lambda 구성 — `terraform/sns.tf`(`skills-ceh-alert-topic` Standard) + `terraform/lambda.tf`(`skills-ceh-remediate-fn`: python3.12 / `remediate_security_group.lambda_handler` / timeout 30 / env `PROTECTED_SECURITY_GROUP_ID`·`SNS_TOPIC_ARN`)
+- [~] 3-4 CloudTrail, EventBridge Rule 및 Target 구성 — `terraform/cloudtrail.tf`(`skills-ceh-cloudtrail` enable_logging + S3 버킷/정책) + `terraform/eventbridge.tf`(`skills-ceh-sg-change-rule` default bus, `AuthorizeSecurityGroupIngress` 패턴, Lambda target + `aws_lambda_permission`)
+- [~] 3-5 최종 기능 검증 — 지급 Lambda 가 Inbound 전체 revoke + SNS 발행. 로그 그룹 `/aws/lambda/skills-ceh-remediate-fn` 은 terraform 선생성. README 검증 1(직접 invoke, 채점과 동일 payload)·검증 2(실경로)로 사전 확인
 
 ### module-4 채점 커버리지 (mark2-4.sh ↔ 구현)
 <!-- [x] apply 후 mark2-4.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
@@ -43,21 +61,49 @@ module-2·module-4는 terraform/eksctl/k8s/runbook까지 구현 완료했으나 
 - **CloudShell 업로드 파일 목록**: module-4는 `Dockerfile`(`app/Dockerfile`)·`worker.py`(`provided/module-4/worker.py`)·mark 스크립트(`mark/mark2-4.sh`, module-2는 `mark/mark2-2.sh`)를 CloudShell에 업로드해야 한다. Windows 작업본을 그대로 업로드하면 CRLF가 섞여 bash 스크립트가 깨질 수 있어, 실행 전 `sed -i 's/\r$//' <파일>` 가드가 필요하다(각 모듈 README에 반영됨).
 - **CloudShell `.env`는 세션 초기화 시 재업로드 필요**: CloudShell 세션이 끊기면 홈 디렉터리가 초기화되므로 `.env`(module-4 3단계 빌드용) 재업로드가 필요하다. 로컬 `.env.ps1`은 본 PC 재부팅에도 남지만(파일 초기화는 대회 환경 규칙, `.env.ps1`은 gitignore 대상이라 로컬 파일 자체엔 영향 없음) CloudShell 측 파일은 그렇지 않다는 점을 구분한다.
 - **helm 차트 미핀 — 대회 당일 차트 기본값 재확인**: KEDA·Karpenter helm 설치에 `--version`을 고정하지 않았다(작업 규칙 2 예외 — eksctl·helm·EKS Addon은 최신 안정). 최신 차트가 `replicas`·`dnsPolicy`·`tolerations` 등의 기본값을 바꾸면 README 4단계 helm 값이 무효화될 수 있어, 대회 당일 실행 전 공식 문서로 현재 기본값을 재확인해야 한다.
+- **[module-1] 지급 앱 상수가 변수 변경 폭을 제한한다**: `docdb_client.py`는 region(`ap-northeast-2`)·secret 이름(`skills-nosql-docdb-secret`)·DB 이름(`skills_retail`)·port(27017)를 상수로 박아 둔다. terraform 변수(`region`/`secret_name`/`docdb_port`)만 바꾸면 지급 앱과 어긋나 기능 검증 전체가 실패한다 — 이 변수들은 대회 당일 지급 파일 자체가 바뀐 경우에만 함께 바꾼다.
+- **[module-1] TTL 인덱스는 실제로 동작한다 — dataset 만료일 확인**: `sessions.expiresAt`에 TTL(expireAfterSeconds 0)을 걸므로 그 시각(현 dataset 기준 2026-12-01~03)이 지나면 DocumentDB가 문서를 자동 삭제해 sessions count<3 → 채점 1-3·1-4 연쇄 실패. 대회 당일 지급 dataset의 `expiresAt`이 채점 시점보다 미래인지 반드시 확인하고, 과거라면 감독관에게 문의(지급 데이터 결함).
+- **[module-3] 실경로 이벤트 지연은 채점 리스크 아님**: CloudTrail→EventBridge 전달은 수 분 걸릴 수 있으나, mark2-3.sh 3-5는 Lambda를 직접 invoke하고 폴링(최대 180초)하므로 실채점은 전달 지연과 무관. 실경로는 README 검증 2로 별도 확인만 한다. 채점 중 mark가 추가한 TCP/22가 실경로 이벤트로 한 번 더 Lambda를 깨워도 IGNORED/NO_ACTION으로 무해.
+- **[module-3] trail S3 버킷명은 전역 유일**: `skills-ceh-cloudtrail-<account_id>` 형태로 계정 ID를 붙였다. 그래도 충돌(잔존 버킷 등) 시 삭제 금지 정책에 따라 버킷을 지우지 말고 `trail_name` 변수를 리네임해 우회한다.
 - **협의회 추적**: 공식 예상 출력 파일(mark.md 원본) 도착 시 이 표와 `mark/mark2-*.sh` 실제 검사 항목을 다시 대조한다.
 - **NodePool/EC2NodeClass의 subnet·SG selector 태그 값은 치환 범위 밖 리터럴**: `k8s/10-karpenter-nodepool.yaml`의 `subnetSelectorTerms`(`karpenter.sh/discovery: "skills-sqs-cluster"`)와 `securityGroupSelectorTerms`(`aws:eks:cluster-name: "skills-sqs-cluster"`)는 README 렌더링 단계의 치환 placeholder가 아니라 클러스터 이름을 직접 박은 리터럴이다. `terraform/variables.tf`의 `var.cluster_name`이나 `eksctl/cluster.yaml`의 `metadata.name`을 바꾸면(30% 변동 대비) 이 두 태그 값도 함께 수동으로 맞춰야 한다 — 놓치면 Karpenter가 서브넷·SG를 디스커버리하지 못해 노드 프로비저닝 자체가 실패한다.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
 
-- module-1 apply:
+- module-1 apply: terraform plan 실측 22 add / 0 errors (apply 미실행) — DocumentDB instance 생성 ~10-15분 예상이 병목
 - module-2 apply: terraform plan 실측 24 add / 0 errors (apply 미실행)
-- module-3 apply:
+- module-3 apply: terraform plan 실측 16 add / 0 errors (apply 미실행)
 - module-4 apply: terraform plan 실측 30 add / 0 errors (apply 미실행)
 - 공통 병목: EKS 클러스터 생성(eksctl, module-4) ~15-20분 예상 — CloudShell 이미지 빌드/push와 병렬 처리 설계(README 3단계)
 
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-01 [module-3] EventBridge 패턴 최소화 — groupId 필터 미포함
+- 맥락: rule 이 모든 `AuthorizeSecurityGroupIngress` 를 잡으면 보호 SG 외 이벤트에도 Lambda 가 호출된다
+- 채택: 과제지 5-4 문구 그대로 source/detail-type/eventName 매칭만. 보호 SG 여부 판별은 지급 Lambda 의 IGNORED 로직에 위임
+- 기각: `detail.requestParameters.groupId` 필터 추가 → CloudTrail 이벤트의 groupId 위치가 요청 형태에 따라 달라(단건/중첩) 매칭 누락 위험이 있고 과제지 무요구
+- 대가: 무관 SG 이벤트에도 Lambda 호출 발생 (IGNORED 로 무해, 비용 무시 가능)
+
+### 2026-08-01 [module-3] EC2 는 IGW 없는 최소 VPC 구성
+- 맥락: 채점 3-1 은 EC2 존재·protected SG 연결만 확인하고 외부 접근 요구가 없다
+- 채택: 서브넷 1개, IGW·Public IP 미생성. protected SG 는 ingress 리소스 자체를 선언하지 않아 Inbound 0개(채점 3-2)가 기본 상태이고, 채점 3-5 가 임시 추가하는 규칙도 state 밖이라 drift 가 없다
+- 기각: public 서브넷 + IGW → 접근할 일이 없는 미사용 리소스 (리뷰 규칙: 미사용 정리)
+- 대가: EC2 에 SSM/SSH 접근 불가 — 접근 필요 자체가 없어 무해
+
+### 2026-08-01 [module-1] 인덱스·TTL 생성을 별도 index_setup.py 로 분리
+- 맥락: 과제지 3-3 의 인덱스 8종(TTL 포함)은 지급 `docdb_client.py` 에 생성 코드가 없다(조회·나열만). 지급 앱은 수정 금지
+- 채택: `terraform/index_setup.py.tftpl`(region·secret 이름은 terraform 변수 치환, `create_index` 멱등)을 user-data 로 EC2 에 배치해 seed 직후 실행
+- 기각: (a) 지급 앱에 생성 코드 추가 → 수정 금지 위반. (b) CloudShell/로컬에서 mongosh 수동 실행 → DocumentDB 가 외부 비노출이라 도달 불가하고 수동 단계만 추가
+- 대가: 없음
+
+### 2026-08-01 [module-1] user-data 임베드를 base64gzip 으로 전환
+- 맥락: 지급 `docdb_client.py`(9KB) + `retail_dataset.json`(5KB) 을 module-2 식 평문 base64 로 임베드하면 EC2 user-data 16KB 한도를 초과한다
+- 채택: terraform `base64gzip()` + 부팅 시 `base64 -d | gunzip` — 총 user-data ~7KB
+- 기각: S3 스테이징 버킷 경유 다운로드 → 버킷·IAM 권한·업로드 순서가 추가되는 과제지 무요구 리소스
+- 대가: user-data 원문 가독성 저하 (스크립트 원본은 템플릿 파일로 저장소에 남아 무해)
 
 ### 2026-08-01 [module-4] eksctl/k8s ARN·role 플레이스홀더를 terraform output 직접 소비로 전환 (fix-wave)
 - 맥락: `eksctl/cluster.yaml`의 attachPolicyARNs 3개·accessEntries principalARN, `k8s/10-karpenter-nodepool.yaml`의 EC2NodeClass `role`이 모두 `arn:aws:iam::${ACCOUNT_ID}:policy/skills-sqs-*` 또는 `KarpenterNodeRole-skills-sqs-cluster` 형태로 ARN·이름을 리터럴 재조립하고 있었다. 이름 변수(`name_prefix`·`cluster_name`)가 대회 당일 바뀌면(30% 변동) 이 재조립 문자열들이 개별적으로 어긋나 eksctl 후반부(IRSA·access entry)나 Karpenter 노드 조인이 조용히 실패할 위험이 있었다

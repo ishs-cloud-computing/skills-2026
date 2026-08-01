@@ -14,12 +14,27 @@ sidebar:
 
 | 모듈 | 주제 | 리전 | 핵심 서비스 | 상태 |
 |------|------|------|-------------|------|
-| 1 | NoSQL (DocumentDB) | ap-northeast-2 | DocumentDB + EC2 Client | 미착수 |
+| 1 | NoSQL (DocumentDB) | ap-northeast-2 | DocumentDB + EC2 Client | 구현 완료 (실채점 전) |
 | 2 | VPC Lattice | ap-northeast-1 | EC2 ×2 + VPC Lattice | 구현 완료 (실채점 전) |
-| 3 | Cloud Event Handling | ap-southeast-1 | EventBridge + Lambda + SNS | 미착수 |
+| 3 | Cloud Event Handling | ap-southeast-1 | EventBridge + Lambda + SNS | 구현 완료 (실채점 전) |
 | 4 | SQS Scaling | us-west-2 | EKS(Fargate) + KEDA(SQS) + Karpenter | 구현 완료 (실채점 전) |
 
-이번 구현 범위는 **모듈 2·4**다. 모듈 1(NoSQL)·3(Cloud Event Handling)은 이번 문서에서 다루지 않는다.
+## 모듈 1 — NoSQL (DocumentDB) 한눈에
+
+지급 Client 앱(`docdb_client.py`)이 Secrets Manager에서 접속 정보를 읽어 DocumentDB에 주문·상품·세션 데이터를 적재·조회한다.
+
+- **DocumentDB**: `skills-nosql-docdb-cluster`/`skills-nosql-docdb-instance-1`(db.t3.medium), 전용 KMS 키(`alias/skills-nosql-docdb`)로 저장 암호화, TLS 필수
+- **Client EC2**: Public IP(:8080)로 채점 curl을 받는다. 앱·데이터셋·인덱스 스크립트는 user-data로 임베드
+- **Secrets Manager**: `skills-nosql-docdb-secret` — username/password/host(hostname만). 앱이 형식을 검증한다
+- **인덱스·TTL**: 지급 앱에 생성 코드가 없어 별도 `index_setup.py`가 seed 직후 생성한다
+
+## 모듈 3 — Cloud Event Handling 한눈에
+
+보호 대상 SG(`skills-ceh-protected-sg`, Inbound 0개가 기준 상태)에 Inbound 규칙이 추가되면 CloudTrail→EventBridge→Lambda가 자동 복구하고 SNS로 알린다.
+
+- **감지**: 단일 리전 CloudTrail(`skills-ceh-cloudtrail`) → default bus의 `AuthorizeSecurityGroupIngress` 패턴 rule(`skills-ceh-sg-change-rule`)
+- **복구**: 지급 `remediate_security_group.py`(python3.12) — 보호 SG 이벤트만 처리하고 나머지는 IGNORED
+- **알림**: `skills-ceh-alert-topic`(Standard)에 복구 결과 발행
 
 ## 모듈 2 — VPC Lattice 한눈에
 

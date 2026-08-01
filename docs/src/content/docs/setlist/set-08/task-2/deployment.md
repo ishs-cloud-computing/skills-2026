@@ -5,7 +5,23 @@ sidebar:
   order: 3
 ---
 
-각 선택의 "왜"만 다룬다. 실행 절차는 [런북](../runbook/), 채점 대조는 [매핑](../mapping/) 참고. 모듈 1·3은 미착수라 다루지 않는다.
+각 선택의 "왜"만 다룬다. 실행 절차는 [런북](../runbook/), 채점 대조는 [매핑](../mapping/) 참고.
+
+## 모듈 1 — 왜 인덱스를 별도 스크립트로 만드는가
+
+지급 `docdb_client.py`는 인덱스를 나열(`/v1/admin/indexes`)할 뿐 생성하지 않는다. 그런데 채점 1-4는 과제지 3-3의 인덱스 8종(TTL 포함)이 실제로 존재해야 통과한다. 지급 앱은 수정 금지이므로 생성 코드는 앱 밖에 있어야 하고, DocumentDB는 외부 비노출이라 로컬·CloudShell에서 접속할 수도 없다. 남는 자리는 클러스터와 같은 VPC에 있는 Client EC2뿐이다 — terraform이 `index_setup.py`를 렌더링해 user-data로 배치하고, seed 직후 실행한다. `create_index`는 멱등이라 부팅 재시도 루프에 안전하게 들어간다.
+
+## 모듈 1 — 왜 user-data가 gzip 임베드인가
+
+module-2는 지급 앱을 평문 base64로 user-data에 임베드했다. 같은 방식이면 module-1은 앱(9KB)+데이터셋(5KB)의 base64 팽창(×1.37)만으로 EC2 user-data 한도(16KB)를 넘는다. terraform `base64gzip()`으로 압축 임베드하면 총 ~7KB로 수렴하고, S3 스테이징 버킷(추가 리소스·IAM·업로드 순서)을 만들 필요가 없어진다.
+
+## 모듈 3 — 왜 EventBridge 패턴에 groupId 필터가 없는가
+
+rule 패턴을 보호 SG의 `groupId`까지 좁히면 Lambda 호출 자체를 줄일 수 있다. 그러나 CloudTrail 이벤트에서 groupId가 놓이는 위치는 요청 형태(단건 파라미터/중첩 목록)에 따라 달라 필터가 이벤트를 놓칠 수 있고, 지급 Lambda가 이미 보호 SG가 아닌 이벤트를 IGNORED로 걸러낸다. 감지 누락(채점 실패)과 불필요한 호출(무해) 중 후자를 받아들이는 선택이다.
+
+## 모듈 3 — 왜 EC2에 IGW조차 없는가
+
+채점 3-1은 EC2가 running이고 보호 SG가 연결돼 있는지만 본다. 이 EC2는 트래픽을 받지도 보내지도 않는 "보호 대상 표본"이라 IGW·Public IP·NAT 어느 것도 필요 없다. 미사용 리소스를 줄이면 30% 변동 때 재작성 표면도 줄어든다.
 
 ## 모듈 4 — 도구 3분담: terraform / eksctl / helm
 
