@@ -1,0 +1,21 @@
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# set -e 미사용: 일부 단계 실패해도 systemd 등록까지 진행 (Restart=always 복구 여지)
+set -uxo pipefail
+mkdir -p /opt/app
+base64 -d > /opt/app/service_app.py <<'B64'
+${app_b64}
+B64
+cat > /etc/systemd/system/lattice-service.service <<'UNIT'
+[Unit]
+Description=lattice service app
+After=network.target
+[Service]
+ExecStart=/usr/bin/python3 /opt/app/service_app.py
+Restart=always
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now lattice-service
