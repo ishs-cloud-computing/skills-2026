@@ -65,7 +65,7 @@ curl client:80/v1/client/orders?id=1001
 
 - **SERVICE_URL 주입**: client user-data에 `aws_vpclattice_service.*.dns_entry[0].domain_name`을 terraform 참조로 삽입 — 의존성 순서 자동 해결, 수동 치환 없음. 대가: 도메인 변경 시 client 인스턴스 재생성(user_data 변경).
 - **앱 파일 참조**: `provided/module-2/`의 원본을 `filebase64()`로 그대로 임베드. templatefile 미사용(원본 무수정 규칙).
-- **둘 다 public 서브넷 + Public IP**: 채점 2-2가 두 인스턴스의 PublicIp 필드를 확인. 차단은 SG 책임.
+- **[2026-08-01 fix-wave 수정] Client만 Public IP, Service는 없음**: 과제지 4-4가 "Client EC2는 Public IP로 HTTP 접근 가능해야 하며, Service EC2는 Public IP 없이 내부 서비스로 구성"을 명시(task.md:117). 최초 설계 당시 "채점 2-2가 PublicIp 필드를 확인하므로 둘 다 Public IP 필요"로 잘못 판단했었다 — mark2-2.sh는 PublicIp 필드를 조회·출력만 할 뿐 값의 존재를 요구하지 않는다. `vpc.tf`의 service 서브넷은 `map_public_ip_on_launch = false`로 수정, client 서브넷만 유지. Service 접근 차단은 SG(prefix list 소스 한정)가 이중으로 담당.
 
 ## 4. module-4-sqs-scaling (terraform + eksctl + helm)
 

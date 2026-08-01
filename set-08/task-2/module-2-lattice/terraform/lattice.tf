@@ -62,7 +62,7 @@ resource "aws_vpclattice_target_group_attachment" "service" {
 resource "aws_vpclattice_listener" "http" {
   name               = var.listener_name
   protocol           = "HTTP"
-  port               = var.client_port
+  port               = var.listener_port
   service_identifier = aws_vpclattice_service.order.id
 
   default_action {

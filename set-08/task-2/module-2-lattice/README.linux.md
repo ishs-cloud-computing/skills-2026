@@ -44,6 +44,11 @@ until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
 curl -s "http://${CLIENT_IP}/health"
 # → {"status": "ok", "app": "client"}
 
+# Lattice Target Group의 healthy 전환은 배포 완료 후에도 별도로 ~30-60초 더 걸릴 수 있어
+# /health 통과 직후 곧바로 호출하면 502/타임아웃이 날 수 있다 — 재시도 루프로 흡수
+until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+  "http://${CLIENT_IP}/v1/client/orders?id=1001" | grep -q 200; do sleep 10; done
+
 curl -s "http://${CLIENT_IP}/v1/client/orders?id=1001"
 # → {"client": "ok", "service": {"order_id": "1001", "via": "vpc-lattice"}}
 #   (service.order_id=1001, service.via=vpc-lattice 확인)

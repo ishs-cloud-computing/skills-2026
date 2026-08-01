@@ -3,8 +3,9 @@
 
 # ---------------------------------------------------------------------------
 # Security Group 3개 (과제지 4-2·4-3·4-4)
-# - client   : in 80 from 0.0.0.0/0 (과제지 명시), out 은 Lattice managed
-#              prefix list 80 만 — Lattice 도메인은 link-local 대역으로
+# - client   : in var.client_port from 0.0.0.0/0 (과제지 명시), out 은 Lattice
+#              managed prefix list · var.listener_port(Lattice로 나가는
+#              트래픽 포트) 만 — Lattice 도메인은 link-local 대역으로
 #              해석되며 그 대역이 이 prefix list 에 들어있다.
 #              DNS 는 VPC 리졸버 경유라 SG 평가 대상이 아니므로 별도 규칙 불필요.
 # - service  : in 8080 from Lattice managed prefix list 만.
@@ -33,8 +34,8 @@ resource "aws_security_group" "client" {
 
   egress {
     description     = "to vpc lattice data plane"
-    from_port       = 80
-    to_port         = 80
+    from_port       = var.listener_port
+    to_port         = var.listener_port
     protocol        = "tcp"
     prefix_list_ids = [data.aws_ec2_managed_prefix_list.vpc_lattice.id]
   }

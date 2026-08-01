@@ -76,6 +76,12 @@ variable "service_port" {
   default     = 8080
 }
 
+variable "listener_port" {
+  description = "VPC Lattice Listener 포트"
+  type        = number
+  default     = 80
+}
+
 variable "sn_name" {
   description = "Service Network 이름 (채점 2-3)"
   type        = string
