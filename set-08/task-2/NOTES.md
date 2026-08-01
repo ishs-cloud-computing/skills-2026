@@ -38,12 +38,13 @@ module-2·module-4는 terraform/eksctl/k8s/runbook까지 구현 완료했으나 
 ## 함정 절
 
 - **service-sg 0.0.0.0/0 → 과제지 명시 미충족 (감점 확정 함정)**: 과제지 4-3이 "0.0.0.0/0 허용 시 미충족"을 명시. `module-2-lattice/terraform/sg.tf`의 service SG는 VPC Lattice managed prefix list 소스만 허용하도록 만들었으나, 30% 변동으로 SG 리소스를 재작성하게 되면 이 조건을 놓치기 쉽다 — service SG ingress에 CIDR 블록을 절대 추가하지 않는다.
-- **min 0이라 채점 4-5 시점 pod·노드 0개 가능**: `sqs-worker-scaledobject`가 minReplicaCount 0이라 큐가 비어 있으면 pod·Karpenter 노드가 0개인 상태가 정상이다. mark2-4.sh는 항목 순서상 4-5(NodePool·배치 확인)가 4-6(scale-out 검증) *이전에* 실행되므로, 4-5 시점에 리소스가 조회되지 않아도 실패가 아니다 — 4-6에서 부하를 발생시킨 뒤 노드·pod가 실제로 뜨는 경로를 재확인해야 4-5의 정합성을 판단할 수 있다.
+- **min 0이라 채점 4-5 시점 pod·노드 0개 위험 — 런북 8단계 사전 활성화로 대응**: `sqs-worker-scaledobject`가 minReplicaCount 0이라 큐가 비어 있으면 pod·Karpenter 노드가 0개인 상태가 정상 동작이다. 그러나 mark2-4.sh는 항목 순서상 4-5(NodePool·배치 확인)가 4-6(scale-out 검증, 12건 발송) *이전에* 실행되므로, 채점지 문구상 4-5가 "배치 확인"을 명시적 채점 대상으로 삼는다면 이 시점에 pod·노드가 0개인 것이 감점으로 해석될 위험이 있다 — "idle 0이 정상이라 문제없다"고 단정할 근거가 없다. 대응: `module-4-sqs-scaling/README.md`·`README.linux.md` 8단계에서 채점 시작 직전 SQS에 메시지 6건을 발송하고 worker pod·Karpenter 노드가 활성화(pod ≥1 Running on Karpenter node)된 것을 확인한 뒤에 채점을 시작한다(purge는 하지 않는다 — 메시지는 5초/건으로 소진되고 cooldown 후 자연히 0으로 복귀하며, 채점 자체가 4-6에서 12건을 새로 발송한다).
 - **삭제 금지 정책 대비: 이름 충돌 시 삭제 대신 변수 리네임**: 과제지 시행 후 유의사항이 "채점 완료 전 리소스 삭제·수정 금지"다. set-07 module-1의 log group 선존재 충돌은 `aws logs delete-log-group`으로 선삭제하고 재apply해 해결했는데, 대회 규정상 이 삭제 자체가 금지될 수 있다. set-08에서 이름 충돌(예: 기존 리소스 잔존)이 발생하면 삭제를 시도하지 말고 이름 변수(`*_name` 계열)를 리네임해 신규 리소스로 우회하는 경로를 우선한다.
 - **CloudShell 업로드 파일 목록**: module-4는 `Dockerfile`(`app/Dockerfile`)·`worker.py`(`provided/module-4/worker.py`)·mark 스크립트(`mark/mark2-4.sh`, module-2는 `mark/mark2-2.sh`)를 CloudShell에 업로드해야 한다. Windows 작업본을 그대로 업로드하면 CRLF가 섞여 bash 스크립트가 깨질 수 있어, 실행 전 `sed -i 's/\r$//' <파일>` 가드가 필요하다(각 모듈 README에 반영됨).
 - **CloudShell `.env`는 세션 초기화 시 재업로드 필요**: CloudShell 세션이 끊기면 홈 디렉터리가 초기화되므로 `.env`(module-4 3단계 빌드용) 재업로드가 필요하다. 로컬 `.env.ps1`은 본 PC 재부팅에도 남지만(파일 초기화는 대회 환경 규칙, `.env.ps1`은 gitignore 대상이라 로컬 파일 자체엔 영향 없음) CloudShell 측 파일은 그렇지 않다는 점을 구분한다.
 - **helm 차트 미핀 — 대회 당일 차트 기본값 재확인**: KEDA·Karpenter helm 설치에 `--version`을 고정하지 않았다(작업 규칙 2 예외 — eksctl·helm·EKS Addon은 최신 안정). 최신 차트가 `replicas`·`dnsPolicy`·`tolerations` 등의 기본값을 바꾸면 README 4단계 helm 값이 무효화될 수 있어, 대회 당일 실행 전 공식 문서로 현재 기본값을 재확인해야 한다.
 - **협의회 추적**: 공식 예상 출력 파일(mark.md 원본) 도착 시 이 표와 `mark/mark2-*.sh` 실제 검사 항목을 다시 대조한다.
+- **NodePool/EC2NodeClass의 subnet·SG selector 태그 값은 치환 범위 밖 리터럴**: `k8s/10-karpenter-nodepool.yaml`의 `subnetSelectorTerms`(`karpenter.sh/discovery: "skills-sqs-cluster"`)와 `securityGroupSelectorTerms`(`aws:eks:cluster-name: "skills-sqs-cluster"`)는 README 렌더링 단계의 치환 placeholder가 아니라 클러스터 이름을 직접 박은 리터럴이다. `terraform/variables.tf`의 `var.cluster_name`이나 `eksctl/cluster.yaml`의 `metadata.name`을 바꾸면(30% 변동 대비) 이 두 태그 값도 함께 수동으로 맞춰야 한다 — 놓치면 Karpenter가 서브넷·SG를 디스커버리하지 못해 노드 프로비저닝 자체가 실패한다.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
@@ -57,6 +58,18 @@ module-2·module-4는 terraform/eksctl/k8s/runbook까지 구현 완료했으나 
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-01 [module-4] eksctl/k8s ARN·role 플레이스홀더를 terraform output 직접 소비로 전환 (fix-wave)
+- 맥락: `eksctl/cluster.yaml`의 attachPolicyARNs 3개·accessEntries principalARN, `k8s/10-karpenter-nodepool.yaml`의 EC2NodeClass `role`이 모두 `arn:aws:iam::${ACCOUNT_ID}:policy/skills-sqs-*` 또는 `KarpenterNodeRole-skills-sqs-cluster` 형태로 ARN·이름을 리터럴 재조립하고 있었다. 이름 변수(`name_prefix`·`cluster_name`)가 대회 당일 바뀌면(30% 변동) 이 재조립 문자열들이 개별적으로 어긋나 eksctl 후반부(IRSA·access entry)나 Karpenter 노드 조인이 조용히 실패할 위험이 있었다
+- 채택: 4개 ARN·1개 role 값을 각각 `${KEDA_POLICY_ARN}`/`${KARPENTER_POLICY_ARN}`/`${WORKER_POLICY_ARN}`/`${NODE_ROLE_ARN}`(cluster.yaml)와 `${NODE_ROLE_NAME}`(k8s)로 바꾸고, terraform output(`keda_policy_arn`/`karpenter_policy_arn`/`worker_policy_arn`/`karpenter_node_role_arn`/`karpenter_node_role_name`)을 README 렌더링 단계에서 그대로 주입 — 이름이 바뀌어도 terraform이 계산한 실제 ARN을 그대로 쓰므로 치환 체인이 끊기지 않는다. `${ACCOUNT_ID}` 재조립은 cluster.yaml에서 완전히 제거(다른 곳에 남지 않아 README 치환 목록에서도 제거, 단 CloudShell ECR 로그인용 `ACCOUNT_ID` 자체는 유지)
+- 기각: 이름 변수 변경 시 cluster.yaml·k8s manifest를 수동으로 같이 고치는 규약 → 이미 set-07부터 반복된 "이름 변경 시 후속 파일 갱신 누락" 함정과 동일 패턴이라 재발 방지 차원에서 구조적으로 없앰
+- 대가: 없음 (terraform output이 이미 이 값들을 노출하고 있어 추가 리소스·API 호출 없음)
+
+### 2026-08-01 [module-2] Service EC2 Public IP 요구 오독 정정 (fix-wave)
+- 맥락: 최초 설계에서 "채점 mark2-2.sh가 PublicIp 필드를 확인한다"를 "두 인스턴스 모두 Public IP가 있어야 한다"로 잘못 해석해 `vpc.tf`의 service 서브넷도 `map_public_ip_on_launch = true`로 만들었다. 그러나 과제지가 "Client EC2는 Public IP로 HTTP 접근 가능해야 하며, Service EC2는 Public IP 없이 내부 서비스로 구성합니다"(task.md:117)를 명시하고 있었고, mark2-2.sh는 PublicIp 필드를 단순 조회·출력할 뿐 값의 존재를 요구하지 않는다
+- 채택: service 서브넷의 `map_public_ip_on_launch`를 `false`로 정정. client 서브넷은 그대로 유지(Public IP 필요, 과제지 명시). service 서브넷의 IGW 라우트는 그대로 남기되 Public IP 자체가 없어 무해(Lattice 데이터 플레인이 Target Group을 통해 서비스 VPC 내부에서 직접 인스턴스에 도달하므로 IGW 경로에 의존하지 않음)
+- 기각: service 서브넷을 완전한 private 서브넷(라우트 테이블에서 IGW 라우트 제거)으로 재구성 → 과제지가 요구하는 것은 Public IP 미할당이지 라우트 제거가 아니며, 라우트 제거는 SG가 이미 담당하는 차단을 중복 구현하는 것이라 최소 변경 원칙에 어긋남
+- 대가: 없음 (기능·채점 영향 없음 — client→service 경로는 Lattice 데이터 플레인만 사용)
 
 ### 2026-08-01 [module-4] Fargate 컨트롤러 + skills-sqs-fp-kube-system 추가, coredns addon configurationValues computeType=Fargate
 - 맥락: 과제지 6-2가 Fargate Profile 2개(`skills-sqs-fp-keda`·`skills-sqs-fp-karpenter`)만 명시. 그러나 워커는 Karpenter EC2 노드여야 하고(과제지 6-1·6-5), 클러스터에 Managed NodeGroup을 두지 않는 이상 CoreDNS가 스케줄될 노드 자체가 없다
