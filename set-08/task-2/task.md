@@ -174,7 +174,7 @@ Client EC2는 Public IP로 HTTP 접근 가능해야 하며, Service EC2는 Publi
 
 - Function Name Tag: `skills-ceh-remediate-fn`
 - Application File: 제공된 `remediate_security_group.py`를 수정하지 않고 배포
-- Runtime / Handler / Timeout: Python 3.12 / `remediate_security_group.lambda_handler` / 30
+- Runtime / Handler / Timeout: Python 3.12 / `remediate_security_group.lambda_handler` / 30초 이상
 - Environment: `PROTECTED_SECURITY_GROUP_ID=skills-ceh-protected-sg`의 Security Group ID, `SNS_TOPIC_ARN=skills-ceh-alert-topic`의 ARN
 - IAM 권한: Security Group 조회/수정, SNS 발행, CloudWatch Logs 기록 가능
 - 동작: EC2 Security Group 이벤트 감지 중 Inbound 규칙을 0개로 복구하고, `skills-ceh-alert-topic`에 알림을 발행
@@ -227,9 +227,9 @@ SQS Queue 길이에 따라 Worker Pod가 증가/감소하고, Karpenter가 EC2 W
 - Worker Dockerfile: 선수 직접 작성
 - Namespace / Deployment / ServiceAccount: `skills-sqs` / `sqs-worker` / `sqs-worker-sa`
 - Label / Selector: `app=sqs-worker`
-- Required Environment: `SQS_QUEUE_URL`, `AWS_REGION`, `PROCESSING_SECONDS`(5초)
+- Required Environment: `SQS_QUEUE_URL`, `AWS_REGION`, `PROCESSING_SECONDS`(5초 권장)
 - Node Selector: `karpenter.sh/nodepool=skills-sqs-nodepool`, `skills-nodepool=event-worker`
-- Worker Pod는 Fargate Node가 아닌 Karpenter EC2 Worker Node에서 실행되어야 함(권장)
+- Worker Pod는 Fargate Node가 아닌 Karpenter EC2 Worker Node에서 실행되어야 함
 
 ### 6-6. KEDA
 
