@@ -20,4 +20,17 @@
 - **EKS 모듈(module-4)은 모듈 전용 터미널**: kubeconfig를 모듈 경로로 고정하고 시작한다(터미널 1개 = 클러스터 1개). 재부팅 후엔 모듈 README의 복구 절차를 따른다.
 - **`provided/`는 원본 그대로**: `provided/module-N/*`는 대회 제공 원본이며 수정하지 않는다. 각 모듈 terraform/eksctl이 직접 참조한다.
 
+## 실행 순서 (대기 시간 기준)
+
+apply 소요 시간이 긴 모듈부터 먼저 걸어두고, 대기 구간에 짧은 모듈을 처리한다. 터미널 4개(모듈별 1개)를 동시에 연다.
+
+1. **module-4 apply 시작** (`terraform apply` — EKS 클러스터 생성 ~15-20분, 가장 오래 걸림). 0단계 IAM 권한 프로브도 이 시점에 1회 실행.
+2. **module-1 apply 시작** (DocumentDB 인스턴스 생성 ~10-15분).
+3. module-4 대기 중 CloudShell에서 워커 이미지 build/push 진행 (module-4 README 3단계 — 병렬 처리 설계).
+4. **module-2 apply + 검증 + 채점** (전체 apply 한 번으로 끝, 대기 짧음).
+5. **module-3 apply + 검증 + 채점** (apply 짧음, 검증 2는 이벤트 전달 대기 수 분).
+6. module-1 완료 확인 후 검증 + 채점.
+7. module-4 완료 확인 후 k8s manifest apply + 검증 + 채점 (module-4 README 4단계 이후).
+8. 채점 직전: module-4 min 0 스케일 사전 활성화 (README 8단계, purge 금지).
+
 > 설계 근거·요구사항↔구현 매핑은 docs 사이트(setlist/set-08/task-2)를 참고한다.
