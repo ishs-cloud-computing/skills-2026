@@ -1,41 +1,57 @@
 # set-08/task-2 세션 핸드오프
 
-> 다음 세션의 에이전트가 컨텍스트를 복원하는 진입점. 상태가 바뀌면 이 문서를 덮어쓴다.
+> 다음 에이전트가 컨텍스트를 복원하는 진입점. 상태가 바뀌면 이 문서를 덮어쓴다(append 금지).
 > 내용 중복 금지 — 상세는 각 소유 문서로 포인터만. (README=런북, NOTES=함정·결정, docs/=설계 이유)
+> **토큰 절약**: 이 문서 + 필요한 모듈 1개만 읽고 시작 가능하게 설계됨. 전체 재확인 불필요 — 아래 "완료됨" 표를 신뢰하고 해당 파일은 열지 마라.
 
-## 상태 스냅샷 (2026-08-01, 2차)
+## TL;DR
 
-- 브랜치: `set-08/task-2` (main 미병합, squash merge 예정)
-- 구현: **모듈 4개 전부 완료** (module-1-nosql · module-2-lattice · module-3-event-handling · module-4-sqs-scaling)
-- 검증 수준: `terraform fmt`/`validate`/`plan`까지 (module-1: 22 add, module-2: 24 add, module-3: 16 add, module-4: 30 add, 전부 0 errors).
-  **실 apply·mark 실채점·CloudShell 검증은 미실행** — NOTES 커버리지가 전부 `[~]`인 이유.
-- 설계/계획 문서: `docs/superpowers/specs/2026-08-01-set-08-task-2-design.md`, `docs/superpowers/plans/2026-08-01-set-08-task-2.md` (모듈 2·4 범위. 모듈 1·3 설계 근거는 docs setlist deployment.md와 NOTES 결정 로그가 소유)
+코드·문서 작업 **전부 끝남** (4모듈 terraform/eksctl/k8s/README, fmt/validate/plan 클린). 남은 건 **실 apply + CloudShell 실채점**뿐 — AWS 비용 발생하니 사용자 확인 없이 시작하지 마라.
 
-## 다음 작업 (우선순위)
+## 완료됨 — 재작업 금지 (파일 열어서 재검증할 필요 없음)
 
-1. **실 apply + 실채점**: 모듈별 README 런북 순서대로. AWS 비용 발생 — 사용자 판단으로 시작. 채점은 CloudShell에서 `mark/mark2-N.sh` (CRLF 가드 필수). apply 실측 시간을 NOTES 실측 절에 기록.
-2. **NOTES 커버리지 `[~]` → `[x]` 승격**: mark 실채점 통과 항목만.
-3. **협의회 공식 예상 출력 파일 도착 시**: `mark.md`·NOTES 커버리지와 대조. 오류 정정 마감 2026-08-13 — 과제지·채점지 오류 발견 시 그 전에 마이스터넷 게시판 질의.
+| 모듈 | 리전 | 구현 | plan | 커밋 |
+|------|------|------|------|------|
+| module-1-nosql | ap-northeast-2 | terraform 전체 + README×2 | 22 add / 0 err | `61f7b58` |
+| module-2-lattice | ap-northeast-1 | terraform 전체 + README×2 | 24 add / 0 err | (이전 세션) |
+| module-3-event-handling | ap-southeast-1 | terraform 전체 + README×2 | 16 add / 0 err | `026e183` |
+| module-4-sqs-scaling | us-west-2 | terraform+eksctl+k8s + README×2 | 30 add / 0 err | (이전 세션) |
 
-## 작업 전 필수 읽기 순서
+문서: NOTES.md 커버리지(4모듈 전부 `[~]`, 20/21 항목) + 결정 로그, docs setlist 4페이지, 루트 README 실행 순서까지 완료 (`a64247f`, `2655992`, `4963048`, `f7ac129`).
 
-1. 루트 `CLAUDE.md` (작업 규칙 — 특히 1·4·5번)
-2. `task.md`·`mark.md` (요구사항·채점 원문)
-3. `NOTES.md` — **결정 로그 기각안 먼저** (실패한 접근 반복 금지), 함정 절
-4. 대상 모듈 `mark/mark2-N.sh` (채점 ground truth — 문서보다 우선)
-5. 대상 모듈 `README.md` (런북)
+**빠른 상태 재확인 원커맨드** (이 문서가 stale한지 의심될 때만):
+```bash
+git log --oneline -5
+grep -n "^| [0-9]" set-08/task-2/NOTES.md   # 모듈 현황 표 4행
+```
+출력이 위 표·커밋과 다르면 이 문서가 stale — 다시 작성.
+
+## 다음 작업 (우선순위, 전부 AWS 비용 수반 — 시작 전 사용자 확인)
+
+1. **실 apply + 실채점**: `set-08/task-2/README.md`의 "실행 순서" 절 그대로 따른다(이미 대기시간 기준으로 최적화됨, 재설계 불필요). 채점은 CloudShell `mark/mark2-N.sh` (CRLF 가드 필수, 각 모듈 README에 명령 있음). apply 실측 시간 NOTES 실측 절에 기록.
+2. **NOTES 커버리지 `[~]` → `[x]` 승격**: mark 실채점 통과 항목만, 실패 항목은 원인과 함께 `[ ]`로.
+3. **협의회 예상 출력 파일 도착 시**: `mark.md`·NOTES 대조. 오류 정정 마감 2026-08-13.
+
+## 새 작업 시작 전 필수 읽기 (스코프 좁혀서 — 전체 재독 금지)
+
+1. 이 문서 (완료 상태 신뢰)
+2. `NOTES.md` **함정 절만** grep (`^- \*\*` 패턴) — 결정 로그는 문제 생겼을 때만 참조
+3. 작업 대상 모듈의 `mark/mark2-N.sh` 1개만 (채점 ground truth)
+4. 작업 대상 모듈 `README.md` 1개만
+
+task.md/mark.md 전체를 다시 읽지 마라 — 요구사항은 이미 코드·NOTES에 반영됨. 새 모듈 추가(협의회: 당일 최대 2개 추가 가능)나 요구사항 자체가 의심될 때만 원문 대조.
 
 ## 이 과제 고유 주의점 (요약 — 상세는 NOTES.md 함정 절)
 
 - 과제지 명시 위반 감점 축: module-2 service-sg `0.0.0.0/0` 금지, Service EC2 Public IP 금지
 - module-1: 지급 앱 상수(region·secret명·DB명·port)가 변수 변경 폭을 제한. TTL 인덱스 실동작 — dataset `sessions.expiresAt`(현재 2026-12-01~03)이 채점 시점보다 미래인지 확인
 - module-3: 채점 3-5는 Lambda 직접 invoke — CloudTrail 전달 지연은 채점 무관. trail S3 버킷명 충돌 시 삭제 대신 `trail_name` 리네임
-- module-4: min 0 스케일 — 채점 직전 사전 활성화 (README 8단계, purge 금지). 치환 placeholder cluster.yaml 7종/k8s 4종 — 가드 2단계 필수. helm 차트 미핀 — 당일 스키마 재확인
-- 이름 충돌 시 삭제 금지 — 이름 변수 리네임으로 우회 (시행 후 유의사항 8)
+- module-4: min 0 스케일이 4-5(배치 확인)를 4-6(부하)보다 먼저 통과해야 함 — 구조적으로 전 선수 동일 조건이라 실제 감점 아님으로 판단(질의 안 함, `f7ac129`)했으나 런북 8단계 사전 활성화는 저비용 보험으로 유지(purge 금지). 치환 placeholder cluster.yaml 7종/k8s 4종 — 가드 2단계 필수. helm 차트 미핀 — 당일 스키마 재확인
+- 공통: 이름 충돌 시 삭제 금지 — 이름 변수 리네임으로 우회 (시행 후 유의사항 8, PowerUserAccess+Deny 가능성 있음)
 
 ## 환경 특이사항 (이 머신)
 
-- Python은 `py` 런처만 동작 (`python`은 Store 스텁). pdfminer.six·pyyaml 설치돼 있음 — PDF 재추출 필요 시 페이지별 + `LAParams(line_margin=1.0)` + `py -X utf8`
+- Python은 `py` 런처만 동작 (`python`은 Store 스텁). PDF 재추출 시 페이지별 + `LAParams(line_margin=1.0)` + `py -X utf8`
 - terraform 1.15.8 (mise), AWS 자격증명 로컬 존재 (plan 실행 가능)
-- `docs/package-lock.json`에 무관한 로컬 수정 존재 — **스테이징 금지**
+- `docs/package-lock.json`에 무관한 로컬 수정 존재 — **스테이징 금지** (한 번 실수로 커밋됐다 `e767e74`로 되돌림 — `git add <특정파일>`만 쓰고 디렉터리 add 지양)
 - PDF는 Git LFS. `provided/`는 원본 — 수정 금지, 참조만
