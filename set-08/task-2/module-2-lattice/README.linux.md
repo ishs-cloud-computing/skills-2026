@@ -35,7 +35,7 @@ EOF
 source .env   # 재접속 시: module-2-lattice 디렉터리에서 `source .env` 만 다시 실행
 ```
 
-### 3) 검증 (배포 후 ~1-2분 대기: user-data systemd 기동, Lattice 도메인은 Client VPC 내부 전용 — 아래 curl 은 모두 Client Public IP 경유)
+### 3) 검증 (배포 후 ~1-2분 대기: user-data systemd 기동, Client Public IP 경유)
 
 ```bash
 until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
@@ -60,7 +60,7 @@ sed -i 's/\r$//' mark/mark2-2.sh
 bash mark/mark2-2.sh
 ```
 
-## 4) Teardown
+### 4) Teardown
 
 ```bash
 terraform -chdir=terraform destroy -auto-approve

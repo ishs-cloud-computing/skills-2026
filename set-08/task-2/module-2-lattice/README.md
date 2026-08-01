@@ -55,7 +55,7 @@ $env:TARGET_GROUP_ID     = terraform -chdir=terraform output -raw target_group_i
 . .\.env.ps1   # 재접속 시: module-2-lattice 디렉터리에서 `. .\.env.ps1` 만 다시 실행
 ```
 
-## 3. 검증 (배포 후 ~1-2분 대기: user-data systemd 기동, Lattice 도메인은 Client VPC 내부 전용 — 아래 curl 은 모두 Client Public IP 경유)
+## 3. 검증 (배포 후 ~1-2분 대기: user-data systemd 기동, Client Public IP 경유)
 
 ```powershell
 while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$env:CLIENT_IP/health") -ne "200") { Start-Sleep 10 }
