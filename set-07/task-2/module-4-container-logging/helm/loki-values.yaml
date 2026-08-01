@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Loki (grafana-community/loki chart 18.x) — 과제지 4-4, 채점 4-3·4-5
+# release 이름 o11y-loki → svc 이름 o11y-loki(ClusterIP, ports[0]=3100)가
+# 채점 4-3 정확 일치. chart 기본값 함정이 많아 전부 명시 오버라이드한다
+# (NOTES 함정 절 참조).
+# ---------------------------------------------------------------------------
+
+# 과제지 "Single Binary 모드" (chart 18.x 표기는 Monolithic — SingleBinary 는
+# 같은 모드의 deprecated 별칭)
+deploymentMode: Monolithic
+
+loki:
+  # 기본 true — 무인증 push/query(채점 port-forward 쿼리, OTel 전송)가 401 나므로 비활성
+  auth_enabled: false
+
+  commonConfig:
+    # 단일 바이너리 1 replica — 기본 3이면 ring 구성 실패
+    replication_factor: 1
+
+  # 과제지 "Chunks·Index 는 Persistent Volume" → 로컬 파일시스템(PV 마운트) 저장.
+  # 기본 s3 은 버킷 없이는 기동 실패.
+  storage:
+    type: filesystem
+
+  # 기본 {} — 미지정 시 기동 실패. 현행 v13/tsdb 스키마 명시.
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  limits_config:
+    # OTLP ingestion 전제 (Loki 3.x 기본 true지만 채점 의존 항목이라 명시).
+    # k8s.namespace.name/k8s.pod.name 은 기본 OTLP 인덱스 라벨 → 채점 4-5 의
+    # {k8s_namespace_name="o11y"} 필터가 추가 설정 없이 동작.
+    allow_structured_metadata: true
+
+singleBinary:
+  # 기본 0 — 그대로 두면 아무것도 배포되지 않는다
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+    # k8s/05-storageclass.yaml. EKS 1.30+ 는 기본 SC 가 없어 명시 필수.
+    storageClass: o11y-gp3
+
+# SimpleScalable 타깃은 기본 replicas 가 0이 아니라 Monolithic 과 공존 검증에
+# 걸린다 → 명시적으로 0
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+# 채점이 svc/o11y-loki 를 직접 조회·port-forward — gateway 불필요
+gateway:
+  enabled: false
+
+# 기본 memcached 캐시는 requests/limits 9830Mi (allocatedMemory 8192MB × 1.2)
+# — t3.medium 노드에 스케줄 불가
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# 셀프 모니터링 부속 비활성 (채점 무관 리소스 정리)
+lokiCanary:
+  enabled: false
+test:
+  enabled: false

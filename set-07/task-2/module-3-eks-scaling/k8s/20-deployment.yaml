@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Deployment (과제지 3-3)
+# - SQS Consumer + /healthz·/status API (8080). 이미지는 CloudShell 에서 빌드해
+#   ECR push (README 런북 3단계).
+# - pod label app=order-processor: 채점 3-3 이 -l app=order-processor 로 조회.
+# - nodeSelector + toleration: skm-app-nodepool(Karpenter) 노드에서만 구동
+#   (과제지 "App 은 skm-app-nodepool 에서만 구동" — addon NG 는 taint 로 차단됨).
+# - env 는 정확히 3개만: 채점 3-3 이 env 전체를 sort 덤프해 정확 일치로 검사.
+# - serviceAccountName: eksctl IRSA(skm-app-sqs-policy — 메시지 수신·삭제).
+#
+# ${ECR_IMAGE} ${SQS_URL} 은 apply 시 terraform output 으로 치환한다 (README 6단계).
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-processor
+  namespace: skillsmkt
+  labels:
+    app: order-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-processor
+  template:
+    metadata:
+      labels:
+        app: order-processor
+    spec:
+      serviceAccountName: order-processor
+      nodeSelector:
+        karpenter.sh/nodepool: skm-app-nodepool
+      tolerations:
+        - key: dedicated
+          value: app
+          effect: NoSchedule
+      containers:
+        - name: order-processor
+          image: "${ECR_IMAGE}"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+          env:
+            - name: AWS_REGION
+              value: "ap-northeast-2"
+            - name: PROCESSING_TIME
+              value: "3"
+            - name: SQS_QUEUE_URL
+              value: "${SQS_URL}"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5

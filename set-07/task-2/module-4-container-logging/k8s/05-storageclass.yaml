@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Loki PV 용 StorageClass (과제지 4-4 "Chunks·Index 는 Persistent Volume").
+# EKS 1.30+ 는 기본(annotated default) StorageClass 가 없다 → 명시 생성 후
+# helm/loki-values.yaml persistence.storageClass 로 이름 참조.
+# WaitForFirstConsumer: pod 가 스케줄된 AZ 에 볼륨 생성 (Multi-AZ 노드 대응).
+# 플레이스홀더 없음.
+# ---------------------------------------------------------------------------
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: o11y-gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete

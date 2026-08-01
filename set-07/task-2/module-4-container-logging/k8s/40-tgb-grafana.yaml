@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# TargetGroupBinding — Grafana (채점 4-2 o11y-grafana-tg healthy 1)
+# - Grafana svc(o11y-grafana, helm 설치)는 port 3000 (helm/grafana-values.yaml).
+# 플레이스홀더: ${ALB_SG_ID} (terraform output alb_sg_id)
+# ---------------------------------------------------------------------------
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: o11y-grafana-tgb
+  namespace: monitoring
+spec:
+  serviceRef:
+    name: o11y-grafana
+    port: 3000
+  targetGroupName: o11y-grafana-tg
+  targetType: ip
+  networking:
+    ingress:
+      - from:
+          - securityGroup:
+              groupID: "${ALB_SG_ID}"
+        ports:
+          - protocol: TCP
