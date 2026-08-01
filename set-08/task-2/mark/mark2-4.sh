@@ -5,25 +5,64 @@ export AWS_PAGER=""
 OUT_TXT="asgmt2_module4_check_result.txt"
 exec > >(tee "$OUT_TXT") 2>&1
 
-if ! command -v aws >/dev/null 2>&1; then
-  echo "ERROR: required command not found: aws" >&2
-  exit 2
-fi
-if ! command -v kubectl >/dev/null 2>&1; then
-  echo "ERROR: required command not found: kubectl" >&2
-  echo "CloudShell 또는 채점 환경에 kubectl을 준비한 뒤 다시 실행하십시오." >&2
-  exit 2
-fi
+export PATH="$HOME/.local/bin:$PATH"
+
+install_base_tools() {
+  local packages=()
+  for CMD in "$@"; do
+    if ! command -v "$CMD" >/dev/null 2>&1; then
+      packages+=("$CMD")
+    fi
+  done
+  if [ "${#packages[@]}" -gt 0 ]; then
+    sudo dnf install -y "${packages[@]}"
+  fi
+}
+
+install_aws_cli() {
+  if command -v aws >/dev/null 2>&1; then
+    return 0
+  fi
+  local arch awscli_arch
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64) awscli_arch="x86_64" ;;
+    aarch64|arm64) awscli_arch="aarch64" ;;
+    *) echo "지원하지 않는 CPU 아키텍처입니다: $arch" >&2; exit 2 ;;
+  esac
+  mkdir -p "$HOME/.local/bin"
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${awscli_arch}.zip" -o /tmp/awscliv2.zip
+  unzip -q -o /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install --install-dir "$HOME/usr/local/aws-cli" --bin-dir "$HOME/.local/bin" --update
+}
+
+install_kubectl() {
+  if command -v kubectl >/dev/null 2>&1; then
+    return 0
+  fi
+  local arch kubectl_arch
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64) kubectl_arch="amd64" ;;
+    aarch64|arm64) kubectl_arch="arm64" ;;
+    *) echo "지원하지 않는 CPU 아키텍처입니다: $arch" >&2; exit 2 ;;
+  esac
+  mkdir -p "$HOME/.local/bin"
+  curl -fsSL -o "$HOME/.local/bin/kubectl" "https://dl.k8s.io/release/v1.35.0/bin/linux/${kubectl_arch}/kubectl"
+  chmod +x "$HOME/.local/bin/kubectl"
+}
+
+install_base_tools curl jq unzip
+install_aws_cli
+install_kubectl
 
 echo "== 제2과제 4모듈 Event-driven Pod Scaling with AWS SQS 채점 출력 =="
 echo
 
 echo "[4-1] EKS Cluster, VPC, Fargate Profile 구성 (1.25점)"
-aws eks describe-cluster --region us-west-2 --name skills-sqs-cluster --query 'cluster.{Name:name,Status:status,Endpoint:endpoint,Version:version,Role:roleArn,Vpc:vpcConfig}' --output table
-for FP in skills-sqs-fp-keda skills-sqs-fp-karpenter; do
-  echo "fargate_profile=${FP}"
-  aws eks describe-fargate-profile --region us-west-2 --cluster-name skills-sqs-cluster --fargate-profile-name "$FP" --query 'fargateProfile.{Name:fargateProfileName,Status:status,Selectors:selectors,Subnets:subnets}' --output table
-done
+aws eks describe-cluster --region us-west-2 --name skills-sqs-cluster --query 'cluster.{Name:name,Status:status,Endpoint:endpoint,Version:version,Role:roleArn,Vpc:resourcesVpcConfig.vpcId,Subnets:resourcesVpcConfig.subnetIds}' --output table
+aws eks describe-fargate-profile --region us-west-2 --cluster-name skills-sqs-cluster --fargate-profile-name skills-sqs-fp-keda --query 'fargateProfile.{Name:fargateProfileName,Status:status,Selectors:selectors,Subnets:subnets}' --output table
+aws eks describe-fargate-profile --region us-west-2 --cluster-name skills-sqs-cluster --fargate-profile-name skills-sqs-fp-karpenter --query 'fargateProfile.{Name:fargateProfileName,Status:status,Selectors:selectors,Subnets:subnets}' --output table
 aws eks update-kubeconfig --region us-west-2 --name skills-sqs-cluster
 kubectl get nodes -l eks.amazonaws.com/compute-type=fargate -o wide
 
@@ -36,12 +75,9 @@ if [ -n "$QUEUE_URL" ] && [ "$QUEUE_URL" != "None" ]; then
 else
   echo "skills-sqs-queue Queue URL 식별 실패"
 fi
-for X in "keda keda-operator" "karpenter karpenter" "skills-sqs sqs-worker-sa"; do
-  set -- $X
-  echo -n "$1/$2 role="
-  kubectl get serviceaccount "$2" -n "$1" -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}'
-  echo
-done
+kubectl get serviceaccount keda-operator -n keda -o jsonpath='keda/keda-operator role={.metadata.annotations.eks\.amazonaws\.com/role-arn}{"\n"}'
+kubectl get serviceaccount karpenter -n karpenter -o jsonpath='karpenter/karpenter role={.metadata.annotations.eks\.amazonaws\.com/role-arn}{"\n"}'
+kubectl get serviceaccount sqs-worker-sa -n skills-sqs -o jsonpath='skills-sqs/sqs-worker-sa role={.metadata.annotations.eks\.amazonaws\.com/role-arn}{"\n"}'
 
 echo
 echo "[4-3] KEDA/Karpenter Controller Fargate 배포 구성 (1.25점)"
@@ -50,15 +86,14 @@ kubectl get deployment,pod -n karpenter -o wide
 
 echo
 echo "[4-4] Worker Application 및 KEDA ScaledObject 구성 (1.25점)"
-kubectl get deployment sqs-worker -n skills-sqs -o wide
-kubectl get deployment sqs-worker -n skills-sqs -o jsonpath='serviceAccountName={.spec.template.spec.serviceAccountName}{"\n"}selector={.spec.selector.matchLabels}{"\n"}podLabels={.spec.template.metadata.labels}{"\n"}nodeSelector={.spec.template.spec.nodeSelector}{"\n"}env={.spec.template.spec.containers[0].env}{"\n"}image={.spec.template.spec.containers[0].image}{"\n"}'
-kubectl get scaledobject sqs-worker-scaledobject -n skills-sqs -o yaml
-kubectl get triggerauthentication sqs-worker-trigger-auth -n skills-sqs -o yaml
+kubectl get deployment sqs-worker -n skills-sqs -o jsonpath='name={.metadata.name}{"\n"}serviceAccountName={.spec.template.spec.serviceAccountName}{"\n"}selector={.spec.selector.matchLabels}{"\n"}podLabels={.spec.template.metadata.labels}{"\n"}nodeSelector={.spec.template.spec.nodeSelector}{"\n"}env={.spec.template.spec.containers[0].env}{"\n"}image={.spec.template.spec.containers[0].image}{"\n"}'
+kubectl get scaledobject sqs-worker-scaledobject -n skills-sqs -o json | jq '{name:.metadata.name, namespace:.metadata.namespace, scaleTargetRef:.spec.scaleTargetRef, minReplicaCount:.spec.minReplicaCount, maxReplicaCount:.spec.maxReplicaCount, pollingInterval:.spec.pollingInterval, cooldownPeriod:.spec.cooldownPeriod, triggers:.spec.triggers}'
+kubectl get triggerauthentication sqs-worker-trigger-auth -n skills-sqs -o json | jq '{name:.metadata.name, namespace:.metadata.namespace, podIdentity:.spec.podIdentity, secretTargetRef:.spec.secretTargetRef, env:.spec.env}'
 
 echo
 echo "[4-5] Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 (1.25점)"
-kubectl get nodepool skills-sqs-nodepool -o yaml
-kubectl get ec2nodeclass skills-sqs-nodeclass -o yaml
+kubectl get nodepool skills-sqs-nodepool -o json | jq '{name:.metadata.name, labels:.spec.template.metadata.labels, nodeClassRef:.spec.template.spec.nodeClassRef, requirements:.spec.template.spec.requirements, consolidationPolicy:.spec.disruption.consolidationPolicy}'
+kubectl get ec2nodeclass skills-sqs-nodeclass -o json | jq '{name:.metadata.name, role:.spec.role, instanceProfile:.spec.instanceProfile, subnetSelectorTerms:.spec.subnetSelectorTerms, securityGroupSelectorTerms:.spec.securityGroupSelectorTerms, amiFamily:.spec.amiFamily}'
 kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker -o wide
 kubectl get pods -n skills-sqs -l app=sqs-worker -o wide
 
@@ -69,9 +104,8 @@ if [ -z "$QUEUE_URL" ] || [ "$QUEUE_URL" = "None" ]; then
   echo "skills-sqs-queue Queue URL 식별 실패"
 else
   SENT=0
-  RUN_ID="skills-scale-out-$(date +%s)"
   for I in $(seq 1 12); do
-    aws sqs send-message --region us-west-2 --queue-url "$QUEUE_URL" --message-body "${RUN_ID}-${I}" >/dev/null 2>&1 && SENT=$((SENT + 1))
+    aws sqs send-message --region us-west-2 --queue-url "$QUEUE_URL" --message-body "judge-$I" >/dev/null 2>&1 && SENT=$((SENT + 1))
   done
   echo "sent=${SENT}"
   for T in 60 120 180; do

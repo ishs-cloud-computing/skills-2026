@@ -30,7 +30,7 @@ grep -n "^| [0-9]" set-08/task-2/NOTES.md   # 모듈 현황 표 4행
 
 1. **실 apply + 실채점**: `set-08/task-2/README.md`의 "실행 순서" 절 그대로 따른다(이미 대기시간 기준으로 최적화됨, 재설계 불필요). 채점은 CloudShell `mark/mark2-N.sh` (CRLF 가드 필수, 각 모듈 README에 명령 있음). apply 실측 시간 NOTES 실측 절에 기록.
 2. **NOTES 커버리지 `[~]` → `[x]` 승격**: mark 실채점 통과 항목만, 실패 항목은 원인과 함께 `[ ]`로.
-3. **협의회 예상 출력 파일 도착 시**: `mark.md`·NOTES 대조. 오류 정정 마감 2026-08-13.
+3. ~~협의회 예상 출력 파일 도착 시~~ **완료(2026-08-01)**: 공식 판정 기준 `provided/008_chall_2nd_patched_0801.md` 도착·대조 완료(불일치 0), 공식 diff `mark/mark2-{1..4}.sh` 적용 완료. 오류 정정 마감 2026-08-13 — 추가 오류 발견 시에만 게시판 질의.
 
 ## 새 작업 시작 전 필수 읽기 (스코프 좁혀서 — 전체 재독 금지)
 
@@ -46,7 +46,7 @@ task.md/mark.md 전체를 다시 읽지 마라 — 요구사항은 이미 코드
 - 과제지 명시 위반 감점 축: module-2 service-sg `0.0.0.0/0` 금지, Service EC2 Public IP 금지
 - module-1: 지급 앱 상수(region·secret명·DB명·port)가 변수 변경 폭을 제한. TTL 인덱스 실동작 — dataset `sessions.expiresAt`(현재 2026-12-01~03)이 채점 시점보다 미래인지 확인
 - module-3: 채점 3-5는 Lambda 직접 invoke — CloudTrail 전달 지연은 채점 무관. trail S3 버킷명 충돌 시 삭제 대신 `trail_name` 리네임
-- module-4: min 0 스케일이 4-5(배치 확인)를 4-6(부하)보다 먼저 통과해야 함 — 구조적으로 전 선수 동일 조건이라 실제 감점 아님으로 판단(질의 안 함, `f7ac129`)했으나 런북 8단계 사전 활성화는 저비용 보험으로 유지(purge 금지). 치환 placeholder cluster.yaml 7종/k8s 4종 — 가드 2단계 필수. helm 차트 미핀 — 당일 스키마 재확인
+- module-4: 4-5 시점 pod 0개 감점 우려는 공식 예상 출력이 "4-6 결과 포함 판정"을 명시해 해소 확정 — 런북 8단계 사전 활성화는 선택 보험으로 하향 유지(purge 금지). 치환 placeholder cluster.yaml 7종/k8s 4종 — 가드 2단계 필수. helm 차트 미핀 — 당일 스키마 재확인
 - 공통: 이름 충돌 시 삭제 금지 — 이름 변수 리네임으로 우회 (시행 후 유의사항 8, PowerUserAccess+Deny 가능성 있음)
 
 ## 환경 특이사항 (이 머신)

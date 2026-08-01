@@ -56,9 +56,7 @@
 ## 함정 절
 
 - **service-sg 0.0.0.0/0 → 과제지 명시 미충족 (감점 확정 함정)**: 과제지 4-3이 "0.0.0.0/0 허용 시 미충족"을 명시. `module-2-lattice/terraform/sg.tf`의 service SG는 VPC Lattice managed prefix list 소스만 허용하도록 만들었으나, 30% 변동으로 SG 리소스를 재작성하게 되면 이 조건을 놓치기 쉽다 — service SG ingress에 CIDR 블록을 절대 추가하지 않는다.
-- **min 0이라 채점 4-5 시점 pod·노드 0개 — 구조적으로 전원 동일, 그래도 런북 8단계로 저비용 대비**: `sqs-worker-scaledobject`가 minReplicaCount 0(과제지 6-6 요구값, 우리 선택 아님)이라 큐가 비어 있으면 pod·Karpenter 노드가 0개인 상태가 정상 동작이다. `mark2-4.sh`는 4-5(NodePool·EC2NodeClass·`get nodes`/`get pods` 라이브 조회)가 4-6(scale-out 검증, 12건 발송) *이전에* 실행되므로 4-5 시점에 목록이 비어 보일 수 있다.
-  - 실제 피해는 없다고 판단: min 0은 출제자가 강제한 요구사항이라, 정석대로 지은 모든 선수가 idle 시 동일하게 pod 0개를 보인다. 자기 스펙이 만든 결과를 자기 채점 스크립트가 감점하는 건 논리적으로 성립하지 않으므로, 4-5는 사실상 리소스 정의(YAML) 존재 확인 용도로 설계됐다고 봐야 한다. 게시판 질의는 하지 않는다(2026-08-01 판단) — 확인해도 확정 이득이 없고 72시간 응답 대기 비용만 있다.
-  - 그럼에도 런북 대응은 유지한다: 위 추론은 출제자 "의도"에 대한 추정이지 보장이 아니고, 채점 방식이 스크립트 자동 판정이 아니라 사람이 출력을 눈으로 보고 판단하는 방식(mark.md 2절)이라 "0개로 보이는 화면" 자체가 인상에 영향을 줄 수 있다. 대응 비용(SQS 메시지 6건 발송 + ~1분 대기, README에 이미 코드로 있어 당일 추가 공수 0)이 오판 시 손실(1.25점, 항변 기회 없음)보다 압도적으로 싸다 — 확률이 낮아도 거의 공짜인 보험이라 유지. `module-4-sqs-scaling/README.md`·`README.linux.md` 8단계에서 채점 시작 직전 SQS에 메시지 6건을 발송하고 worker pod·Karpenter 노드가 활성화(pod ≥1 Running on Karpenter node)된 것을 확인한 뒤 채점을 시작한다(purge는 하지 않는다 — 메시지는 5초/건으로 소진되고 cooldown 후 자연히 0으로 복귀하며, 채점 자체가 4-6에서 12건을 새로 발송한다).
+- **min 0이라 채점 4-5 시점 pod·노드 0개 — 공식 예상 출력으로 리스크 해소 확정(2026-08-01)**: `sqs-worker-scaledobject`가 minReplicaCount 0(과제지 6-6 요구값)이라 큐가 비어 있으면 4-5 시점에 pod·노드 목록이 비어 보일 수 있다는 우려가 있었다. 공식 예상 출력(`provided/008_chall_2nd_patched_0801.md`) 4-5 판정 기준이 "min 0으로 채점 직후 Worker Pod가 없을 수 있으므로 Worker Pod의 EC2 배치는 4-6 Scale Out 출력 결과를 포함해 판정할 수 있습니다"를 명시 — 감점 리스크가 공식적으로 해소됐고, 우리의 사전 추론(전원 동일 조건이라 감점 성립 불가, 게시판 질의 불필요)도 맞았음이 확인됐다. 런북 8단계 사전 활성화는 "선택 — 저비용 보험"으로 하향하되 유지한다(예상 출력 문서 자체가 "최종본 아님, 대회 중 변경 가능" 단서를 달고 있고 비용이 사실상 0이므로).
 - **삭제 금지 정책 대비: 이름 충돌 시 삭제 대신 변수 리네임**: 과제지 시행 후 유의사항이 "채점 완료 전 리소스 삭제·수정 금지"다. set-07 module-1의 log group 선존재 충돌은 `aws logs delete-log-group`으로 선삭제하고 재apply해 해결했는데, 대회 규정상 이 삭제 자체가 금지될 수 있다. set-08에서 이름 충돌(예: 기존 리소스 잔존)이 발생하면 삭제를 시도하지 말고 이름 변수(`*_name` 계열)를 리네임해 신규 리소스로 우회하는 경로를 우선한다.
 - **CloudShell 업로드 파일 목록**: module-4는 `Dockerfile`(`app/Dockerfile`)·`worker.py`(`provided/module-4/worker.py`)·mark 스크립트(`mark/mark2-4.sh`, module-2는 `mark/mark2-2.sh`)를 CloudShell에 업로드해야 한다. Windows 작업본을 그대로 업로드하면 CRLF가 섞여 bash 스크립트가 깨질 수 있어, 실행 전 `sed -i 's/\r$//' <파일>` 가드가 필요하다(각 모듈 README에 반영됨).
 - **CloudShell `.env`는 세션 초기화 시 재업로드 필요**: CloudShell 세션이 끊기면 홈 디렉터리가 초기화되므로 `.env`(module-4 3단계 빌드용) 재업로드가 필요하다. 로컬 `.env.ps1`은 본 PC 재부팅에도 남지만(파일 초기화는 대회 환경 규칙, `.env.ps1`은 gitignore 대상이라 로컬 파일 자체엔 영향 없음) CloudShell 측 파일은 그렇지 않다는 점을 구분한다.
@@ -70,7 +68,7 @@
 - **[협의회 7/31] 당일 변경은 신규 모듈 추가 방향 — 기존 4모듈 재작성 리스크는 낮다**: 2과제 변경은 기존 문제 수정이 아니라 최대 2개 모듈 **추가**(총 6개, 추가 시간 없음)가 원칙. 따라서 기존 4모듈의 30% 변수화는 보험으로 유지하되, 당일 리허설 계획은 "신규 모듈 2개를 처음 보는 상태로 풀 시간"을 남기는 쪽에 무게를 둔다. 세트 선정은 추첨 1인 세트의 4모듈 전체 — 세트가 통째로 나오므로 세트 단위 숙련이 유효하다.
 - **[협의회 7/31] PowerUserAccess + 명시적 Deny 가능**: 지급 계정은 PowerUserAccess "수준"이라 IAM 생성이 기본 정책만으로는 불가할 수 있고(런북 0단계 프로브의 존재 이유), 사전 제공 리소스 보호용 Deny로 특정 삭제·수정 API가 막힐 수 있다. AccessDenied 가 프로브 외 지점에서 나와도 코드 문제로 단정하지 말고 Deny 정책 여부를 감독관에게 확인한다. "이름 충돌 시 삭제 대신 리네임" 함정과 같은 계열.
 - **[협의회 7/31] 채점 중 update-kubeconfig 1회 제한**: 채점 도중 클러스터 접근 불가 시 `aws eks update-kubeconfig` 1회만 허용, 그 외 자격증명 입력·명령 실행 금지. module-4 README 7단계(CloudShell kubeconfig 사전 구성)를 채점 전에 반드시 완료해야 하는 근거.
-- **협의회 추적**: 공식 예상 출력 파일(mark.md 원본) 도착 시 이 표와 `mark/mark2-*.sh` 실제 검사 항목을 다시 대조한다. 마이스터넷 오류 정정 마감 **2026-08-13** — 그 전에 발견한 과제지·채점지 오류는 게시판으로 질의(72시간 내 답변 원칙).
+- **협의회 추적 — 완료(2026-08-01)**: 공식 예상 출력·판정 기준·채점 스크립트 수정 diff가 `provided/008_chall_2nd_patched_0801.md`로 도착. diff는 `mark/mark2-{1..4}.sh`에 적용 완료(결정 로그 참조), 판정 기준은 4모듈 구현·dataset과 전 항목 대조 완료 — 불일치 없음(1-5 기대 데이터도 retail_dataset.json과 일치 확인: O-1001/C001 주문 3건/기간 내 PENDING 3건/W-A low-stock 2건·P-GRN-002 제외). 마이스터넷 오류 정정 마감 **2026-08-13** — 추가 오류 발견 시 그 전에 게시판 질의(72시간 내 답변 원칙).
 - **NodePool/EC2NodeClass의 subnet·SG selector 태그 값은 치환 범위 밖 리터럴**: `k8s/10-karpenter-nodepool.yaml`의 `subnetSelectorTerms`(`karpenter.sh/discovery: "skills-sqs-cluster"`)와 `securityGroupSelectorTerms`(`aws:eks:cluster-name: "skills-sqs-cluster"`)는 README 렌더링 단계의 치환 placeholder가 아니라 클러스터 이름을 직접 박은 리터럴이다. `terraform/variables.tf`의 `var.cluster_name`이나 `eksctl/cluster.yaml`의 `metadata.name`을 바꾸면(30% 변동 대비) 이 두 태그 값도 함께 수동으로 맞춰야 한다 — 놓치면 Karpenter가 서브넷·SG를 디스커버리하지 못해 노드 프로비저닝 자체가 실패한다.
 
 ## 실측 소요시간
@@ -85,6 +83,12 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-01 [공통] 공식 채점 스크립트 수정 diff를 mark/에 적용
+- 맥락: 협의회가 예고한 공식 예상 출력 파일(`008_chall_2nd_patched_0801.md`)이 도착 — 판정 기준 전문 + 채점 스크립트 4개의 수정 diff(CloudShell 도구 자동 설치 헤더, module-4는 조회를 yaml 덤프에서 jq 필드 추출로 교체, 4-6 메시지 body `judge-N` 고정) 포함. 출제 측은 원본 파일을 직접 수정하지 않고 정정본을 별도 배포하는 방식
+- 채택: 공식 문서 원본은 `provided/008_chall_2nd_patched_0801.md`에 무수정 보존하고, diff는 `mark/mark2-{1..4}.sh`에 적용 — mark/는 "대회에서 실제 실행될 채점 스크립트"를 항상 반영한다는 원칙. `bash -n` 문법 검증 통과
+- 기각: mark/를 구버전 원본 그대로 두고 패치본을 별도 파일로 병존 → 셀프 채점이 실제 채점과 어긋난 채 진행될 위험, 런북의 mark 실행 경로도 두 갈래가 됨
+- 대가: mark/가 더 이상 "최초 배포본과 diff 없음" 상태가 아님 — 원본 대조가 필요하면 provided/의 공식 문서와 git 이력으로 추적
 
 ### 2026-08-01 [module-3] EventBridge 패턴 최소화 — groupId 필터 미포함
 - 맥락: rule 이 모든 `AuthorizeSecurityGroupIngress` 를 잡으면 보호 SG 외 이벤트에도 Lambda 가 호출된다

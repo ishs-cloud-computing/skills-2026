@@ -5,12 +5,40 @@ export AWS_PAGER=""
 OUT_TXT="asgmt2_module2_check_result.txt"
 exec > >(tee "$OUT_TXT") 2>&1
 
-for CMD in aws curl; do
-  if ! command -v "$CMD" >/dev/null 2>&1; then
-    echo "ERROR: required command not found: $CMD" >&2
-    exit 2
+export PATH="$HOME/.local/bin:$PATH"
+
+install_base_tools() {
+  local packages=()
+  for CMD in "$@"; do
+    if ! command -v "$CMD" >/dev/null 2>&1; then
+      packages+=("$CMD")
+    fi
+  done
+  if [ "${#packages[@]}" -gt 0 ]; then
+    sudo dnf install -y "${packages[@]}"
   fi
-done
+}
+
+install_aws_cli() {
+  if command -v aws >/dev/null 2>&1; then
+    return 0
+  fi
+  local arch awscli_arch
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64) awscli_arch="x86_64" ;;
+    aarch64|arm64) awscli_arch="aarch64" ;;
+    *) echo "지원하지 않는 CPU 아키텍처입니다: $arch" >&2; exit 2 ;;
+  esac
+  mkdir -p "$HOME/.local/bin"
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${awscli_arch}.zip" -o /tmp/awscliv2.zip
+  unzip -q -o /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install --install-dir "$HOME/usr/local/aws-cli" --bin-dir "$HOME/.local/bin" --update
+}
+
+install_base_tools curl unzip
+install_aws_cli
+
 
 echo "== 제2과제 2모듈 Simplify Service Networking with VPC Lattice 채점 출력 =="
 echo

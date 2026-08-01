@@ -183,9 +183,9 @@ aws eks associate-access-policy --cluster-name skills-sqs-cluster --principal-ar
   --access-scope type=cluster --region us-west-2
 ```
 
-## 8. 채점 직전 사전 활성화
+## 8. 채점 직전 사전 활성화 (선택 — 저비용 보험)
 
-mark2-4.sh는 [4-5](Karpenter NodePool·EC2NodeClass·배치)를 [4-6](스케일아웃 검증, 12건 발송)보다 먼저 조회한다. minReplicaCount 0 설계상 큐가 비어 있으면 pod·노드가 0개인 상태가 정상이지만, 그 상태로 채점을 시작하면 4-5 시점에 아무 것도 조회되지 않는다. **purge는 하지 않는다** — 메시지는 5초/건으로 처리되고 cooldown 후 자연히 0으로 복귀하며, 채점 자체가 4-6에서 12건을 새로 발송한다. 대신 채점 시작 직전에 메시지를 미리 보내 pod·노드를 활성 상태로 만들어 둔다:
+공식 예상 출력(`provided/008_chall_2nd_patched_0801.md` 4-5 판정 기준)이 4-5의 Worker Pod 배치를 4-6 출력 결과를 포함해 판정할 수 있다고 명시해 이 단계 없이도 감점되지 않는다. 비용이 사실상 0이라 보험으로 유지한다. mark2-4.sh는 [4-5](Karpenter NodePool·EC2NodeClass·배치)를 [4-6](스케일아웃 검증, 12건 발송)보다 먼저 조회한다. minReplicaCount 0 설계상 큐가 비어 있으면 pod·노드가 0개인 상태가 정상이지만, 그 상태로 채점을 시작하면 4-5 시점에 아무 것도 조회되지 않는다. **purge는 하지 않는다** — 메시지는 5초/건으로 처리되고 cooldown 후 자연히 0으로 복귀하며, 채점 자체가 4-6에서 12건을 새로 발송한다. 대신 채점 시작 직전에 메시지를 미리 보내 pod·노드를 활성 상태로 만들어 둔다:
 
 ```bash
 for i in $(seq 1 6); do
