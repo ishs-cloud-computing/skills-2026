@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# 과제지 3-3 인덱스·TTL 을 지급 앱(수정 금지) 밖에서 생성한다. create_index 는 멱등.
+# 인덱스 이름 자유(과제지 명시) — pymongo 기본 명명 사용.
+import json
+from urllib.parse import quote_plus
+
+import boto3
+from pymongo import MongoClient, ASCENDING, DESCENDING
+
+AWS_REGION = "${region}"
+SECRET_NAME = "${secret_name}"
+DATABASE_NAME = "skills_retail"
+DOCDB_PORT = ${docdb_port}
+CA_FILE = "/opt/skills-nosql/global-bundle.pem"
+
+res = boto3.client("secretsmanager", region_name=AWS_REGION).get_secret_value(SecretId=SECRET_NAME)
+sec = json.loads(res["SecretString"])
+uri = (
+    f"mongodb://{quote_plus(sec['username'])}:{quote_plus(sec['password'])}@{sec['host']}:{DOCDB_PORT}/"
+    "?replicaSet=rs0&retryWrites=false"
+)
+db = MongoClient(uri, tls=True, tlsCAFile=CA_FILE, serverSelectionTimeoutMS=8000)[DATABASE_NAME]
+
+db.orders.create_index([("orderId", ASCENDING)], unique=True)
+db.orders.create_index([("customerId", ASCENDING), ("createdAt", DESCENDING)])
+db.orders.create_index([("status", ASCENDING), ("dueAt", ASCENDING)])
+db.products.create_index([("productId", ASCENDING)], unique=True)
+db.products.create_index([("warehouseId", ASCENDING), ("stock", ASCENDING)])
+db.sessions.create_index([("sessionId", ASCENDING)], unique=True)
+db.sessions.create_index([("expiresAt", ASCENDING)], expireAfterSeconds=0)
+db.sessions.create_index([("customerId", ASCENDING), ("lastSeen", DESCENDING)])
+print("indexes ok")

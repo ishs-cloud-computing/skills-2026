@@ -1,0 +1,42 @@
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# set -e 미사용: 일부 단계 실패해도 systemd 등록까지 진행 (Restart=always 복구 여지)
+set -uxo pipefail
+
+dnf install -y python3-pip
+pip3 install boto3 pymongo
+
+mkdir -p /opt/skills-nosql
+base64 -d <<'B64' | gunzip > /opt/skills-nosql/docdb_client.py
+${app_gz_b64}
+B64
+base64 -d <<'B64' | gunzip > /opt/skills-nosql/retail_dataset.json
+${dataset_gz_b64}
+B64
+base64 -d <<'B64' | gunzip > /opt/skills-nosql/index_setup.py
+${index_gz_b64}
+B64
+curl -fsSL -o /opt/skills-nosql/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+
+cat > /etc/systemd/system/skills-nosql-app.service <<'UNIT'
+[Unit]
+Description=skills nosql client app
+After=network.target
+[Service]
+WorkingDirectory=/opt/skills-nosql
+ExecStart=/usr/bin/python3 /opt/skills-nosql/docdb_client.py serve
+Restart=always
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now skills-nosql-app
+
+# seed + index: 클러스터 기동 직후 접속이 튕길 수 있어 재시도 (최대 ~10분)
+for i in $(seq 1 30); do
+  if python3 /opt/skills-nosql/docdb_client.py seed && python3 /opt/skills-nosql/index_setup.py; then
+    break
+  fi
+  sleep 20
+done
