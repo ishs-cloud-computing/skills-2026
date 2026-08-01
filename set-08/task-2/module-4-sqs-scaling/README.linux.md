@@ -183,23 +183,16 @@ aws eks associate-access-policy --cluster-name skills-sqs-cluster --principal-ar
   --access-scope type=cluster --region us-west-2
 ```
 
-## 8. 채점 직전 사전 활성화 (선택 — 저비용 보험)
+## 8. 채점 직전 경량 상태 확인
 
-공식 예상 출력(`provided/008_chall_2nd_patched_0801.md` 4-5 판정 기준)이 4-5의 Worker Pod 배치를 4-6 출력 결과를 포함해 판정할 수 있다고 명시해 이 단계 없이도 감점되지 않는다. 비용이 사실상 0이라 보험으로 유지한다. mark2-4.sh는 [4-5](Karpenter NodePool·EC2NodeClass·배치)를 [4-6](스케일아웃 검증, 12건 발송)보다 먼저 조회한다. minReplicaCount 0 설계상 큐가 비어 있으면 pod·노드가 0개인 상태가 정상이지만, 그 상태로 채점을 시작하면 4-5 시점에 아무 것도 조회되지 않는다. **purge는 하지 않는다** — 메시지는 5초/건으로 처리되고 cooldown 후 자연히 0으로 복귀하며, 채점 자체가 4-6에서 12건을 새로 발송한다. 대신 채점 시작 직전에 메시지를 미리 보내 pod·노드를 활성 상태로 만들어 둔다:
+4-5 감점 우려는 공식 예상 출력(`provided/008_chall_2nd_patched_0801.md` 4-5 판정 기준)이 4-5의 Worker Pod 배치를 4-6 출력 결과를 포함해 판정할 수 있다고 명시해 해소됐다. 스케일아웃 파이프라인 실동작 검증은 6단계에서 이미 마쳤으므로(12건 발송, 소진·복귀까지 확인) 채점 직전에 SQS 메시지를 다시 보낼 필요는 없다 — 6단계 이후 상태 변경 없이 그대로인지만 가볍게 확인한다:
 
 ```bash
-for i in $(seq 1 6); do
-  aws sqs send-message --region us-west-2 --queue-url "$QUEUE_URL" --message-body "pre-mark-${i}" >/dev/null
-done
-# 노드 프로비저닝 포함 최대 3분 대기, Running pod 확인되면 즉시 진행
-for i in $(seq 1 18); do
-  sleep 10
-  running=$(kubectl get pods -n skills-sqs -l app=sqs-worker --field-selector=status.phase=Running --no-headers 2>/dev/null)
-  [ -n "$running" ] && break
-done
-kubectl get pods -n skills-sqs -l app=sqs-worker -o wide
-kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker -o wide
-# 위 두 명령에서 pod가 Running(≥1)이고 Karpenter 노드가 조회되면 채점 시작
+kubectl get pods -n keda
+kubectl get pods -n karpenter
+kubectl get scaledobject,triggerauthentication -n skills-sqs
+kubectl get nodepool,ec2nodeclass
+# 컨트롤러 pod Running, ScaledObject/TriggerAuthentication/NodePool/EC2NodeClass 존재 확인되면 채점 시작
 ```
 
 [CloudShell] 셀프 채점: [README.md](README.md) 8단계 CloudShell 항목을 수행한다.

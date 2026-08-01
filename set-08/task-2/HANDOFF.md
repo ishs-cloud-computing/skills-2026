@@ -46,7 +46,7 @@ task.md/mark.md 전체를 다시 읽지 마라 — 요구사항은 이미 코드
 - 과제지 명시 위반 감점 축: module-2 service-sg `0.0.0.0/0` 금지, Service EC2 Public IP 금지
 - module-1: 지급 앱 상수(region·secret명·DB명·port)가 변수 변경 폭을 제한. TTL 인덱스 실동작 — dataset `sessions.expiresAt`(현재 2026-12-01~03)이 채점 시점보다 미래인지 확인
 - module-3: 채점 3-5는 Lambda 직접 invoke — CloudTrail 전달 지연은 채점 무관. trail S3 버킷명 충돌 시 삭제 대신 `trail_name` 리네임
-- module-4: 4-5 시점 pod 0개 감점 우려는 공식 예상 출력이 "4-6 결과 포함 판정"을 명시해 해소 확정 — 런북 8단계 사전 활성화는 선택 보험으로 하향 유지(purge 금지). 치환 placeholder cluster.yaml 7종/k8s 4종 — 가드 2단계 필수. helm 차트 미핀 — 당일 스키마 재확인
+- module-4: 4-5 시점 pod 0개 감점 우려는 공식 예상 출력이 "4-6 결과 포함 판정"을 명시해 해소 확정. 런북 8단계는 SQS 재발송(6단계와 중복) 대신 경량 상태 확인으로 축소. 치환 placeholder cluster.yaml 7종/k8s 4종 — 가드 2단계 필수. helm 차트 미핀 — 당일 스키마 재확인
 - 공통: 이름 충돌 시 삭제 금지 — 이름 변수 리네임으로 우회 (시행 후 유의사항 8, PowerUserAccess+Deny 가능성 있음)
 
 ## 환경 특이사항 (이 머신)
