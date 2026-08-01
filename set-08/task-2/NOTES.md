@@ -65,7 +65,10 @@
 - **[module-1] TTL 인덱스는 실제로 동작한다 — dataset 만료일 확인**: `sessions.expiresAt`에 TTL(expireAfterSeconds 0)을 걸므로 그 시각(현 dataset 기준 2026-12-01~03)이 지나면 DocumentDB가 문서를 자동 삭제해 sessions count<3 → 채점 1-3·1-4 연쇄 실패. 대회 당일 지급 dataset의 `expiresAt`이 채점 시점보다 미래인지 반드시 확인하고, 과거라면 감독관에게 문의(지급 데이터 결함).
 - **[module-3] 실경로 이벤트 지연은 채점 리스크 아님**: CloudTrail→EventBridge 전달은 수 분 걸릴 수 있으나, mark2-3.sh 3-5는 Lambda를 직접 invoke하고 폴링(최대 180초)하므로 실채점은 전달 지연과 무관. 실경로는 README 검증 2로 별도 확인만 한다. 채점 중 mark가 추가한 TCP/22가 실경로 이벤트로 한 번 더 Lambda를 깨워도 IGNORED/NO_ACTION으로 무해.
 - **[module-3] trail S3 버킷명은 전역 유일**: `skills-ceh-cloudtrail-<account_id>` 형태로 계정 ID를 붙였다. 그래도 충돌(잔존 버킷 등) 시 삭제 금지 정책에 따라 버킷을 지우지 말고 `trail_name` 변수를 리네임해 우회한다.
-- **협의회 추적**: 공식 예상 출력 파일(mark.md 원본) 도착 시 이 표와 `mark/mark2-*.sh` 실제 검사 항목을 다시 대조한다.
+- **[협의회 7/31] 당일 변경은 신규 모듈 추가 방향 — 기존 4모듈 재작성 리스크는 낮다**: 2과제 변경은 기존 문제 수정이 아니라 최대 2개 모듈 **추가**(총 6개, 추가 시간 없음)가 원칙. 따라서 기존 4모듈의 30% 변수화는 보험으로 유지하되, 당일 리허설 계획은 "신규 모듈 2개를 처음 보는 상태로 풀 시간"을 남기는 쪽에 무게를 둔다. 세트 선정은 추첨 1인 세트의 4모듈 전체 — 세트가 통째로 나오므로 세트 단위 숙련이 유효하다.
+- **[협의회 7/31] PowerUserAccess + 명시적 Deny 가능**: 지급 계정은 PowerUserAccess "수준"이라 IAM 생성이 기본 정책만으로는 불가할 수 있고(런북 0단계 프로브의 존재 이유), 사전 제공 리소스 보호용 Deny로 특정 삭제·수정 API가 막힐 수 있다. AccessDenied 가 프로브 외 지점에서 나와도 코드 문제로 단정하지 말고 Deny 정책 여부를 감독관에게 확인한다. "이름 충돌 시 삭제 대신 리네임" 함정과 같은 계열.
+- **[협의회 7/31] 채점 중 update-kubeconfig 1회 제한**: 채점 도중 클러스터 접근 불가 시 `aws eks update-kubeconfig` 1회만 허용, 그 외 자격증명 입력·명령 실행 금지. module-4 README 7단계(CloudShell kubeconfig 사전 구성)를 채점 전에 반드시 완료해야 하는 근거.
+- **협의회 추적**: 공식 예상 출력 파일(mark.md 원본) 도착 시 이 표와 `mark/mark2-*.sh` 실제 검사 항목을 다시 대조한다. 마이스터넷 오류 정정 마감 **2026-08-13** — 그 전에 발견한 과제지·채점지 오류는 게시판으로 질의(72시간 내 답변 원칙).
 - **NodePool/EC2NodeClass의 subnet·SG selector 태그 값은 치환 범위 밖 리터럴**: `k8s/10-karpenter-nodepool.yaml`의 `subnetSelectorTerms`(`karpenter.sh/discovery: "skills-sqs-cluster"`)와 `securityGroupSelectorTerms`(`aws:eks:cluster-name: "skills-sqs-cluster"`)는 README 렌더링 단계의 치환 placeholder가 아니라 클러스터 이름을 직접 박은 리터럴이다. `terraform/variables.tf`의 `var.cluster_name`이나 `eksctl/cluster.yaml`의 `metadata.name`을 바꾸면(30% 변동 대비) 이 두 태그 값도 함께 수동으로 맞춰야 한다 — 놓치면 Karpenter가 서브넷·SG를 디스커버리하지 못해 노드 프로비저닝 자체가 실패한다.
 
 ## 실측 소요시간

@@ -362,3 +362,4 @@ kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=e
 
 > **[추적] 공식 예상 출력**: 채점지에 예상 출력이 없어 주최측이 별도 텍스트 파일로
 > 제공 예정(2026-07-31 지도교사협의회). 도착 시 이 문서·NOTES.md 커버리지와 대조할 것.
+> 마이스터넷 오류 정정 마감 2026-08-13 — 오류 질의는 그 전에 게시판 접수(72시간 내 답변 원칙).
