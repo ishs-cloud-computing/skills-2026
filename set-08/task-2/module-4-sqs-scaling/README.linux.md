@@ -36,30 +36,28 @@ source .env
 ## 1. terraform apply
 
 ```bash
-cd terraform
-terraform init
-terraform apply -auto-approve
-terraform output -json > outputs.json   # 커밋 금지 (.gitignore)
+terraform -chdir=terraform init
+terraform -chdir=terraform apply -auto-approve
+terraform -chdir=terraform output -json > outputs.json   # 커밋 금지 (.gitignore)
 ```
 
 주요 output을 세션 변수로 로드하고 `.env`(본 PC 재접속·CloudShell 업로드 겸용)로 저장한다:
 
 ```bash
-export ACCOUNT_ID=$(terraform output -raw account_id)
+export ACCOUNT_ID=$(terraform -chdir=terraform output -raw account_id)
 export REGION=us-west-2
-export VPC_ID=$(terraform output -raw vpc_id)
-export PRIV_SUBNET_A=$(terraform output -json private_subnet_ids | jq -r '.["skills-sqs-sn-priv-a"]')
-export PRIV_SUBNET_B=$(terraform output -json private_subnet_ids | jq -r '.["skills-sqs-sn-priv-b"]')
-export QUEUE_URL=$(terraform output -raw queue_url)
-ECR_REPO_URL=$(terraform output -raw ecr_repo_url)
+export VPC_ID=$(terraform -chdir=terraform output -raw vpc_id)
+export PRIV_SUBNET_A=$(terraform -chdir=terraform output -json private_subnet_ids | jq -r '.["skills-sqs-sn-priv-a"]')
+export PRIV_SUBNET_B=$(terraform -chdir=terraform output -json private_subnet_ids | jq -r '.["skills-sqs-sn-priv-b"]')
+export QUEUE_URL=$(terraform -chdir=terraform output -raw queue_url)
+ECR_REPO_URL=$(terraform -chdir=terraform output -raw ecr_repo_url)
 # 중괄호 필수: zsh 는 "$ECR_REPO_URL:latest" 의 :l 을 소문자 modifier 로 해석해 이미지명이 깨진다
 export ECR_IMAGE="${ECR_REPO_URL}:latest"
-export KEDA_POLICY_ARN=$(terraform output -raw keda_policy_arn)
-export KARPENTER_POLICY_ARN=$(terraform output -raw karpenter_policy_arn)
-export WORKER_POLICY_ARN=$(terraform output -raw worker_policy_arn)
-export NODE_ROLE_ARN=$(terraform output -raw karpenter_node_role_arn)
-export NODE_ROLE_NAME=$(terraform output -raw karpenter_node_role_name)
-cd ..
+export KEDA_POLICY_ARN=$(terraform -chdir=terraform output -raw keda_policy_arn)
+export KARPENTER_POLICY_ARN=$(terraform -chdir=terraform output -raw karpenter_policy_arn)
+export WORKER_POLICY_ARN=$(terraform -chdir=terraform output -raw worker_policy_arn)
+export NODE_ROLE_ARN=$(terraform -chdir=terraform output -raw karpenter_node_role_arn)
+export NODE_ROLE_NAME=$(terraform -chdir=terraform output -raw karpenter_node_role_name)
 
 cat > .env <<EOF
 export ACCOUNT_ID=${ACCOUNT_ID}
@@ -82,17 +80,15 @@ source .env   # 재접속 시: module-4-sqs-scaling 디렉터리에서 `source .
 ## 2. cluster.yaml 렌더링 + eksctl create (~20분)
 
 ```bash
-cd eksctl
-mkdir -p rendered
+mkdir -p eksctl/rendered
 # 가드 2단계: ① envsubst 는 unset 변수도 빈 문자열로 치환하므로 치환 전 비어있음 검사
 #            ② 변수 목록 명시 → 목록 외 신규 플레이스홀더는 남아서 grep 에 걸림
 # 스니펫은 zsh/bash 겸용 (붙여넣기 실행 대비: exit 금지, if 게이트로만 차단)
 if [ -n "$VPC_ID" ] && [ -n "$PRIV_SUBNET_A" ] && [ -n "$PRIV_SUBNET_B" ] && [ -n "$KEDA_POLICY_ARN" ] && [ -n "$KARPENTER_POLICY_ARN" ] && [ -n "$WORKER_POLICY_ARN" ] && [ -n "$NODE_ROLE_ARN" ]; then
-  envsubst '${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B} ${KEDA_POLICY_ARN} ${KARPENTER_POLICY_ARN} ${WORKER_POLICY_ARN} ${NODE_ROLE_ARN}' < cluster.yaml > rendered/cluster.yaml
-  if grep -n '\${' rendered/cluster.yaml; then echo "STOP: 미치환 값 존재"
-  else eksctl create cluster -f rendered/cluster.yaml; fi
+  envsubst '${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B} ${KEDA_POLICY_ARN} ${KARPENTER_POLICY_ARN} ${WORKER_POLICY_ARN} ${NODE_ROLE_ARN}' < eksctl/cluster.yaml > eksctl/rendered/cluster.yaml
+  if grep -n '\${' eksctl/rendered/cluster.yaml; then echo "STOP: 미치환 값 존재"
+  else eksctl create cluster -f eksctl/rendered/cluster.yaml; fi
 else echo "STOP: terraform output 값 누락"; fi
-cd ..
 ```
 
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
@@ -127,18 +123,16 @@ kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
 ## 5. k8s manifest 렌더링 + apply
 
 ```bash
-cd k8s
 if [ -z "$ECR_IMAGE" ] || [ -z "$QUEUE_URL" ] || [ -z "$REGION" ] || [ -z "$NODE_ROLE_NAME" ]; then
   echo "STOP: terraform output 값 누락"
 else
-  mkdir -p rendered
-  for f in *.yaml; do
-    sed -e "s|\${ECR_IMAGE}|${ECR_IMAGE}|g" -e "s|\${QUEUE_URL}|${QUEUE_URL}|g" -e "s|\${REGION}|${REGION}|g" -e "s|\${NODE_ROLE_NAME}|${NODE_ROLE_NAME}|g" "$f" > "rendered/$f"
+  mkdir -p k8s/rendered
+  for f in k8s/*.yaml; do
+    sed -e "s|\${ECR_IMAGE}|${ECR_IMAGE}|g" -e "s|\${QUEUE_URL}|${QUEUE_URL}|g" -e "s|\${REGION}|${REGION}|g" -e "s|\${NODE_ROLE_NAME}|${NODE_ROLE_NAME}|g" "$f" > "k8s/rendered/$(basename "$f")"
   done
-  if grep -rn '\${' rendered/; then echo "STOP: 미치환 값 존재"
-  else kubectl apply -f rendered/; fi   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
+  if grep -rn '\${' k8s/rendered/; then echo "STOP: 미치환 값 존재"
+  else kubectl apply -f k8s/rendered/; fi   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
 fi
-cd ..
 ```
 
 `namespace/skills-sqs`에 `missing the kubectl.kubernetes.io/last-applied-configuration annotation` 경고가 뜨는 건 정상이다 — eksctl Fargate profile이 네임스페이스를 먼저 만들어서 나며, 자동 패치된다.
@@ -211,16 +205,11 @@ bash mark2-4.sh
 ## 9. Teardown
 
 ```bash
-cd k8s
-kubectl delete -f rendered/ --wait=false
-cd ..
+kubectl delete -f k8s/rendered/ --wait=false
 helm uninstall keda -n keda
 helm uninstall karpenter -n karpenter
-cd eksctl
-eksctl delete cluster -f rendered/cluster.yaml
-cd ../terraform
-terraform destroy -auto-approve
-cd ..
+eksctl delete cluster -f eksctl/rendered/cluster.yaml
+terraform -chdir=terraform destroy -auto-approve
 ```
 
 - `--wait=false`를 쓰는 이유: 기본 동작이면 삭제 메시지를 다 출력한 뒤에도 kubectl이 종료되지 않고 매달려(실측 15분+) 뒤의 `helm uninstall`이 실행되지 않는다.

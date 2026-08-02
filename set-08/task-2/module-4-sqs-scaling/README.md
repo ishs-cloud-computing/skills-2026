@@ -64,29 +64,27 @@ aws eks update-kubeconfig --name skills-sqs-cluster --region us-west-2 --kubecon
 ## 1. terraform apply
 
 ```powershell
-cd terraform
-terraform init
-terraform apply -auto-approve
-terraform output -json > outputs.json   # 커밋 금지 (.gitignore)
+terraform -chdir=terraform init
+terraform -chdir=terraform apply -auto-approve
+terraform -chdir=terraform output -json > outputs.json   # 커밋 금지 (.gitignore)
 ```
 
 주요 output을 세션 변수로 로드하고 `.env.ps1`(본 PC 재접속용)·`.env`(CloudShell 업로드용)로 저장한다:
 
 ```powershell
-$env:ACCOUNT_ID           = terraform output -raw account_id
+$env:ACCOUNT_ID           = terraform -chdir=terraform output -raw account_id
 $env:REGION               = "us-west-2"
-$env:VPC_ID               = terraform output -raw vpc_id
-$SN                       = terraform output -json private_subnet_ids | ConvertFrom-Json
+$env:VPC_ID               = terraform -chdir=terraform output -raw vpc_id
+$SN                       = terraform -chdir=terraform output -json private_subnet_ids | ConvertFrom-Json
 $env:PRIV_SUBNET_A        = $SN.'skills-sqs-sn-priv-a'
 $env:PRIV_SUBNET_B        = $SN.'skills-sqs-sn-priv-b'
-$env:QUEUE_URL            = terraform output -raw queue_url
-$env:ECR_IMAGE            = "$(terraform output -raw ecr_repo_url):latest"
-$env:KEDA_POLICY_ARN      = terraform output -raw keda_policy_arn
-$env:KARPENTER_POLICY_ARN = terraform output -raw karpenter_policy_arn
-$env:WORKER_POLICY_ARN    = terraform output -raw worker_policy_arn
-$env:NODE_ROLE_ARN        = terraform output -raw karpenter_node_role_arn
-$env:NODE_ROLE_NAME       = terraform output -raw karpenter_node_role_name
-cd ..
+$env:QUEUE_URL            = terraform -chdir=terraform output -raw queue_url
+$env:ECR_IMAGE            = "$(terraform -chdir=terraform output -raw ecr_repo_url):latest"
+$env:KEDA_POLICY_ARN      = terraform -chdir=terraform output -raw keda_policy_arn
+$env:KARPENTER_POLICY_ARN = terraform -chdir=terraform output -raw karpenter_policy_arn
+$env:WORKER_POLICY_ARN    = terraform -chdir=terraform output -raw worker_policy_arn
+$env:NODE_ROLE_ARN        = terraform -chdir=terraform output -raw karpenter_node_role_arn
+$env:NODE_ROLE_NAME       = terraform -chdir=terraform output -raw karpenter_node_role_name
 
 @"
 `$env:ACCOUNT_ID           = "$env:ACCOUNT_ID"
@@ -125,23 +123,21 @@ export ECR_IMAGE=$env:ECR_IMAGE
 ## 2. cluster.yaml 렌더링 + eksctl create (~20분)
 
 ```powershell
-cd eksctl
 if (!$env:VPC_ID -or !$env:PRIV_SUBNET_A -or !$env:PRIV_SUBNET_B -or !$env:KEDA_POLICY_ARN -or !$env:KARPENTER_POLICY_ARN -or !$env:WORKER_POLICY_ARN -or !$env:NODE_ROLE_ARN) { throw "STOP: terraform output 값 누락" }
-New-Item -ItemType Directory -Force rendered | Out-Null
-$Y = Get-Content cluster.yaml -Raw
+New-Item -ItemType Directory -Force eksctl/rendered | Out-Null
+$Y = Get-Content eksctl/cluster.yaml -Raw
 $Y = $Y.Replace('${VPC_ID}', $env:VPC_ID).Replace('${PRIV_SUBNET_A}', $env:PRIV_SUBNET_A).Replace('${PRIV_SUBNET_B}', $env:PRIV_SUBNET_B)
 $Y = $Y.Replace('${KEDA_POLICY_ARN}', $env:KEDA_POLICY_ARN).Replace('${KARPENTER_POLICY_ARN}', $env:KARPENTER_POLICY_ARN)
 $Y = $Y.Replace('${WORKER_POLICY_ARN}', $env:WORKER_POLICY_ARN).Replace('${NODE_ROLE_ARN}', $env:NODE_ROLE_ARN)
-$Y | Set-Content rendered/cluster.yaml
-if (Select-String -Path rendered/cluster.yaml -Pattern '\$\{') { throw "STOP: 미치환 값 존재" }
-eksctl create cluster -f rendered/cluster.yaml   # kubeconfig 는 $env:KUBECONFIG(모듈 경로)에 기록됨
-cd ..
+$Y | Set-Content eksctl/rendered/cluster.yaml
+if (Select-String -Path eksctl/rendered/cluster.yaml -Pattern '\$\{') { throw "STOP: 미치환 값 존재" }
+eksctl create cluster -f eksctl/rendered/cluster.yaml   # kubeconfig 는 $env:KUBECONFIG(모듈 경로)에 기록됨
 ```
 
 생성은 실측 **약 19분**이라 도구·셸 타임아웃(보통 10분)을 넘긴다. 타임아웃으로 중간에 끊기는 환경이라면 별도 창에 detach 실행하고 로그 파일로 진행을 확인한다:
 
 ```powershell
-Start-Process pwsh -ArgumentList "-NoProfile","-Command","cd '$PWD\eksctl'; `$env:KUBECONFIG='$PWD\kubeconfig'; eksctl create cluster -f rendered/cluster.yaml" -RedirectStandardOutput eksctl.log -RedirectStandardError eksctl.err -WindowStyle Hidden
+Start-Process pwsh -ArgumentList "-NoProfile","-Command","`$env:KUBECONFIG='$PWD\kubeconfig'; eksctl create cluster -f eksctl/rendered/cluster.yaml" -RedirectStandardOutput eksctl.log -RedirectStandardError eksctl.err -WindowStyle Hidden
 Get-Content eksctl.log -Tail 5   # 진행 확인. "is ready" 가 나오면 완료
 ```
 
@@ -187,15 +183,13 @@ kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
 ## 5. k8s manifest 렌더링 + apply
 
 ```powershell
-cd k8s
 if (!$env:ECR_IMAGE -or !$env:QUEUE_URL -or !$env:REGION -or !$env:NODE_ROLE_NAME) { throw "STOP: terraform output 값 누락" }
-New-Item -ItemType Directory -Force rendered | Out-Null
-Get-ChildItem *.yaml | ForEach-Object {
-  (Get-Content $_ -Raw).Replace('${ECR_IMAGE}', $env:ECR_IMAGE).Replace('${QUEUE_URL}', $env:QUEUE_URL).Replace('${REGION}', $env:REGION).Replace('${NODE_ROLE_NAME}', $env:NODE_ROLE_NAME) | Set-Content "rendered/$($_.Name)"
+New-Item -ItemType Directory -Force k8s/rendered | Out-Null
+Get-ChildItem k8s/*.yaml | ForEach-Object {
+  (Get-Content $_ -Raw).Replace('${ECR_IMAGE}', $env:ECR_IMAGE).Replace('${QUEUE_URL}', $env:QUEUE_URL).Replace('${REGION}', $env:REGION).Replace('${NODE_ROLE_NAME}', $env:NODE_ROLE_NAME) | Set-Content "k8s/rendered/$($_.Name)"
 }
-if (Select-String -Pattern '\$\{' rendered\*.yaml) { throw "STOP: 미치환 값 존재" }
-kubectl apply -f rendered/   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
-cd ..
+if (Select-String -Pattern '\$\{' k8s/rendered/*.yaml) { throw "STOP: 미치환 값 존재" }
+kubectl apply -f k8s/rendered/   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
 ```
 
 `namespace/skills-sqs`에 `missing the kubectl.kubernetes.io/last-applied-configuration annotation` 경고가 뜨는 건 정상이다 — eksctl Fargate profile이 네임스페이스를 먼저 만들어서 나며, 자동 패치된다.
@@ -277,16 +271,11 @@ bash mark2-4.sh
 ## 9. Teardown
 
 ```powershell
-cd k8s
-kubectl delete -f rendered/ --wait=false
-cd ..
+kubectl delete -f k8s/rendered/ --wait=false
 helm uninstall keda -n keda
 helm uninstall karpenter -n karpenter
-cd eksctl
-eksctl delete cluster -f rendered/cluster.yaml
-cd ../terraform
-terraform destroy -auto-approve
-cd ..
+eksctl delete cluster -f eksctl/rendered/cluster.yaml
+terraform -chdir=terraform destroy -auto-approve
 ```
 
 - `--wait=false`를 쓰는 이유: 기본 동작으로 돌리면 삭제 메시지를 다 출력한 뒤에도 kubectl이 종료되지 않고 매달려(실측 15분+) 뒤의 `helm uninstall`이 아예 실행되지 않는다.
