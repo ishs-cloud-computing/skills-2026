@@ -11,38 +11,36 @@
 
 각 모듈의 배포·채점·teardown 절차는 해당 모듈 README(런북)를 따른다. 여기서는 절차를 반복하지 않고 모듈 간 공통 사항만 다룬다.
 
+## 공통 워크플로
+
+```powershell
+# 각 모듈 디렉터리에서 독립적으로 배포
+terraform -chdir=module-<n>-<name>/terraform init
+terraform -chdir=module-<n>-<name>/terraform apply -auto-approve
+# 이후 모듈별 README 의 배포 절차를 따른다.
+```
+
+module-4(EKS)는 클러스터가 하나이므로 **모듈 전용 터미널**에서 kubeconfig를 모듈 경로로 고정하고 시작한다(터미널 1개 = 클러스터 1개):
+
+```powershell
+cd module-4-sqs-scaling
+$env:KUBECONFIG = "$PWD\kubeconfig"
+```
+
+공식 채점 스크립트는 `mark/`(mark2-1~4.sh)에, 제공 배포파일은 `provided/`에 있다. 제공 배포파일은 수정하지 않으며 각 모듈 terraform/eksctl이 직접 참조한다. 채점은 CloudShell에서 실행한다 — 저장소가 private이라 git clone은 안 되므로 **작업 → 파일 업로드**로 전송하고(CloudShell 홈은 리전별로 분리, 업로드는 `$HOME`에 평평하게 저장), 실행 전 CRLF 가드를 거친다:
+
+```bash
+sed -i 's/\r$//' <스크립트_파일명>
+```
+
 ## 공통 규칙
 
-### 1. 작업 시작 전 필수 체크
-* **리전 확인**: 새 모듈 작업 전 반드시 리전 확인 (리전 오류 시 0점 처리)
-  ```powershell
-  # 로컬(Windows) 확인 명령어
-  aws configure get region
-  $env:AWS_DEFAULT_REGION
-  ```
-* **CloudShell 탭 확인**: 파일 업로드/다운로드 버튼이 막혀있다면, **VPC 환경 탭에서 기본 리전 탭으로 전환**
-* **CloudShell 접속 확인**: module-4는 로컬에 Docker가 없어 이미지 build/push가 CloudShell 필수 경로다. mark 스크립트도 `jq`에 의존해 로컬(Windows Git Bash) 대체 실행이 불가하다 — 접속 실패 시 진행 자체가 막히므로 0단계에서 먼저 확인
-* **EKS 전용 터미널 고정**: module-4(EKS) 작업 시, 터미널 1개당 클러스터 1개만 연결되도록 **kubeconfig 경로를 모듈 경로로 고정**하고 시작
+- 리소스 이름·태그는 과제지에 명시된 값과 **정확히 일치**(이름 일치 채점 항목 다수).
+- `.env`(본 PC용 `.env.ps1`, CloudShell 업로드용 `.env`)는 `terraform output` 직후 생성한다. 둘 다 gitignore 대상 — 재부팅·CloudShell 세션 초기화 시 재생성/재업로드.
+- module-4는 로컬에 Docker가 없어 이미지 build/push가 CloudShell 필수 경로다. mark 스크립트도 `jq` 의존이라 로컬 대체 실행이 불가 — CloudShell 접속을 0단계에서 먼저 확인한다.
+- CloudShell 진입 시 활성 탭이 이전 세션의 VPC 환경이면 파일 업로드가 막힌다. 기본 리전 탭으로 전환한다.
 
-### 2. 리소스 생성 및 파일 규칙
-* **이름/태그 정확히 일치**: 과제지에 명시된 이름과 태그를 토씨 하나 틀리지 않고 그대로 사용 (채점 항목)
-* **`provided/`는 원본 그대로**: `provided/module-N/*`는 대회 제공 원본이며 수정하지 않는다. 각 모듈 terraform/eksctl이 직접 참조한다.
-* **`.env` 즉시 생성**: `terraform output` 직후 아래 2개 파일 생성 (**둘 다 gitignore 필수**)
-  * 로컬 PC용 (PowerShell 변수 복원): `.env.ps1`
-  * CloudShell용 (bash export): `.env`
-
-### 3. CloudShell 채점 (mark/) 실행 규칙
-* **전송은 업로드만**: 저장소가 private이라 CloudShell에서 `git clone`이 안 된다(익명 clone 404). **작업 → 파일 업로드**로만 전송한다.
-* **업로드는 홈 기준**: 업로드 파일은 항상 `$HOME`(`/home/cloudshell-user`)에 평평하게 떨어지므로 실행 명령도 `bash mark2-N.sh`처럼 홈 기준으로 친다.
-* **리전별 개별 업로드**: CloudShell 홈은 리전별로 분리되어 있으므로, **모듈 변경 시 해당 리전 CloudShell에 mark 스크립트 새로 업로드**
-* **줄바꿈(CRLF) 에러 가드**: Windows에서 작성한 파일을 CloudShell에 올린 후, 실행 전 **반드시 아래 명령어로 파일 변환**
-  ```bash
-  sed -i 's/\r$//' <스크립트_파일명>
-  ```
-
-### 4. 재부팅 및 세션 초기화 복구
-* **로컬 PC 재부팅 시**: `.env.ps1`을 실행하여 PowerShell 세션 변수 복원 (EKS는 모듈 README 복구 절차 수행)
-* **CloudShell 세션 초기화 시**: `.env` 및 채점 스크립트 재업로드 진행
+> 트랩·원인은 [NOTES.md](NOTES.md) 함정 절, 런북 개선 이력은 [FEEDBACK.md](FEEDBACK.md) 참고.
 
 ## 실행 순서 (대기 시간 기준)
 
