@@ -28,7 +28,7 @@ module-1-nosql/
 
 [module-4 런북 0단계](../module-4-sqs-scaling/README.md)에서 1회만 수행한다.
 
-## 1. 배포 (~15분: DocumentDB 인스턴스 생성이 병목)
+## 1. 배포 (실측 ~7분: DocumentDB 인스턴스 생성이 병목)
 
 ```powershell
 terraform -chdir=terraform init
@@ -51,7 +51,7 @@ $env:DOCDB_ENDPOINT     = terraform -chdir=terraform output -raw docdb_endpoint
 . .\.env.ps1   # 재접속 시: module-1-nosql 디렉터리에서 `. .\.env.ps1` 만 다시 실행
 ```
 
-## 3. 검증 (배포 후 ~3-5분 대기: pip 설치 + seed/index 재시도 루프)
+## 3. 검증 (pip 설치 + seed/index 재시도 루프 — 실측으로는 apply 직후 바로 200)
 
 ```powershell
 while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$($env:NOSQL_CLIENT_IP):8080/health") -ne "200") { Start-Sleep 15 }
@@ -75,10 +75,10 @@ curl.exe -s "http://$($env:NOSQL_CLIENT_IP):8080/v1/products/low-stock?warehouse
 ### [CloudShell] 셀프 채점
 
 ```bash
-# mark/mark2-1.sh 를 CloudShell 에 업로드(Actions → Upload file) 후 실행.
+# mark/mark2-1.sh 를 CloudShell 에 업로드(작업 → 파일 업로드) 후 실행. 저장소가 private 이라 git clone 은 쓰지 않는다.
 # Windows 업로드 시 CRLF 가드 (멱등):
-sed -i 's/\r$//' mark/mark2-1.sh
-bash mark/mark2-1.sh
+sed -i 's/\r$//' mark2-1.sh
+bash mark2-1.sh
 ```
 
 ## 4. Teardown

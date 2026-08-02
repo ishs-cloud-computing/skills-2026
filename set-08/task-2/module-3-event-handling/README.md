@@ -63,7 +63,7 @@ aws ec2 describe-security-groups --group-ids $env:PROTECTED_SG_ID --query "Secur
 Remove-Item payload.json, out.json
 ```
 
-## 4. 검증 2 — 실경로 (CloudTrail→EventBridge→Lambda, 이벤트 전달까지 수 분)
+## 4. 검증 2 — 실경로 (CloudTrail→EventBridge→Lambda — 실측 ~20초, 최대 수 분)
 
 ```powershell
 aws ec2 authorize-security-group-ingress --group-id $env:PROTECTED_SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
@@ -84,10 +84,10 @@ aws cloudtrail get-trail-status --name skills-ceh-cloudtrail --query IsLogging
 ### [CloudShell] 셀프 채점
 
 ```bash
-# mark/mark2-3.sh 를 CloudShell 에 업로드(Actions → Upload file) 후 실행.
+# mark/mark2-3.sh 를 CloudShell 에 업로드(작업 → 파일 업로드) 후 실행. 저장소가 private 이라 git clone 은 쓰지 않는다.
 # Windows 업로드 시 CRLF 가드 (멱등):
-sed -i 's/\r$//' mark/mark2-3.sh
-bash mark/mark2-3.sh
+sed -i 's/\r$//' mark2-3.sh
+bash mark2-3.sh
 ```
 
 ## 6. Teardown

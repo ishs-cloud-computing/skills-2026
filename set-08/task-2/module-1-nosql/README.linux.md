@@ -6,7 +6,7 @@ PowerShell 대신 bash/zsh 용. 단계 구성은 [README.md](README.md) 와 1:1.
 
 [module-4 런북 0단계](../module-4-sqs-scaling/README.linux.md)에서 1회만 수행한다.
 
-## 1. 배포 (~15분)
+## 1. 배포 (실측 ~7분: DocumentDB 인스턴스 생성이 병목)
 
 ```bash
 terraform -chdir=terraform init
@@ -29,7 +29,7 @@ EOF
 source .env   # 재접속 시: module-1-nosql 디렉터리에서 `source .env` 만 다시 실행
 ```
 
-## 3. 검증 (배포 후 ~3-5분 대기)
+## 3. 검증 (배포 후 대기 — 실측으로는 apply 직후 바로 200)
 
 ```bash
 until [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://${NOSQL_CLIENT_IP}:8080/health")" = "200" ]; do sleep 15; done
@@ -47,8 +47,8 @@ curl -s "http://${NOSQL_CLIENT_IP}:8080/v1/products/low-stock?warehouseId=W-A"
 ### [CloudShell] 셀프 채점
 
 ```bash
-sed -i 's/\r$//' mark/mark2-1.sh
-bash mark/mark2-1.sh
+sed -i 's/\r$//' mark2-1.sh
+bash mark2-1.sh
 ```
 
 ## 4. Teardown

@@ -37,11 +37,14 @@ aws iam create-role --role-name skills-iam-probe --assume-role-policy-document f
 if ($LASTEXITCODE -eq 0) {
   aws iam delete-role --role-name skills-iam-probe
   if ($LASTEXITCODE -ne 0) { Write-Host "삭제 거부 — skills-iam-probe role 잔존 상태를 감독관에게 확인" }
+  else { Write-Host "IAM OK — 생성·삭제 모두 성공" }
 } else {
   Write-Host "STOP: AccessDenied — IAM 미지급. 감독관 문의 (module-1·3·4 진행 불가)"
 }
 Remove-Item -Force iam-probe-trust.json
 ```
+
+같은 시점에 **CloudShell 접속도 확인**한다. 이 모듈은 로컬에 Docker가 없어 이미지 build/push(3단계)가 CloudShell 필수 경로이므로, 접속이 안 되면 모듈 전체가 막힌다. 활성 탭이 이전 세션의 VPC 환경이면 기본 리전 탭으로 전환한다(그 상태에선 파일 업로드가 비활성이다).
 
 이 모듈에서 만드는 클러스터 전용 kubeconfig를 지금부터 사용한다 (터미널 1개 = 클러스터 1개):
 
@@ -100,7 +103,10 @@ cd ..
 `$env:NODE_ROLE_NAME       = "$env:NODE_ROLE_NAME"
 "@ | Set-Content .env.ps1
 
-@"
+# .env 는 CloudShell(bash)이 source 하므로 반드시 LF 로 쓴다.
+# Set-Content 는 파일 끝 개행을 CRLF 로 써서 마지막 줄(ECR_IMAGE)에 \r 이 붙고,
+# docker build/push 가 잘못된 태그로 실패한다 — WriteAllText + LF 치환으로 회피.
+$envBody = @"
 export ACCOUNT_ID=$env:ACCOUNT_ID
 export REGION=$env:REGION
 export VPC_ID=$env:VPC_ID
@@ -108,7 +114,8 @@ export PRIV_SUBNET_A=$env:PRIV_SUBNET_A
 export PRIV_SUBNET_B=$env:PRIV_SUBNET_B
 export QUEUE_URL=$env:QUEUE_URL
 export ECR_IMAGE=$env:ECR_IMAGE
-"@ | Set-Content .env
+"@
+[IO.File]::WriteAllText("$PWD\.env", ($envBody.Replace("`r`n", "`n") + "`n"))
 
 . .\.env.ps1   # 재접속 시: module-4-sqs-scaling 디렉터리에서 `. .\.env.ps1` 만 다시 실행
 ```
@@ -131,13 +138,21 @@ eksctl create cluster -f rendered/cluster.yaml   # kubeconfig 는 $env:KUBECONFI
 cd ..
 ```
 
+생성은 실측 **약 19분**이라 도구·셸 타임아웃(보통 10분)을 넘긴다. 타임아웃으로 중간에 끊기는 환경이라면 별도 창에 detach 실행하고 로그 파일로 진행을 확인한다:
+
+```powershell
+Start-Process pwsh -ArgumentList "-NoProfile","-Command","cd '$PWD\eksctl'; `$env:KUBECONFIG='$PWD\kubeconfig'; eksctl create cluster -f rendered/cluster.yaml" -RedirectStandardOutput eksctl.log -RedirectStandardError eksctl.err -WindowStyle Hidden
+Get-Content eksctl.log -Tail 5   # 진행 확인. "is ready" 가 나오면 완료
+```
+
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
 
-CloudShell Actions → Upload file로 `app/Dockerfile`, `provided/module-4/worker.py`, `.env`를 업로드한다 (CloudShell 홈 디렉터리에 저장됨).
+**us-west-2 CloudShell**에서 작업 → 파일 업로드로 `app/Dockerfile`, `provided/module-4/worker.py`, `.env`를 올린다. 업로드 파일은 항상 홈(`/home/cloudshell-user`)에 평평하게 저장되고, CloudShell 홈은 리전별로 분리되므로 반드시 us-west-2 탭에서 올려야 한다.
 
 ```bash
 mkdir -p ~/module4-build && cd ~/module4-build
 cp ~/Dockerfile ~/worker.py ~/.env .
+sed -i 's/\r$//' .env   # CRLF 가드 (멱등) — \r 이 섞이면 ECR_IMAGE 태그가 깨진다
 source .env
 aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 docker build -t "${ECR_IMAGE}" .
@@ -182,6 +197,8 @@ if (Select-String -Pattern '\$\{' rendered\*.yaml) { throw "STOP: 미치환 값 
 kubectl apply -f rendered/   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
 cd ..
 ```
+
+`namespace/skills-sqs`에 `missing the kubectl.kubernetes.io/last-applied-configuration annotation` 경고가 뜨는 건 정상이다 — eksctl Fargate profile이 네임스페이스를 먼저 만들어서 나며, 자동 패치된다.
 
 큐가 비어 있으면 minReplicaCount 0이라 pod 0개가 정상이다 — scale-out 확인은 6단계에서 한다. apply 결과는 리소스 존재로만 확인:
 
@@ -230,7 +247,7 @@ aws sts get-caller-identity --query Arn --output text   # CloudShell 에서 ARN 
 ```powershell
 aws eks create-access-entry --cluster-name skills-sqs-cluster --principal-arn <CLOUDSHELL_IAM_ARN> --region us-west-2
 aws eks associate-access-policy --cluster-name skills-sqs-cluster --principal-arn <CLOUDSHELL_IAM_ARN> `
-  --policy-arn arn:aws:eks:aws:cluster-access-policy/AmazonEKSClusterAdminPolicy `
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy `
   --access-scope type=cluster --region us-west-2
 ```
 
@@ -249,17 +266,19 @@ kubectl get nodepool,ec2nodeclass
 [CloudShell] 셀프 채점:
 
 ```bash
-# CloudShell 에서 mark/mark2-4.sh 를 git clone 또는 파일 업로드(Actions → Upload file)로 전송 후 실행.
+# mark/mark2-4.sh 를 CloudShell 에 업로드(작업 → 파일 업로드) 후 실행. 저장소가 private 이라 git clone 은 쓰지 않는다.
 # Windows 에서 파일 업로드 시 CRLF 가 섞일 수 있어 실행 전 가드(멱등 — 이미 LF 여도 무해):
-sed -i 's/\r$//' mark/mark2-4.sh
-bash mark/mark2-4.sh
+sed -i 's/\r$//' mark2-4.sh
+bash mark2-4.sh
 ```
+
+`mark2-4.sh`는 CloudShell에 kubectl이 없어 설치부터 하고 4-6에서 `sleep 60`을 3회 돈다 — 실측 **약 11분**. 다른 모듈 채점(각 1~3분)과 달리 시간을 따로 잡는다.
 
 ## 9. Teardown
 
 ```powershell
 cd k8s
-kubectl delete -f rendered/
+kubectl delete -f rendered/ --wait=false
 cd ..
 helm uninstall keda -n keda
 helm uninstall karpenter -n karpenter
@@ -269,3 +288,7 @@ cd ../terraform
 terraform destroy -auto-approve
 cd ..
 ```
+
+- `--wait=false`를 쓰는 이유: 기본 동작으로 돌리면 삭제 메시지를 다 출력한 뒤에도 kubectl이 종료되지 않고 매달려(실측 15분+) 뒤의 `helm uninstall`이 아예 실행되지 않는다.
+- 그래도 매달리면 kubectl을 끊고 다음 단계로 진행해도 된다. 이때 `helm uninstall`이 `Failed to purge the release: secrets "sh.helm.release.v1.keda.v1" not found` 경고를 내도 리소스는 제거된 상태라 무시한다.
+- `eksctl delete cluster`는 실측 약 8분(Fargate profile 3개를 프로필당 ~2분씩 순차 삭제).

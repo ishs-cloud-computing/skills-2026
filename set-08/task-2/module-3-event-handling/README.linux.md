@@ -42,7 +42,7 @@ aws ec2 describe-security-groups --group-ids "$PROTECTED_SG_ID" --query "Securit
 rm -f payload.json out.json
 ```
 
-## 4. 검증 2 — 실경로 (CloudTrail→EventBridge→Lambda, 이벤트 전달까지 수 분)
+## 4. 검증 2 — 실경로 (CloudTrail→EventBridge→Lambda — 실측 ~20초, 최대 수 분)
 
 ```bash
 aws ec2 authorize-security-group-ingress --group-id "$PROTECTED_SG_ID" --protocol tcp --port 22 --cidr 0.0.0.0/0
@@ -63,8 +63,8 @@ aws cloudtrail get-trail-status --name skills-ceh-cloudtrail --query IsLogging
 ### [CloudShell] 셀프 채점
 
 ```bash
-sed -i 's/\r$//' mark/mark2-3.sh
-bash mark/mark2-3.sh
+sed -i 's/\r$//' mark2-3.sh
+bash mark2-3.sh
 ```
 
 ## 6. Teardown

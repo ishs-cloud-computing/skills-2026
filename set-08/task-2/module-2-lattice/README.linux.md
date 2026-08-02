@@ -59,10 +59,10 @@ curl -s "http://${CLIENT_IP}/v1/client/orders?id=1001"
 [README.md](README.md) 3단계 CloudShell 항목 수행.
 
 ```bash
-# CloudShell 에서 mark/mark2-2.sh 를 git clone 또는 파일 업로드(Actions → Upload file)로 전송 후 실행.
+# mark/mark2-2.sh 를 CloudShell 에 업로드(작업 → 파일 업로드) 후 실행. 저장소가 private 이라 git clone 은 쓰지 않는다.
 # Windows 에서 파일 업로드 시 CRLF 가 섞일 수 있어 실행 전 가드(멱등 — 이미 LF 여도 무해):
-sed -i 's/\r$//' mark/mark2-2.sh
-bash mark/mark2-2.sh
+sed -i 's/\r$//' mark2-2.sh
+bash mark2-2.sh
 ```
 
 ### 4) Teardown
@@ -70,3 +70,5 @@ bash mark/mark2-2.sh
 ```bash
 terraform -chdir=terraform destroy -auto-approve
 ```
+
+1회차가 `unexpected state 'UNUSED', wanted target ''` (Lattice Target Group Attachment)로 실패할 수 있다 — EC2가 먼저 지워지며 생기는 레이스다. 같은 명령을 한 번 더 실행하면 정리된다.

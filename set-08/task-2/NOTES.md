@@ -55,6 +55,10 @@
 
 ## 함정 절
 
+- **[실측 확인, 2026-08-02] `.env` 마지막 줄 CRLF로 docker build/push가 깨진다**: PowerShell `Set-Content`가 파일 끝 개행을 CRLF로 써서 `.env` 마지막 줄(`ECR_IMAGE`)에만 `\r`이 붙는다. CloudShell에서 `source .env` 하면 태그가 `...:latest\r`이 돼 build/push가 실패한다. module-4 README 1단계를 `[IO.File]::WriteAllText` + LF 치환으로 고치고, 3단계 `source .env` 앞에 `sed -i 's/\r$//' .env` 가드를 넣었다. mark 스크립트에만 걸려 있던 CRLF 가드로는 이 경로를 못 잡는다.
+- **[실측 확인, 2026-08-02] EKS access entry policy ARN은 `arn:aws:eks::aws:...`**: README 7단계에 `arn:aws:eks:aws:cluster-access-policy/...`(콜론 1개)로 적혀 있어 `ResourceNotFoundException`이 났다. 정확한 값은 리전 세그먼트가 빈 `arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy`. `aws eks list-access-policies`로 확인 가능.
+- **[실측 확인, 2026-08-02] CloudShell 전송·실행 경로**: 저장소가 private이라 `git clone` 불가(익명 404), 업로드 파일은 항상 `$HOME`에 평면 저장(런북의 `mark/` 경로와 불일치), CloudShell 홈은 리전별로 분리, 이전 세션의 VPC 환경 탭이 활성이면 업로드 메뉴 자체가 비활성. 로컬 대체 실행도 `jq` 부재로 불가 — 채점은 CloudShell 전용이다. 상세는 [FEEDBACK.md](FEEDBACK.md).
+- **[실측 확인, 2026-08-02] teardown 두 지점에서 멈춘다**: module-4 `kubectl delete -f rendered/`가 삭제 출력 후에도 종료되지 않아(15분+) 뒤의 helm 단계가 실행되지 않는다 → `--wait=false`. module-2 `terraform destroy` 1회차가 Lattice Target Group Attachment `unexpected state 'UNUSED'`로 실패한다 → 재실행하면 정리된다.
 - **service-sg 0.0.0.0/0 → 과제지 명시 미충족 (감점 확정 함정)**: 과제지 4-3이 "0.0.0.0/0 허용 시 미충족"을 명시. `module-2-lattice/terraform/sg.tf`의 service SG는 VPC Lattice managed prefix list 소스만 허용하도록 만들었으나, 30% 변동으로 SG 리소스를 재작성하게 되면 이 조건을 놓치기 쉽다 — service SG ingress에 CIDR 블록을 절대 추가하지 않는다.
 - **min 0이라 채점 4-5 시점 pod·노드 0개 — 공식 예상 출력으로 리스크 해소 확정(2026-08-01)**: `sqs-worker-scaledobject`가 minReplicaCount 0(과제지 6-6 요구값)이라 큐가 비어 있으면 4-5 시점에 pod·노드 목록이 비어 보일 수 있다는 우려가 있었다. 공식 예상 출력(`provided/008_chall_2nd_patched_0801.md`) 4-5 판정 기준이 "min 0으로 채점 직후 Worker Pod가 없을 수 있으므로 Worker Pod의 EC2 배치는 4-6 Scale Out 출력 결과를 포함해 판정할 수 있습니다"를 명시 — 감점 리스크가 공식적으로 해소됐고, 우리의 사전 추론(전원 동일 조건이라 감점 성립 불가, 게시판 질의 불필요)도 맞았음이 확인됐다. 런북 8단계는 SQS 재발송이 아니라 **경량 상태 확인**(컨트롤러 pod·CRD 리소스 존재만 조회)으로 축소했다 — 실동작 스모크 테스트는 6단계에서 이미 12건 발송으로 마쳤으므로, 8단계에서 같은 검증을 반복하는 건 과잉이라고 판단(2026-08-01, 사용자 지적).
 - **삭제 금지 정책 대비: 이름 충돌 시 삭제 대신 변수 리네임**: 과제지 시행 후 유의사항이 "채점 완료 전 리소스 삭제·수정 금지"다. set-07 module-1의 log group 선존재 충돌은 `aws logs delete-log-group`으로 선삭제하고 재apply해 해결했는데, 대회 규정상 이 삭제 자체가 금지될 수 있다. set-08에서 이름 충돌(예: 기존 리소스 잔존)이 발생하면 삭제를 시도하지 말고 이름 변수(`*_name` 계열)를 리네임해 신규 리소스로 우회하는 경로를 우선한다.
@@ -75,11 +79,16 @@
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
 
-- module-1 apply: terraform plan 실측 22 add / 0 errors (apply 미실행) — DocumentDB instance 생성 ~10-15분 예상이 병목
-- module-2 apply: terraform plan 실측 24 add / 0 errors (apply 미실행)
-- module-3 apply: terraform plan 실측 16 add / 0 errors (apply 미실행)
-- module-4 apply: terraform plan 실측 30 add / 0 errors (apply 미실행)
-- 공통 병목: EKS 클러스터 생성(eksctl, module-4) ~15-20분 예상 — CloudShell 이미지 빌드/push와 병렬 처리 설계(README 3단계)
+2026-08-02 실 apply·실채점 리허설로 전부 실측치로 교체했다. 원본 로그는 [LOGS.md](LOGS.md).
+
+- module-1 apply: 22 added / **~7분** (DocumentDB instance 병목, 기존 10-15분 예상은 과대)
+- module-2 apply: 24 added / ~2분
+- module-3 apply: 16 added / ~1분
+- module-4 apply: 30 added / ~3분 (NAT GW 병목)
+- 공통 병목: eksctl 클러스터 생성 **19분** (삭제는 8분) — CloudShell 이미지 빌드/push(~2분)와 병렬 처리 설계(README 3단계)
+- helm karpenter+keda: ~2분 / module-4 scale out(12건→pod 6+노드 2): 60초 이내 / scale in: 큐 소진 후 ~3분
+- module-3 실경로 복구(CloudTrail→EventBridge→Lambda): **19.6초** (기준 180초, "수 분" 상정보다 훨씬 빠름)
+- 채점 스크립트: mark2-1/2/3 각 1~3분, **mark2-4는 ~11분**(CloudShell kubectl 설치 + 4-6의 sleep 60×3)
 
 ---
 ## 결정 로그

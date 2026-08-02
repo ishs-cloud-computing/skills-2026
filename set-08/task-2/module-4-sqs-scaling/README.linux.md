@@ -141,6 +141,8 @@ fi
 cd ..
 ```
 
+`namespace/skills-sqs`에 `missing the kubectl.kubernetes.io/last-applied-configuration annotation` 경고가 뜨는 건 정상이다 — eksctl Fargate profile이 네임스페이스를 먼저 만들어서 나며, 자동 패치된다.
+
 큐가 비어 있으면 minReplicaCount 0이라 pod 0개가 정상이다 — scale-out 확인은 6단계에서 한다. apply 결과는 리소스 존재로만 확인:
 
 ```bash
@@ -179,7 +181,7 @@ kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool
 ```bash
 aws eks create-access-entry --cluster-name skills-sqs-cluster --principal-arn <CLOUDSHELL_IAM_ARN> --region us-west-2
 aws eks associate-access-policy --cluster-name skills-sqs-cluster --principal-arn <CLOUDSHELL_IAM_ARN> \
-  --policy-arn arn:aws:eks:aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
   --access-scope type=cluster --region us-west-2
 ```
 
@@ -198,17 +200,19 @@ kubectl get nodepool,ec2nodeclass
 [CloudShell] 셀프 채점: [README.md](README.md) 8단계 CloudShell 항목을 수행한다.
 
 ```bash
-# CloudShell 에서 mark/mark2-4.sh 를 git clone 또는 파일 업로드(Actions → Upload file)로 전송 후 실행.
+# mark/mark2-4.sh 를 CloudShell 에 업로드(작업 → 파일 업로드) 후 실행. 저장소가 private 이라 git clone 은 쓰지 않는다.
 # Windows 에서 파일 업로드 시 CRLF 가 섞일 수 있어 실행 전 가드(멱등 — 이미 LF 여도 무해):
-sed -i 's/\r$//' mark/mark2-4.sh
-bash mark/mark2-4.sh
+sed -i 's/\r$//' mark2-4.sh
+bash mark2-4.sh
 ```
+
+`mark2-4.sh`는 kubectl 설치 + 4-6의 `sleep 60`×3 때문에 실측 **약 11분** 걸린다(다른 모듈 채점은 각 1~3분).
 
 ## 9. Teardown
 
 ```bash
 cd k8s
-kubectl delete -f rendered/
+kubectl delete -f rendered/ --wait=false
 cd ..
 helm uninstall keda -n keda
 helm uninstall karpenter -n karpenter
@@ -218,3 +222,7 @@ cd ../terraform
 terraform destroy -auto-approve
 cd ..
 ```
+
+- `--wait=false`를 쓰는 이유: 기본 동작이면 삭제 메시지를 다 출력한 뒤에도 kubectl이 종료되지 않고 매달려(실측 15분+) 뒤의 `helm uninstall`이 실행되지 않는다.
+- 매달린 kubectl을 끊고 진행해도 된다. 이때 `helm uninstall`이 `Failed to purge the release: ... not found` 경고를 내도 리소스는 제거된 상태다.
+- `eksctl delete cluster`는 실측 약 8분(Fargate profile 3개, 프로필당 ~2분).

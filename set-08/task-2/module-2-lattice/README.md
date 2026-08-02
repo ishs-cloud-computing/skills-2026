@@ -75,14 +75,21 @@ curl.exe -s "http://$env:CLIENT_IP/v1/client/orders?id=1001"
 ### [CloudShell] 셀프 채점
 
 ```bash
-# CloudShell 에서 mark/mark2-2.sh 를 git clone 또는 파일 업로드(Actions → Upload file)로 전송 후 실행.
+# mark/mark2-2.sh 를 CloudShell 에 업로드(작업 → 파일 업로드) 후 실행. 저장소가 private 이라 git clone 은 쓰지 않는다.
 # Windows 에서 파일 업로드 시 CRLF 가 섞일 수 있어 실행 전 가드(멱등 — 이미 LF 여도 무해):
-sed -i 's/\r$//' mark/mark2-2.sh
-bash mark/mark2-2.sh
+sed -i 's/\r$//' mark2-2.sh
+bash mark2-2.sh
 ```
 
 ## 4. Teardown
 
 ```powershell
 terraform -chdir=terraform destroy -auto-approve
+```
+
+1회차가 다음 에러로 실패할 수 있다 — EC2가 먼저 지워져 target이 `UNUSED`로 떨어지는 레이스다. **같은 명령을 한 번 더 실행**하면 남은 attachment/target group이 정리된다.
+
+```
+Error: waiting for VPC Lattice Target Group Attachment (tg-.../i-.../8080) delete:
+unexpected state 'UNUSED', wanted target ''. last error: TargetGroupNotInUse
 ```
