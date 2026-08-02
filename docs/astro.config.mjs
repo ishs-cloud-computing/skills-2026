@@ -50,6 +50,12 @@ export default defineConfig({
 								{ label: "2과제", items: [{ autogenerate: { directory: "setlist/set-07/task-2" } }] },
 							],
 						},
+						{
+							label: "8세트",
+							items: [
+								{ label: "2과제", items: [{ autogenerate: { directory: "setlist/set-08/task-2" } }] },
+							],
+						},
 					],
 				},
 				{
