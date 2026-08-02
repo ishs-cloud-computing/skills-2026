@@ -29,22 +29,9 @@ module-4-sqs-scaling/
 # 채점: task-2/mark/mark2-4.sh (CloudShell, us-west-2)
 ```
 
-## 0. IAM 권한 프로브 (대회 시작 직후 1회)
+## 0. 시작 전 확인 (대회 시작 직후 1회)
 
-```powershell
-'{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}' | Set-Content -Path iam-probe-trust.json
-aws iam create-role --role-name skills-iam-probe --assume-role-policy-document file://iam-probe-trust.json
-if ($LASTEXITCODE -eq 0) {
-  aws iam delete-role --role-name skills-iam-probe
-  if ($LASTEXITCODE -ne 0) { Write-Host "삭제 거부 — skills-iam-probe role 잔존 상태를 감독관에게 확인" }
-  else { Write-Host "IAM OK — 생성·삭제 모두 성공" }
-} else {
-  Write-Host "STOP: AccessDenied — IAM 미지급. 감독관 문의 (module-1·3·4 진행 불가)"
-}
-Remove-Item -Force iam-probe-trust.json
-```
-
-같은 시점에 **CloudShell 접속도 확인**한다. 이 모듈은 로컬에 Docker가 없어 이미지 build/push(3단계)가 CloudShell 필수 경로이므로, 접속이 안 되면 모듈 전체가 막힌다. 활성 탭이 이전 세션의 VPC 환경이면 기본 리전 탭으로 전환한다(그 상태에선 파일 업로드가 비활성이다).
+**CloudShell 접속을 확인**한다. 이 모듈은 로컬에 Docker가 없어 이미지 build/push(3단계)가 CloudShell 필수 경로이므로, 접속이 안 되면 모듈 전체가 막힌다. 활성 탭이 이전 세션의 VPC 환경이면 기본 리전 탭으로 전환한다(그 상태에선 파일 업로드가 비활성이다).
 
 이 모듈에서 만드는 클러스터 전용 kubeconfig를 지금부터 사용한다 (터미널 1개 = 클러스터 1개):
 

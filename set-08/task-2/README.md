@@ -46,7 +46,7 @@ sed -i 's/\r$//' <스크립트_파일명>
 
 4모듈의 `terraform apply`는 서로 완전히 독립이므로 **처음에 4개를 전부 걸어두고** 대기 구간에 검증·채점을 순서대로 처리한다. 터미널 4개(모듈별 1개)를 동시에 연다.
 
-1. **0단계 선행 체크**: IAM 권한 프로브 1회(module-4 README 0단계) + CloudShell 접속 확인.
+1. **0단계 선행 체크**: CloudShell 접속 확인(module-4 README 0단계).
 2. **4모듈 `terraform apply` 전부 시작**. 실측 소요: module-3 ~1분 / module-2 ~2분 / module-4 ~3분 / module-1 ~7분(DocumentDB 인스턴스 병목).
 3. **module-4 eksctl create cluster 시작** (terraform apply 직후, **~19분**으로 전체 최장 경로). 별도 창에서 실행하고 로그 파일로 진행을 확인한다.
 4. eksctl 대기 중 CloudShell에서 워커 이미지 build/push 진행 (module-4 README 3단계 — 병렬 처리 설계).

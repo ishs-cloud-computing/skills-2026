@@ -139,16 +139,9 @@ $env:KUBECONFIG = "$PWD\kubeconfig"
 
 재부팅 후엔 같은 줄 + `aws eks update-kubeconfig --name skills-sqs-cluster --region us-west-2 --kubeconfig $env:KUBECONFIG`로 복구.
 
-### 0) [본 PC·PowerShell] IAM 권한 프로브 (대회 시작 직후 1회, module-1·3도 겸함)
+### 0) 시작 전 확인 (대회 시작 직후 1회)
 
-```powershell
-'{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}' | Set-Content iam-probe-trust.json
-aws iam create-role --role-name skills-iam-probe --assume-role-policy-document file://iam-probe-trust.json
-aws iam delete-role --role-name skills-iam-probe
-Remove-Item -Force iam-probe-trust.json
-```
-
-AccessDenied면 즉시 감독관 문의(module-1·3·4 진행 불가). 같은 시점에 CloudShell 접속도 확인한다 — 이 모듈은 로컬 Docker가 없어 3단계 이미지 build/push가 CloudShell 필수 경로다.
+CloudShell 접속을 확인한다 — 이 모듈은 로컬 Docker가 없어 3단계 이미지 build/push가 CloudShell 필수 경로다.
 
 ### 1) [본 PC·PowerShell] terraform apply
 

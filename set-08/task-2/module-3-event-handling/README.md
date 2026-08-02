@@ -22,10 +22,6 @@ module-3-event-handling/
 # 채점: task-2/mark/mark2-3.sh (CloudShell, ap-southeast-1)
 ```
 
-## 0. IAM 권한 프로브 (대회 시작 직후 1회)
-
-[module-4 런북 0단계](../module-4-sqs-scaling/README.md)에서 1회만 수행한다.
-
 ## 1. 배포
 
 ```powershell

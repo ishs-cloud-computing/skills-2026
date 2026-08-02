@@ -2,10 +2,6 @@
 
 PowerShell 대신 bash/zsh 용. 단계 구성은 [README.md](README.md) 와 1:1.
 
-## 0. IAM 권한 프로브
-
-[module-4 런북 0단계](../module-4-sqs-scaling/README.linux.md)에서 1회만 수행한다.
-
 ## 1. 배포
 
 ```bash

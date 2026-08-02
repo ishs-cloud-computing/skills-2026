@@ -2,10 +2,6 @@
 
 [README.md](README.md) 의 본 PC 단계를 bash/zsh 겸용으로 옮긴 것. 번호는 README.md 와 1:1 대응이며, CloudShell 단계도 자리에 그대로 유지했다.
 
-### 0) IAM 권한 프로브 (대회 시작 직후 1회)
-
-이 모듈은 IAM 리소스를 생성하지 않는다. 프로브는 [module-4 런북 0단계](../module-4-sqs-scaling/README.linux.md)에서 1회만 수행한다 (OS 무관, 1회만).
-
 ### 1) 배포
 
 ```bash

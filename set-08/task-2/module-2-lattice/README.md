@@ -22,10 +22,6 @@ module-2-lattice/
 # 채점: task-2/mark/mark2-2.sh (CloudShell, ap-northeast-1)
 ```
 
-## 0. IAM 권한 프로브 (대회 시작 직후 1회)
-
-이 모듈은 IAM 리소스를 생성하지 않는다. 프로브는 [module-4 런북 0단계](../module-4-sqs-scaling/README.md)에서 1회만 수행한다.
-
 ## 1. 배포
 
 ```powershell
