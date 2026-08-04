@@ -12,7 +12,7 @@
 | 1 | nosql | ap-northeast-2 | 5/5 (`[x]` 실채점 통과 2026-08-02) | 없음 |
 | 2 | lattice | ap-northeast-1 | 5/5 (`[x]` 실채점 통과 2026-08-02) | 없음 |
 | 3 | event-handling | ap-southeast-1 | 5/5 (`[x]` 실채점 통과 2026-08-02) | 없음 |
-| 4 | sqs-scaling | us-west-2 | 6/6 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
+| 4 | sqs-scaling | us-west-2 | 6/6 (`[x]` 실채점 통과 2026-08-04) | 없음 |
 
 ### module-1 채점 커버리지 (mark2-1.sh ↔ 구현)
 <!-- [x] apply 후 mark2-1.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
@@ -44,15 +44,17 @@
 ### module-4 채점 커버리지 (mark2-4.sh ↔ 구현)
 <!-- [x] apply 후 mark2-4.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
 
-- [~] 4-1 EKS Cluster, VPC, Fargate Profile 구성 — `eksctl/cluster.yaml`: `skills-sqs-cluster`(us-west-2, public+private 엔드포인트) + `terraform/vpc.tf`(private 서브넷, karpenter.sh/discovery 태그) + Fargate profile `skills-sqs-fp-keda`·`skills-sqs-fp-karpenter`(과제지 명시 2개) + `skills-sqs-fp-kube-system`(coredns용 추가)
-- [~] 4-2 SQS Queue 및 IAM ServiceAccount 구성 — `terraform/sqs.tf`(`skills-sqs-queue`) + `eksctl/cluster.yaml` IRSA `iam.serviceAccounts`(keda-operator/karpenter/sqs-worker-sa 3개, `attachPolicyARNs`로 role-arn annotation 자동 부여)
-- [~] 4-3 KEDA/Karpenter Controller Fargate 배포 구성 — `README.md` 4단계 helm install(karpenter -n karpenter, keda -n keda) + Fargate profile 2개로 두 네임스페이스가 Fargate 노드에 스케줄
-- [~] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30)
-- [~] 4-5 Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 — `k8s/10-karpenter-nodepool.yaml`(`skills-sqs-nodeclass`/`skills-sqs-nodepool`, label `skills-nodepool=event-worker`, `disruption.consolidationPolicy` 포함)
-- [~] 4-6 SQS 기반 Scale Out 및 처리 기능 검증 — ScaledObject queueLength 2 + max 6(12건 발송 시 6 pod) + NodePool 인스턴스 타입 t3.medium/large(500m 요청 pod 다수 스케줄 시 노드 증설 유도)
+- [x] 4-1 EKS Cluster, VPC, Fargate Profile 구성 — `eksctl/cluster.yaml`: `skills-sqs-cluster`(us-west-2, public+private 엔드포인트) + `terraform/vpc.tf`(private 서브넷, karpenter.sh/discovery 태그) + Fargate profile `skills-sqs-fp-keda`·`skills-sqs-fp-karpenter`(과제지 명시 2개) + `skills-sqs-fp-kube-system`(coredns용 추가) — 실채점 통과: Cluster ACTIVE + Fargate profile 2개 ACTIVE(selector keda/karpenter), CloudShell kubectl 로 fargate 노드 8대 Ready (2026-08-04)
+- [x] 4-2 SQS Queue 및 IAM ServiceAccount 구성 — `terraform/sqs.tf`(`skills-sqs-queue`) + `eksctl/cluster.yaml` IRSA `iam.serviceAccounts`(keda-operator/karpenter/sqs-worker-sa 3개, `attachPolicyARNs`로 role-arn annotation 자동 부여) — 실채점 통과: QueueArn 출력 + VisibilityTimeout 30(기준 >=30), SA 3개 role-arn annotation 전부 비어 있지 않음 (2026-08-04)
+- [x] 4-3 KEDA/Karpenter Controller Fargate 배포 구성 — `README.md` 4단계 helm install(karpenter -n karpenter, keda -n keda) + Fargate profile 2개로 두 네임스페이스가 Fargate 노드에 스케줄 — 실채점 통과: keda 3개·karpenter 1개 Deployment Available, Pod 전부 Running, NODE 열 전부 `fargate-ip-*` (2026-08-04)
+- [x] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30) — 실채점 통과: min 0·max 6 정확, pollingInterval 15(<=15)·cooldownPeriod 30(<=30), trigger `aws-sqs-queue` queueLength "2", TriggerAuthentication 존재 (2026-08-04)
+- [x] 4-5 Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 — `k8s/10-karpenter-nodepool.yaml`(`skills-sqs-nodeclass`/`skills-sqs-nodepool`, label `skills-nodepool=event-worker`, `disruption.consolidationPolicy` 포함) — 실채점 통과: NodePool 4개 필드 + EC2NodeClass `role` 출력. 4-5 조회 시점 노드·파드 0은 정상(min 0) — 라벨 조건은 4-6 의 동일 label selector 출력으로 충족 (2026-08-04)
+- [x] 4-6 SQS 기반 Scale Out 및 처리 기능 검증 — ScaledObject queueLength 2 + max 6(12건 발송 시 6 pod) + NodePool 인스턴스 타입 t3.medium/large(500m 요청 pod 다수 스케줄 시 노드 증설 유도) — 실채점 통과: sent=12, after_60s 에 pod 6/6 + Karpenter 노드 2대 Ready(기준 180초), 메시지 12 → after_120s 0 (2026-08-04)
 
 ## 함정 절
 
+- **[실측 확인, 2026-08-04] mark2-4.sh 4-5 의 `No resources found` 2줄은 정상 출력이다 — 재배포하지 마라**: 스크립트 97·98행이 Karpenter 노드와 워커 파드를 조회하는데, 채점 시점엔 큐가 비어 있고 `minReplicaCount: 0`이라 둘 다 0이다. 배포 실패가 아니다. 판정 기준이 "min 0으로 채점 직후 Worker Pod가 없을 수 있으므로 ... 4-6 Scale Out 출력 결과를 포함해 판정할 수 있습니다"를 명시하고, 더 결정적으로 **4-6 의 117행이 4-5 의 97행과 완전히 동일한 label selector**(`karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker`)를 쓴다 — 4-6 에서 그 selector 로 노드가 잡히면 라벨 조건이 같은 결과 파일 안에서 증명된다. 이걸 메우겠다고 min 을 올리거나(과제지 6-6 위반) `consolidateAfter` 를 늘려 유휴 노드를 살려두지 마라.
+- **[실측 확인, 2026-08-04] `keda-operator` Pod `RESTARTS 1` 은 무해하다**: 생성 직후 1회 재시작한다(2026-08-02 실행엔 없던 값). 4-3 판정 기준은 Deployment Available + Pod Running 만 보므로 무관 — Running 이면 넘어가라. `ApproximateNumberOfMessages` 가 발송 60초 뒤에도 12로 보이는 것도 같은 부류다(SQS 지표 지연, 두 실행 모두 재현). 실제 처리 착수까지 약 57초로 기준 180초 대비 3배 여유다.
 - **[실측 확인, 2026-08-02] `.env` 마지막 줄 CRLF로 docker build/push가 깨진다**: PowerShell `Set-Content`가 파일 끝 개행을 CRLF로 써서 `.env` 마지막 줄(`ECR_IMAGE`)에만 `\r`이 붙는다. CloudShell에서 `source .env` 하면 태그가 `...:latest\r`이 돼 build/push가 실패한다. module-4 README 1단계를 `[IO.File]::WriteAllText` + LF 치환으로 고치고, 3단계 `source .env` 앞에 `sed -i 's/\r$//' .env` 가드를 넣었다. mark 스크립트에만 걸려 있던 CRLF 가드로는 이 경로를 못 잡는다.
 - **[실측 확인, 2026-08-02] EKS access entry policy ARN은 `arn:aws:eks::aws:...`**: README 7단계에 `arn:aws:eks:aws:cluster-access-policy/...`(콜론 1개)로 적혀 있어 `ResourceNotFoundException`이 났다. 정확한 값은 리전 세그먼트가 빈 `arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy`. `aws eks list-access-policies`로 확인 가능.
 - **[실측 확인, 2026-08-02] CloudShell 전송·실행 경로**: 저장소가 private이라 `git clone` 불가(익명 404), 업로드 파일은 항상 `$HOME`에 평면 저장(런북의 `mark/` 경로와 불일치), CloudShell 홈은 리전별로 분리, 이전 세션의 VPC 환경 탭이 활성이면 업로드 메뉴 자체가 비활성. 로컬 대체 실행도 `jq` 부재로 불가 — 채점은 CloudShell 전용이다. 상세는 [FEEDBACK.md](FEEDBACK.md).

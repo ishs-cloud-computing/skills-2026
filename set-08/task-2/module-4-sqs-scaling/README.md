@@ -109,15 +109,42 @@ export ECR_IMAGE=$env:ECR_IMAGE
 
 ## 2. cluster.yaml 렌더링 + eksctl create (~20분)
 
+렌더와 실행을 붙이지 않는다. 2-1 환경 변수 검토 → 2-2 렌더 → 2-3 렌더 결과 값 검토 → 2-4 실행 순으로 끊어서, 잘못된 값이 20분짜리 `eksctl create` 에 들어가기 전에 눈으로 잡는다.
+
+### 2-1. 환경 변수 검토
+
 ```powershell
-if (!$env:VPC_ID -or !$env:PRIV_SUBNET_A -or !$env:PRIV_SUBNET_B -or !$env:KEDA_POLICY_ARN -or !$env:KARPENTER_POLICY_ARN -or !$env:WORKER_POLICY_ARN -or !$env:NODE_ROLE_ARN) { throw "STOP: terraform output 값 누락" }
+'VPC_ID','PRIV_SUBNET_A','PRIV_SUBNET_B','KEDA_POLICY_ARN','KARPENTER_POLICY_ARN','WORKER_POLICY_ARN','NODE_ROLE_ARN' |
+  ForEach-Object { "{0,-22} = {1}" -f $_, [Environment]::GetEnvironmentVariable($_) }
+```
+
+- 빈 값이 하나라도 있으면 여기서 멈추고 1단계의 `. .\.env.ps1` 부터 다시 한다.
+- `VPC_ID` 는 `vpc-`, 서브넷 2개는 `subnet-` 으로 시작하고 서로 달라야 한다.
+- ARN 4개는 `arn:aws:iam::<ACCOUNT_ID>:` 로 시작하고 계정번호가 `$env:ACCOUNT_ID` 와 같아야 한다. `NODE_ROLE_ARN` 만 `:role/`, 나머지 3개는 `:policy/` 다.
+
+### 2-2. 렌더
+
+```powershell
 New-Item -ItemType Directory -Force eksctl/rendered | Out-Null
 $Y = Get-Content eksctl/cluster.yaml -Raw
 $Y = $Y.Replace('${VPC_ID}', $env:VPC_ID).Replace('${PRIV_SUBNET_A}', $env:PRIV_SUBNET_A).Replace('${PRIV_SUBNET_B}', $env:PRIV_SUBNET_B)
 $Y = $Y.Replace('${KEDA_POLICY_ARN}', $env:KEDA_POLICY_ARN).Replace('${KARPENTER_POLICY_ARN}', $env:KARPENTER_POLICY_ARN)
 $Y = $Y.Replace('${WORKER_POLICY_ARN}', $env:WORKER_POLICY_ARN).Replace('${NODE_ROLE_ARN}', $env:NODE_ROLE_ARN)
 $Y | Set-Content eksctl/rendered/cluster.yaml
-if (Select-String -Path eksctl/rendered/cluster.yaml -Pattern '\$\{') { throw "STOP: 미치환 값 존재" }
+```
+
+### 2-3. 렌더 결과 값 검토
+
+```powershell
+Select-String -Path eksctl/rendered/cluster.yaml -Pattern '\$\{'          # 출력 없어야 정상 (미치환 잔여)
+Select-String -Path eksctl/rendered/cluster.yaml -Pattern 'vpc-|subnet-|arn:aws:'
+```
+
+치환된 줄만 뽑힌다. `id:` 2줄(서브넷 a/b)이 서로 다른지, `principalARN` 이 role ARN 인지, `attachPolicyARNs` 3개가 keda/karpenter/worker 순서에 맞게 들어갔는지 확인한다. 첫 명령에 한 줄이라도 잡히면 실행하지 않는다.
+
+### 2-4. eksctl create
+
+```powershell
 eksctl create cluster -f eksctl/rendered/cluster.yaml   # kubeconfig 는 $env:KUBECONFIG(모듈 경로)에 기록됨
 ```
 
@@ -169,13 +196,41 @@ kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
 
 ## 5. k8s manifest 렌더링 + apply
 
+2단계와 같이 4단계로 끊는다.
+
+### 5-1. 환경 변수 검토
+
 ```powershell
-if (!$env:ECR_IMAGE -or !$env:QUEUE_URL -or !$env:REGION -or !$env:NODE_ROLE_NAME) { throw "STOP: terraform output 값 누락" }
+'ECR_IMAGE','QUEUE_URL','REGION','NODE_ROLE_NAME' |
+  ForEach-Object { "{0,-16} = {1}" -f $_, [Environment]::GetEnvironmentVariable($_) }
+```
+
+- 빈 값이 있으면 1단계의 `. .\.env.ps1` 부터 다시 한다.
+- `ECR_IMAGE` 는 `<ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/skills-sqs-worker:latest` 형태이고 끝에 `\r` 같은 군더더기가 없어야 한다(3단계에서 push 한 태그와 정확히 같아야 pull 된다).
+- `QUEUE_URL` 은 `https://sqs.us-west-2.amazonaws.com/<ACCOUNT_ID>/skills-sqs-queue`, `NODE_ROLE_NAME` 은 ARN 이 아니라 **역할 이름만** 이다.
+
+### 5-2. 렌더
+
+```powershell
 New-Item -ItemType Directory -Force k8s/rendered | Out-Null
 Get-ChildItem k8s/*.yaml | ForEach-Object {
   (Get-Content $_ -Raw).Replace('${ECR_IMAGE}', $env:ECR_IMAGE).Replace('${QUEUE_URL}', $env:QUEUE_URL).Replace('${REGION}', $env:REGION).Replace('${NODE_ROLE_NAME}', $env:NODE_ROLE_NAME) | Set-Content "k8s/rendered/$($_.Name)"
 }
-if (Select-String -Pattern '\$\{' k8s/rendered/*.yaml) { throw "STOP: 미치환 값 존재" }
+```
+
+### 5-3. 렌더 결과 값 검토
+
+```powershell
+Select-String -Pattern '\$\{' k8s/rendered/*.yaml                          # 출력 없어야 정상 (미치환 잔여)
+Select-String -Pattern 'image:|queueURL|awsRegion|role:|value:' k8s/rendered/*.yaml
+kubectl apply --dry-run=server -f k8s/rendered/                            # 클러스터 스키마 검증 (실제 적용 없음)
+```
+
+`image:` 가 3단계에서 push 한 태그와 같은지, ScaledObject 의 `queueURL`·Deployment 의 `value:` 2줄(SQS_QUEUE_URL·AWS_REGION)이 6단계 검증에 쓸 큐·리전과 같은지, `role:` 이 Karpenter 노드 역할 **이름**인지 확인한다. 미치환이 잡히거나 dry-run 이 실패하면 실행하지 않는다.
+
+### 5-4. apply
+
+```powershell
 kubectl apply -f k8s/rendered/   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
 ```
 

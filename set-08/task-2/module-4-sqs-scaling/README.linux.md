@@ -67,16 +67,47 @@ source .env   # 재접속 시: module-4-sqs-scaling 디렉터리에서 `source .
 
 ## 2. cluster.yaml 렌더링 + eksctl create (~20분)
 
+렌더와 실행을 붙이지 않는다. 2-1 환경 변수 검토 → 2-2 렌더 → 2-3 렌더 결과 값 검토 → 2-4 실행 순으로 끊어서, 잘못된 값이 20분짜리 `eksctl create` 에 들어가기 전에 눈으로 잡는다.
+
+### 2-1. 환경 변수 검토
+
+```bash
+# printf 는 인자가 남으면 포맷을 반복 적용한다 — 이름/값 쌍을 그대로 나열
+printf '%-22s = %s\n' \
+  VPC_ID "$VPC_ID" \
+  PRIV_SUBNET_A "$PRIV_SUBNET_A" \
+  PRIV_SUBNET_B "$PRIV_SUBNET_B" \
+  KEDA_POLICY_ARN "$KEDA_POLICY_ARN" \
+  KARPENTER_POLICY_ARN "$KARPENTER_POLICY_ARN" \
+  WORKER_POLICY_ARN "$WORKER_POLICY_ARN" \
+  NODE_ROLE_ARN "$NODE_ROLE_ARN"
+```
+
+- 빈 값이 하나라도 있으면 여기서 멈추고 1단계의 `source .env` 부터 다시 한다 (`envsubst` 는 unset 변수를 빈 문자열로 조용히 치환하므로 렌더 후에는 안 잡힌다).
+- `VPC_ID` 는 `vpc-`, 서브넷 2개는 `subnet-` 으로 시작하고 서로 달라야 한다.
+- ARN 4개는 `arn:aws:iam::<ACCOUNT_ID>:` 로 시작하고 계정번호가 `$ACCOUNT_ID` 와 같아야 한다. `NODE_ROLE_ARN` 만 `:role/`, 나머지 3개는 `:policy/` 다.
+
+### 2-2. 렌더
+
 ```bash
 mkdir -p eksctl/rendered
-# 가드 2단계: ① envsubst 는 unset 변수도 빈 문자열로 치환하므로 치환 전 비어있음 검사
-#            ② 변수 목록 명시 → 목록 외 신규 플레이스홀더는 남아서 grep 에 걸림
-# 스니펫은 zsh/bash 겸용 (붙여넣기 실행 대비: exit 금지, if 게이트로만 차단)
-if [ -n "$VPC_ID" ] && [ -n "$PRIV_SUBNET_A" ] && [ -n "$PRIV_SUBNET_B" ] && [ -n "$KEDA_POLICY_ARN" ] && [ -n "$KARPENTER_POLICY_ARN" ] && [ -n "$WORKER_POLICY_ARN" ] && [ -n "$NODE_ROLE_ARN" ]; then
-  envsubst '${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B} ${KEDA_POLICY_ARN} ${KARPENTER_POLICY_ARN} ${WORKER_POLICY_ARN} ${NODE_ROLE_ARN}' < eksctl/cluster.yaml > eksctl/rendered/cluster.yaml
-  if grep -n '\${' eksctl/rendered/cluster.yaml; then echo "STOP: 미치환 값 존재"
-  else eksctl create cluster -f eksctl/rendered/cluster.yaml; fi
-else echo "STOP: terraform output 값 누락"; fi
+# 변수 목록 명시 → 목록 외 신규 플레이스홀더는 치환되지 않고 남아 2-3 grep 에 걸린다
+envsubst '${VPC_ID} ${PRIV_SUBNET_A} ${PRIV_SUBNET_B} ${KEDA_POLICY_ARN} ${KARPENTER_POLICY_ARN} ${WORKER_POLICY_ARN} ${NODE_ROLE_ARN}' < eksctl/cluster.yaml > eksctl/rendered/cluster.yaml
+```
+
+### 2-3. 렌더 결과 값 검토
+
+```bash
+grep -n '\${' eksctl/rendered/cluster.yaml            # 출력 없어야 정상 (미치환 잔여)
+grep -nE 'vpc-|subnet-|arn:aws:' eksctl/rendered/cluster.yaml
+```
+
+치환된 줄만 뽑힌다. `id:` 2줄(서브넷 a/b)이 서로 다른지, `principalARN` 이 role ARN 인지, `attachPolicyARNs` 3개가 keda/karpenter/worker 순서에 맞게 들어갔는지 확인한다. 첫 명령에 한 줄이라도 잡히면 실행하지 않는다.
+
+### 2-4. eksctl create
+
+```bash
+eksctl create cluster -f eksctl/rendered/cluster.yaml
 ```
 
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
@@ -110,17 +141,45 @@ kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
 
 ## 5. k8s manifest 렌더링 + apply
 
+2단계와 같이 4단계로 끊는다.
+
+### 5-1. 환경 변수 검토
+
 ```bash
-if [ -z "$ECR_IMAGE" ] || [ -z "$QUEUE_URL" ] || [ -z "$REGION" ] || [ -z "$NODE_ROLE_NAME" ]; then
-  echo "STOP: terraform output 값 누락"
-else
-  mkdir -p k8s/rendered
-  for f in k8s/*.yaml; do
-    sed -e "s|\${ECR_IMAGE}|${ECR_IMAGE}|g" -e "s|\${QUEUE_URL}|${QUEUE_URL}|g" -e "s|\${REGION}|${REGION}|g" -e "s|\${NODE_ROLE_NAME}|${NODE_ROLE_NAME}|g" "$f" > "k8s/rendered/$(basename "$f")"
-  done
-  if grep -rn '\${' k8s/rendered/; then echo "STOP: 미치환 값 존재"
-  else kubectl apply -f k8s/rendered/; fi   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
-fi
+printf '%-16s = %s\n' \
+  ECR_IMAGE "$ECR_IMAGE" \
+  QUEUE_URL "$QUEUE_URL" \
+  REGION "$REGION" \
+  NODE_ROLE_NAME "$NODE_ROLE_NAME"
+```
+
+- 빈 값이 있으면 1단계의 `source .env` 부터 다시 한다.
+- `ECR_IMAGE` 는 `<ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/skills-sqs-worker:latest` 형태여야 한다(3단계에서 push 한 태그와 정확히 같아야 pull 된다 — zsh 의 `:l` modifier 로 소문자화돼 깨지지 않았는지 여기서 확인).
+- `QUEUE_URL` 은 `https://sqs.us-west-2.amazonaws.com/<ACCOUNT_ID>/skills-sqs-queue`, `NODE_ROLE_NAME` 은 ARN 이 아니라 **역할 이름만** 이다.
+
+### 5-2. 렌더
+
+```bash
+mkdir -p k8s/rendered
+for f in k8s/*.yaml; do
+  sed -e "s|\${ECR_IMAGE}|${ECR_IMAGE}|g" -e "s|\${QUEUE_URL}|${QUEUE_URL}|g" -e "s|\${REGION}|${REGION}|g" -e "s|\${NODE_ROLE_NAME}|${NODE_ROLE_NAME}|g" "$f" > "k8s/rendered/$(basename "$f")"
+done
+```
+
+### 5-3. 렌더 결과 값 검토
+
+```bash
+grep -rn '\${' k8s/rendered/                                   # 출력 없어야 정상 (미치환 잔여)
+grep -nE 'image:|queueURL|awsRegion|role:|value:' k8s/rendered/*.yaml
+kubectl apply --dry-run=server -f k8s/rendered/                # 클러스터 스키마 검증 (실제 적용 없음)
+```
+
+`image:` 가 3단계에서 push 한 태그와 같은지, ScaledObject 의 `queueURL`·Deployment 의 `value:` 2줄(SQS_QUEUE_URL·AWS_REGION)이 6단계 검증에 쓸 큐·리전과 같은지, `role:` 이 Karpenter 노드 역할 **이름**인지 확인한다. 미치환이 잡히거나 dry-run 이 실패하면 실행하지 않는다.
+
+### 5-4. apply
+
+```bash
+kubectl apply -f k8s/rendered/   # 파일명 알파벳 순 apply → 번호 prefix 가 순서 보장
 ```
 
 `namespace/skills-sqs`에 `missing the kubectl.kubernetes.io/last-applied-configuration annotation` 경고가 뜨는 건 정상이다 — eksctl Fargate profile이 네임스페이스를 먼저 만들어서 나며, 자동 패치된다.
