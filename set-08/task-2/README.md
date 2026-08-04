@@ -36,11 +36,9 @@ sed -i 's/\r$//' <스크립트_파일명>
 ## 공통 규칙
 
 - 리소스 이름·태그는 과제지에 명시된 값과 **정확히 일치**(이름 일치 채점 항목 다수).
-- `.env`(본 PC용 `.env.ps1`, CloudShell 업로드용 `.env`)는 `terraform output` 직후 생성한다. 둘 다 gitignore 대상 — 재부팅·CloudShell 세션 초기화 시 재생성/재업로드.
+- `.env`(본 PC용 `.env.ps1`, CloudShell 업로드용 `.env`)는 `terraform output` 직후 생성한다. 둘 다 gitignore 대상 — **재부팅·CloudShell 세션 초기화 시(40분동안 비대화형 상태일떄)** 재생성/재업로드.
 - module-4는 로컬에 Docker가 없어 이미지 build/push가 CloudShell 필수 경로다. mark 스크립트도 `jq` 의존이라 로컬 대체 실행이 불가 — CloudShell 접속을 0단계에서 먼저 확인한다.
-- CloudShell 진입 시 활성 탭이 이전 세션의 VPC 환경이면 파일 업로드가 막힌다. 기본 리전 탭으로 전환한다.
-
-> 트랩·원인은 [NOTES.md](NOTES.md) 함정 절, 런북 개선 이력은 [FEEDBACK.md](FEEDBACK.md) 참고.
+> 트랩·원인은 [NOTES.md](NOTES.md) 함정 참고.
 
 ## 실행 순서 (대기 시간 기준)
 
