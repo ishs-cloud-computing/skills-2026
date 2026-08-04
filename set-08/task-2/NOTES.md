@@ -9,39 +9,37 @@
 
 | 모듈 | 이름 | 리전 | 채점 커버 | 미해결 |
 |------|------|------|-----------|--------|
-| 1 | nosql | ap-northeast-2 | 5/5 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
-| 2 | lattice | ap-northeast-1 | 5/5 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
-| 3 | event-handling | ap-southeast-1 | 5/5 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
+| 1 | nosql | ap-northeast-2 | 5/5 (`[x]` 실채점 통과 2026-08-02) | 없음 |
+| 2 | lattice | ap-northeast-1 | 5/5 (`[x]` 실채점 통과 2026-08-02) | 없음 |
+| 3 | event-handling | ap-southeast-1 | 5/5 (`[x]` 실채점 통과 2026-08-02) | 없음 |
 | 4 | sqs-scaling | us-west-2 | 6/6 (`[~]` plan 수준 검증, 실채점 미실행) | 없음 |
-
-4개 모듈 전부 terraform(+module-4는 eksctl/k8s)/runbook까지 구현 완료했으나 자격증명이 있는 로컬에서 `terraform plan`만 실행했다(module-1 22 add, module-2 24 add, module-3 16 add, module-4 30 add, 전부 0 errors). apply 이후 CloudShell `mark2-N.sh` 실채점은 아직 수행하지 않았다 — 아래 커버리지 표의 `[~]`는 전부 이 수준을 의미한다.
 
 ### module-1 채점 커버리지 (mark2-1.sh ↔ 구현)
 <!-- [x] apply 후 mark2-1.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
 
-- [~] 1-1 DocumentDB Cluster 및 Instance 구성 — `terraform/docdb.tf`: cluster `skills-nosql-docdb-cluster`(storage_encrypted + 전용 KMS `alias/skills-nosql-docdb`, backup 1일, port 27017) + instance `skills-nosql-docdb-instance-1`(db.t3.medium)
-- [~] 1-2 Secret 및 Client EC2 구성 — `terraform/secrets.tf`(`skills-nosql-docdb-secret`: username/password/host, host는 scheme·port 없는 cluster endpoint) + `terraform/ec2.tf`(`skills-nosql-client-ec2`, public 서브넷 Public IP)
-- [~] 1-3 Client Application 및 데이터 적재 — `terraform/userdata.sh.tftpl`: pip boto3·pymongo + `global-bundle.pem` 다운로드 + systemd `serve` + `seed` 재시도 루프(최대 ~10분). counts 8/6/3 + BSON Date 는 지급 앱 seed 가 보장
-- [~] 1-4 Index 및 TTL 구성 — `terraform/index_setup.py.tftpl`: 과제지 3-3 인덱스 8개(orders 3·products 2·sessions 3, `expiresAt` TTL `expireAfterSeconds: 0`) — 지급 앱엔 생성 코드가 없어 별도 스크립트 (결정 로그)
-- [~] 1-5 NoSQL 조회 기능 검증 — 지급 앱 조회 로직 + 1-3 적재·1-4 인덱스 전제. 엔드포인트 4개 200 은 README 3단계에서 사전 확인
+- [x] 1-1 DocumentDB Cluster 및 Instance 구성 — `terraform/docdb.tf`: cluster `skills-nosql-docdb-cluster`(storage_encrypted + 전용 KMS `alias/skills-nosql-docdb`, backup 1일, port 27017) + instance `skills-nosql-docdb-instance-1`(db.t3.medium) — 실채점 통과: cluster·instance Status available (2026-08-02)
+- [x] 1-2 Secret 및 Client EC2 구성 — `terraform/secrets.tf`(`skills-nosql-docdb-secret`: username/password/host, host는 scheme·port 없는 cluster endpoint) + `terraform/ec2.tf`(`skills-nosql-client-ec2`, public 서브넷 Public IP) — 실채점 통과: Secret + Client EC2 출력 (2026-08-02)
+- [x] 1-3 Client Application 및 데이터 적재 — `terraform/userdata.sh.tftpl`: pip boto3·pymongo + `global-bundle.pem` 다운로드 + systemd `serve` + `seed` 재시도 루프(최대 ~10분). counts 8/6/3 + BSON Date 는 지급 앱 seed 가 보장 — 실채점 통과: counts 8/6/3, dateFieldTypes datetime (2026-08-02)
+- [x] 1-4 Index 및 TTL 구성 — `terraform/index_setup.py.tftpl`: 과제지 3-3 인덱스 8개(orders 3·products 2·sessions 3, `expiresAt` TTL `expireAfterSeconds: 0`) — 지급 앱엔 생성 코드가 없어 별도 스크립트 (결정 로그) — 실채점 통과: indexes 출력, `sessions.expiresAt` expireAfterSeconds 0 (2026-08-02)
+- [x] 1-5 NoSQL 조회 기능 검증 — 지급 앱 조회 로직 + 1-3 적재·1-4 인덱스 전제. 엔드포인트 4개 200 은 README 3단계에서 사전 확인 — 실채점 통과: 조회 4종 정상 (2026-08-02)
 
 ### module-2 채점 커버리지 (mark2-2.sh ↔ 구현)
 <!-- [x] apply 후 mark2-2.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
 
-- [~] 2-1 기본 VPC 구성 — `terraform/vpc.tf`: Client VPC(`skills-lattice-client-vpc` 10.61.0.0/16)·Service VPC(`skills-lattice-service-vpc` 10.62.0.0/16) + public 서브넷 각 1개, peering/TGW 없음
-- [~] 2-2 Client/Service EC2 및 애플리케이션 구성 — `terraform/ec2.tf`: `provided/module-2/{client_app.py,service_app.py}` 무수정 base64 user-data, client는 Public IP(:80)·service는 Public IP 없이 서비스 VPC 내부(:8080)
-- [~] 2-3 VPC Lattice Service Network 및 Service 구성 — `terraform/lattice.tf`: `aws_vpclattice_service_network.this`(name=`skills-lattice-sn`) + `aws_vpclattice_service.order`(name=`skills-lattice-order-service`, dns_entry 노출) + SN-Service association
-- [~] 2-4 Target Group, Listener, Security Group 구성 — `terraform/lattice.tf`의 `aws_vpclattice_target_group.order`(INSTANCE, HTTP/8080, health check `/health`) + `aws_vpclattice_listener.http`(HTTP/80→TG forward) + `terraform/sg.tf`의 service SG(prefix list 소스만)
-- [~] 2-5 End-to-End 기능 검증 — `ec2.tf`의 client user-data가 `SERVICE_URL`을 `aws_vpclattice_service.order.dns_entry[0].domain_name`으로 terraform 참조 주입 → `client_app.py`가 `/v1/client/orders?id=1001` 호출 시 Lattice 경유로 `service_app.py`에 도달
+- [x] 2-1 기본 VPC 구성 — `terraform/vpc.tf`: Client VPC(`skills-lattice-client-vpc` 10.61.0.0/16)·Service VPC(`skills-lattice-service-vpc` 10.62.0.0/16) + public 서브넷 각 1개, peering/TGW 없음 — 실채점 통과: VPC 구성 출력 (2026-08-02)
+- [x] 2-2 Client/Service EC2 및 애플리케이션 구성 — `terraform/ec2.tf`: `provided/module-2/{client_app.py,service_app.py}` 무수정 base64 user-data, client는 Public IP(:80)·service는 Public IP 없이 서비스 VPC 내부(:8080) — 실채점 통과: Client/Service EC2 및 앱 출력 (2026-08-02)
+- [x] 2-3 VPC Lattice Service Network 및 Service 구성 — `terraform/lattice.tf`: `aws_vpclattice_service_network.this`(name=`skills-lattice-sn`) + `aws_vpclattice_service.order`(name=`skills-lattice-order-service`, dns_entry 노출) + SN-Service association — 실채점 통과: Service Status ACTIVE, SN-VPC association 2건 (2026-08-02)
+- [x] 2-4 Target Group, Listener, Security Group 구성 — `terraform/lattice.tf`의 `aws_vpclattice_target_group.order`(INSTANCE, HTTP/8080, health check `/health`) + `aws_vpclattice_listener.http`(HTTP/80→TG forward) + `terraform/sg.tf`의 service SG(prefix list 소스만) — 실채점 통과: Target Group ACTIVE, target 8080 HEALTHY (2026-08-02)
+- [x] 2-5 End-to-End 기능 검증 — `ec2.tf`의 client user-data가 `SERVICE_URL`을 `aws_vpclattice_service.order.dns_entry[0].domain_name`으로 terraform 참조 주입 → `client_app.py`가 `/v1/client/orders?id=1001` 호출 시 Lattice 경유로 `service_app.py`에 도달 — 실채점 통과: `{"client":"ok","service":{"order_id":"1001","via":"vpc-lattice"}}` (2026-08-02)
 
 ### module-3 채점 커버리지 (mark2-3.sh ↔ 구현)
 <!-- [x] apply 후 mark2-3.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
 
-- [~] 3-1 기본 VPC, EC2, Security Group 구성 — `terraform/vpc.tf`(`skills-ceh-vpc` 10.73.0.0/16, `skills-ceh-ec2` running + protected SG 연결) + `terraform/sg.tf`(`skills-ceh-protected-sg`)
-- [~] 3-2 보호 대상 SG 기준 상태 — `terraform/sg.tf`: ingress 리소스 미선언(Inbound 0개) + egress 는 별도 `aws_vpc_security_group_egress_rule`
-- [~] 3-3 SNS Topic 및 Lambda 구성 — `terraform/sns.tf`(`skills-ceh-alert-topic` Standard) + `terraform/lambda.tf`(`skills-ceh-remediate-fn`: python3.12 / `remediate_security_group.lambda_handler` / timeout 30 / env `PROTECTED_SECURITY_GROUP_ID`·`SNS_TOPIC_ARN`)
-- [~] 3-4 CloudTrail, EventBridge Rule 및 Target 구성 — `terraform/cloudtrail.tf`(`skills-ceh-cloudtrail` enable_logging + S3 버킷/정책) + `terraform/eventbridge.tf`(`skills-ceh-sg-change-rule` default bus, `AuthorizeSecurityGroupIngress` 패턴, Lambda target + `aws_lambda_permission`)
-- [~] 3-5 최종 기능 검증 — 지급 Lambda 가 Inbound 전체 revoke + SNS 발행. 로그 그룹 `/aws/lambda/skills-ceh-remediate-fn` 은 terraform 선생성. README 검증 1(직접 invoke, 채점과 동일 payload)·검증 2(실경로)로 사전 확인
+- [x] 3-1 기본 VPC, EC2, Security Group 구성 — `terraform/vpc.tf`(`skills-ceh-vpc` 10.73.0.0/16, `skills-ceh-ec2` running + protected SG 연결) + `terraform/sg.tf`(`skills-ceh-protected-sg`) — 실채점 통과 (2026-08-02, 재확인 2026-08-04)
+- [x] 3-2 보호 대상 SG 기준 상태 — `terraform/sg.tf`: ingress 리소스 미선언(Inbound 0개) + egress 는 별도 `aws_vpc_security_group_egress_rule` — 실채점 통과: Inbound `[]` (2026-08-02, 재확인 2026-08-04)
+- [x] 3-3 SNS Topic 및 Lambda 구성 — `terraform/sns.tf`(`skills-ceh-alert-topic` Standard) + `terraform/lambda.tf`(`skills-ceh-remediate-fn`: python3.12 / `remediate_security_group.lambda_handler` / timeout 30 / env `PROTECTED_SECURITY_GROUP_ID`·`SNS_TOPIC_ARN`) — 실채점 통과: State Active (2026-08-02, 재확인 2026-08-04)
+- [x] 3-4 CloudTrail, EventBridge Rule 및 Target 구성 — `terraform/cloudtrail.tf`(`skills-ceh-cloudtrail` enable_logging + S3 버킷/정책) + `terraform/eventbridge.tf`(`skills-ceh-sg-change-rule` default bus, `AuthorizeSecurityGroupIngress` 패턴, Lambda target + `aws_lambda_permission`) — 실채점 통과: IsLogging True / Rule ENABLED (2026-08-02, 재확인 2026-08-04)
+- [x] 3-5 최종 기능 검증 — 지급 Lambda 가 Inbound 전체 revoke + SNS 발행. 로그 그룹 `/aws/lambda/skills-ceh-remediate-fn` 은 terraform 선생성. README 검증 1(직접 invoke, 채점과 동일 payload)·검증 2(실경로)로 사전 확인 — 실채점 통과: RESTORED / revokedPermissionCount 1 / SNS_PUBLISHED, poll=1 에 inbound_count=0 (2026-08-02, 재확인 2026-08-04)
 
 ### module-4 채점 커버리지 (mark2-4.sh ↔ 구현)
 <!-- [x] apply 후 mark2-4.sh 통과 확인 / [~] plan 수준 검증만 / [ ] 미구현 -->
