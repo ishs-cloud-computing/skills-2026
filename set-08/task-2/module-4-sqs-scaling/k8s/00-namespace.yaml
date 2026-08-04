@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# eksctl IRSA(sqs-worker-sa) 생성 시 이미 만들어질 수 있으나 apply 멱등이므로 유지.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: skills-sqs

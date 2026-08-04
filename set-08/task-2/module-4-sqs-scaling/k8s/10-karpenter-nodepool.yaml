@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Karpenter EC2NodeClass / NodePool (과제지 6-7)
+# - NodePool label skills-nodepool=event-worker (채점 4-5 노드 셀렉터와 일치)
+# - consolidationPolicy: 과제지는 "설정 포함"만 요구 — WhenEmpty + 30s 채택:
+#   min 0 스케일이라 큐 소진 후 빈 노드 즉시 반환이 목적에 부합.
+# subnet: karpenter.sh/discovery 태그(terraform private 서브넷) 디스커버리
+# securityGroup: 클러스터 기본 SG (aws:eks:cluster-name 태그) 디스커버리
+# role: terraform output(karpenter_node_role_name) → ${NODE_ROLE_NAME} 치환
+#   (README 5단계). subnet/SG selector 태그 값의 "skills-sqs-cluster" 는
+#   치환 대상이 아닌 리터럴 — cluster.yaml의 metadata.name·terraform
+#   var.cluster_name과 함께 바뀌는 축이므로 클러스터 이름 변경 시 여기도
+#   수동으로 맞춰야 한다(NOTES.md 함정 절 기록).
+# ---------------------------------------------------------------------------
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: skills-sqs-nodeclass
+spec:
+  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: "${NODE_ROLE_NAME}"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "skills-sqs-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        aws:eks:cluster-name: "skills-sqs-cluster"
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: skills-sqs-nodepool
+spec:
+  template:
+    metadata:
+      labels:
+        skills-nodepool: event-worker
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: skills-sqs-nodeclass
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t3.medium", "t3.large"]
+      expireAfter: 720h
+  limits:
+    cpu: "16"
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
