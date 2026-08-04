@@ -35,6 +35,23 @@ resource "aws_wafv2_web_acl" "unicorn" {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesCommonRuleSet"
+
+        # XSS 차단 시에도 과제지 지정 응답 본문이 나가도록 rule-level override (2026-07-31 정정 3).
+        # 액션은 그대로 block/403 이라 차단 동작은 변하지 않는다.
+        dynamic "rule_action_override" {
+          for_each = var.waf_xss_rules
+          content {
+            name = rule_action_override.value
+            action_to_use {
+              block {
+                custom_response {
+                  response_code            = 403
+                  custom_response_body_key = "unicorn-blocked"
+                }
+              }
+            }
+          }
+        }
       }
     }
     visibility_config {
@@ -102,7 +119,7 @@ resource "aws_cloudwatch_log_group" "waf" {
   provider          = aws.use1
   name              = "aws-waf-logs-unicorn"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.platform_primary.arn
+  kms_key_id        = aws_kms_replica_key.platform_use1.arn
 
   tags = { Name = "aws-waf-logs-unicorn" }
 }

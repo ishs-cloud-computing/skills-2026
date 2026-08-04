@@ -138,7 +138,7 @@ data "aws_iam_policy_document" "ebs_csi_kms" {
   statement {
     effect    = "Allow"
     actions   = ["kms:CreateGrant", "kms:ListGrants", "kms:RevokeGrant"]
-    resources = [aws_kms_replica_key.platform.arn]
+    resources = [aws_kms_key.platform.arn]
     condition {
       test     = "Bool"
       variable = "kms:GrantIsForAWSResource"
@@ -151,7 +151,7 @@ data "aws_iam_policy_document" "ebs_csi_kms" {
       "kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*",
       "kms:GenerateDataKey*", "kms:DescribeKey",
     ]
-    resources = [aws_kms_replica_key.platform.arn]
+    resources = [aws_kms_key.platform.arn]
   }
 }
 

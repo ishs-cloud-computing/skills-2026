@@ -44,6 +44,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: unicorn-config
+          # created_at 이 KST 로 기록되도록 노드 존 파일을 마운트 (2026-07-31 정정 2).
+          # 컨테이너는 노드 시간대를 상속하지 않고, alpine 이미지에 tzdata 가 없어 TZ 환경변수만으로는 무효다.
+          volumeMounts:
+            - name: localtime
+              mountPath: /etc/localtime
+              readOnly: true
           lifecycle:
             preStop:
               exec:
@@ -67,3 +73,8 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+      volumes:
+        - name: localtime
+          hostPath:
+            path: /usr/share/zoneinfo/Asia/Seoul
+            type: File

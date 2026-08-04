@@ -11,7 +11,7 @@
 resource "aws_cloudwatch_log_group" "book_app" {
   name              = "/unicorn/eks/book-app"
   retention_in_days = 30
-  kms_key_id        = aws_kms_replica_key.platform.arn
+  kms_key_id        = aws_kms_key.platform.arn
 
   tags = { Name = "unicorn-book-app-log" }
 }
@@ -19,7 +19,7 @@ resource "aws_cloudwatch_log_group" "book_app" {
 resource "aws_cloudwatch_log_group" "eks_cluster" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = 30
-  kms_key_id        = aws_kms_replica_key.platform.arn
+  kms_key_id        = aws_kms_key.platform.arn
 
   tags = { Name = "unicorn-eks-cluster-log" }
 }

@@ -8,7 +8,7 @@
 resource "aws_cloudwatch_log_group" "flowlog" {
   name              = "/unicorn/vpc/flowlog"
   retention_in_days = 30
-  kms_key_id        = aws_kms_replica_key.platform.arn
+  kms_key_id        = aws_kms_key.platform.arn
 
   tags = { Name = "unicorn-vpc-flowlog" }
 }

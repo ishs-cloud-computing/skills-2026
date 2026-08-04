@@ -72,7 +72,7 @@ resource "aws_kms_alias" "data" {
   target_key_id = aws_kms_key.data.key_id
 }
 
-# ----- unicorn-kms-platform : MRK (primary in us-east-1) -----
+# ----- unicorn-kms-platform : MRK (primary in ap-northeast-2) -----
 # EKS secret envelope, 노드 EBS, 모든 CloudWatch Logs(양 리전), WAF 로그 암호화에 공용.
 data "aws_iam_policy_document" "kms_platform" {
   source_policy_documents = [data.aws_iam_policy_document.kms_root.json]
@@ -140,30 +140,31 @@ data "aws_iam_policy_document" "kms_platform" {
   }
 }
 
-# 프라이머리(us-east-1, 다중 리전)
-resource "aws_kms_key" "platform_primary" {
-  provider                = aws.use1
-  description             = "unicorn-kms-platform : EKS/EBS/Log/WAF (MRK primary)"
+# 프라이머리(ap-northeast-2, 다중 리전) — EKS/EBS/Log(서울)에서 사용.
+# 선수 유의사항 7(모든 리소스는 서울)에 따라 프라이머리를 서울에 둔다. us-east-1 은 MRK 레플리카로 커버.
+resource "aws_kms_key" "platform" {
+  description             = "unicorn-kms-platform : EKS/EBS/Log (MRK primary)"
   multi_region            = true
   enable_key_rotation     = true
   rotation_period_in_days = 90
   deletion_window_in_days = 7
   policy                  = data.aws_iam_policy_document.kms_platform.json
 }
-resource "aws_kms_alias" "platform_use1" {
-  provider      = aws.use1
+resource "aws_kms_alias" "platform" {
   name          = "alias/unicorn-kms-platform"
-  target_key_id = aws_kms_key.platform_primary.key_id
+  target_key_id = aws_kms_key.platform.key_id
 }
 
-# 레플리카(ap-northeast-2) — EKS/EBS/Log(서울)에서 사용. 회전은 프라이머리가 관리.
-resource "aws_kms_replica_key" "platform" {
-  description             = "unicorn-kms-platform : EKS/EBS/Log (MRK replica, ap-northeast-2)"
-  primary_key_arn         = aws_kms_key.platform_primary.arn
+# 레플리카(us-east-1) — WAF 로그 암호화. 회전은 프라이머리가 관리(AWS 가 레플리카로 복사).
+resource "aws_kms_replica_key" "platform_use1" {
+  provider                = aws.use1
+  description             = "unicorn-kms-platform : WAF Log (MRK replica, us-east-1)"
+  primary_key_arn         = aws_kms_key.platform.arn
   deletion_window_in_days = 7
   policy                  = data.aws_iam_policy_document.kms_platform.json
 }
-resource "aws_kms_alias" "platform" {
+resource "aws_kms_alias" "platform_use1" {
+  provider      = aws.use1
   name          = "alias/unicorn-kms-platform"
-  target_key_id = aws_kms_replica_key.platform.key_id
+  target_key_id = aws_kms_replica_key.platform_use1.key_id
 }

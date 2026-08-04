@@ -18,7 +18,7 @@ data "archive_file" "get_booking" {
 resource "aws_cloudwatch_log_group" "get_booking" {
   name              = "/unicorn/lambda/get-booking"
   retention_in_days = 30
-  kms_key_id        = aws_kms_replica_key.platform.arn
+  kms_key_id        = aws_kms_key.platform.arn
 
   tags = { Name = "unicorn-get-booking-func" }
 }
@@ -60,7 +60,7 @@ data "aws_iam_policy_document" "get_booking" {
     sid       = "Kms"
     effect    = "Allow"
     actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey"]
-    resources = [aws_kms_replica_key.platform.arn, aws_kms_key.app.arn]
+    resources = [aws_kms_key.platform.arn, aws_kms_key.app.arn]
   }
 }
 
@@ -78,7 +78,7 @@ resource "aws_lambda_function" "get_booking" {
   filename         = data.archive_file.get_booking.output_path
   source_code_hash = data.archive_file.get_booking.output_base64sha256
   timeout          = 10
-  kms_key_arn      = aws_kms_replica_key.platform.arn
+  kms_key_arn      = aws_kms_key.platform.arn
 
   environment {
     variables = {

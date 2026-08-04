@@ -1,7 +1,7 @@
 # 2026 전국기능경기대회 클라우드컴퓨팅 제1과제 — Unicorn Tickets Solution Architecture
 
 EKS 기반 콘서트 예약 플랫폼 인프라를 **Terraform / eksctl / Kubernetes manifest** 로 구성한 결과물.
-모든 리소스는 서울(`ap-northeast-2`) 리전 기준(단, CloudFront/WAF 및 Platform KMS 프라이머리는 `us-east-1`).
+모든 리소스는 서울(`ap-northeast-2`) 리전 기준(단, CloudFront/WAF 및 Platform KMS 레플리카는 `us-east-1`).
 본 PC 단계는 **PowerShell 7** 기준이다 — 본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 쓴다
 (CloudShell/bastion 단계는 공통).
 
@@ -460,8 +460,8 @@ aws s3api list-objects-v2 --bucket "$env:BUCKET" --prefix _transfer/ --query 'Co
   대상으로 문서화돼 있지 않아 **사후 보정이 안 될 수 있으므로**, step 9 권한 게이트를 bastion 삭제 전에 반드시 통과시킨다.
 - **`aws login` 전제**: AWS CLI 2.32.0 이상(step 4 에서 최신 v2 로 갱신), signin 엔드포인트는 VPC Endpoint 가 없어
   NAT 경유(유의사항 6 의 443 outbound open 으로 통과), 세션 최대 12시간 후 재로그인.
-- **Platform KMS = MRK**: 프라이머리(us-east-1)·레플리카(ap-northeast-2) 동일 키 자료. WAF 로그(us-east-1)=프라이머리,
-  EKS/EBS/Log(서울)=레플리카. `alias/unicorn-kms-platform` 은 양 리전에 존재. 회전(90일)은 프라이머리가 관리.
+- **Platform KMS = MRK**: 프라이머리(ap-northeast-2)·레플리카(us-east-1) 동일 키 자료. EKS/EBS/Log(서울)=프라이머리,
+  WAF 로그(us-east-1)=레플리카. `alias/unicorn-kms-platform` 은 양 리전에 존재. 회전(90일)은 프라이머리가 관리.
 - **이미지 풀**: private 서브넷에 NAT 가 있어 공개 레지스트리(LBC/Prometheus/Grafana/Fluent Bit)는 직접 pull.
   App 이미지(ECR)·로그(CloudWatch)는 VPC Endpoint(private DNS)로 인터넷 미경유.
 - **Grafana 패널5(HTTP Request Duration)**: ALB TargetResponseTime 기반이라 트래픽이 있어야 데이터 표시 → 8) 시드 수행.
