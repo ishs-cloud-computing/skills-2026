@@ -40,6 +40,8 @@ rm -f payload.json out.json
 
 ## 4. 검증 2 — 실경로 (CloudTrail→EventBridge→Lambda — 실측 ~20초, 최대 수 분)
 
+> apply 후 5분 지난 뒤 실행. 새 Trail 은 준비 전까지 EventBridge 로 이벤트를 안 보낸다.
+
 ```bash
 aws ec2 authorize-security-group-ingress --group-id "$PROTECTED_SG_ID" --protocol tcp --port 22 --cidr 0.0.0.0/0
 until [ "$(aws ec2 describe-security-groups --group-ids "$PROTECTED_SG_ID" --query 'length(SecurityGroups[0].IpPermissions)' --output text)" = "0" ]; do sleep 15; done
