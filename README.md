@@ -109,7 +109,7 @@ skills-2026/
 
 ## Maintainer
 
-- 성준혁 ([@zenru1023](https://github.com/zenru1023))
+- 성준혁 ([@jhyeok1023](https://github.com/jhyeok1023))
 
 ## License
 
