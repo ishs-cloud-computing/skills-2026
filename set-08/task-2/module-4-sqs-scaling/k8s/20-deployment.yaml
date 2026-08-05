@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Worker Deployment (과제지 6-5)
+# - replicas 미지정: KEDA(HPA)가 0~6 을 관리 — 명시하면 재apply 때 스케일 리셋.
+# - env 는 과제지 명시 3개만 (채점 4-4 가 env 전체를 덤프 — 여분 추가 금지).
+# - nodeSelector 2개: Fargate 로 못 가고 Karpenter 노드에만 배치 (skills-sqs
+#   namespace 는 Fargate profile 이 없어 구조적으로도 Fargate 배제).
+# - resources.requests: t3.medium(2vCPU) 기준 6 pod = 노드 2대 유도.
+# ${ECR_IMAGE} ${QUEUE_URL} ${REGION} 은 README 5단계에서 치환.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sqs-worker
+  namespace: skills-sqs
+  labels:
+    app: sqs-worker
+spec:
+  selector:
+    matchLabels:
+      app: sqs-worker
+  template:
+    metadata:
+      labels:
+        app: sqs-worker
+    spec:
+      serviceAccountName: sqs-worker-sa
+      nodeSelector:
+        karpenter.sh/nodepool: skills-sqs-nodepool
+        skills-nodepool: event-worker
+      containers:
+        - name: worker
+          image: "${ECR_IMAGE}"
+          env:
+            - name: SQS_QUEUE_URL
+              value: "${QUEUE_URL}"
+            - name: AWS_REGION
+              value: "${REGION}"
+            - name: PROCESSING_SECONDS
+              value: "5"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi

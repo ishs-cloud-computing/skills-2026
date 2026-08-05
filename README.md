@@ -45,7 +45,7 @@ mise docs
 치트시트, 트러블슈팅 관련 문서는 해당 학습 가이드를 참고해주세요!
 
 - 주소: https://skills-learn.zenru.net/ ( 임시 로그인: user / bruh1004pass )
-- 기여: 김우진 @rladnwls122
+- 기여: 김우진 [@rladnwls122](https://github.com/rladnwls122)
 
 ## 진행 상황
 
@@ -62,7 +62,7 @@ mise docs
 | [set-05](set-05/) | ✅ | 🟡 | |
 | [set-06](set-06/) | 🟡 | ⬜ | 1과제 🥉 |
 | [set-07](set-07/) | ✅ | ✅ | 1, 2과제 🥈 |
-| [set-08](set-08/) | ✅ | ⬜ | 2과제 🥈 |
+| [set-08](set-08/) | ✅ | ✅ | 2과제 🥈 |
 | [set-09](set-09/) | ✅ | ⬜ | |
 | [set-10](set-10/) | ⬜ | ⬜ | |
 
@@ -109,7 +109,7 @@ skills-2026/
 
 ## Maintainer
 
-- 성준혁 ([@zenru1023](https://github.com/zenru1023))
+- 성준혁 ([@jhyeok1023](https://github.com/jhyeok1023))
 
 ## License
 

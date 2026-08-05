@@ -10,7 +10,8 @@ crash.log
 crash.*.log
 __pycache__/
 **/*.rendered.yaml
-**/k8s/rendered/
+# rendered/ 서브디렉토리 렌더링 (eksctl·k8s 공용, set-08 module-4부터)
+**/rendered/
 # 모듈별 kubeconfig (터미널 1개 = 클러스터 1개 운용)
 **/kubeconfig
 # bastion 작업물 회수분 (set-03/task-1 README step 9)

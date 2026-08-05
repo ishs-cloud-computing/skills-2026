@@ -16,9 +16,10 @@
 
 - 지급 계정은 root 가 아니라 **PowerUserAccess 수준의 IAM 사용자**다. root 전용 작업(계정 설정 변경 등)은 설계에 넣지 않는다.
 - 사전 제공 리소스 삭제·대회 운영 방해를 막기 위해 **명시적 Deny 가 붙을 수 있다**. 특정 EC2 종료 권한 등 PowerUser 범위 일부가 빠질 수 있다.
-- 런북 0단계에서 IAM Role 생성 가능 여부를 먼저 확인하고, 안 되면 감독에게 문의한다. 형식적 확인이 아니다 — AWS 관리형 [`PowerUserAccess`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/PowerUserAccess.html) 는 `NotAction: ["iam:*", ...]` 구조라 `iam:CreateRole`·`PassRole`·`AttachRolePolicy` 가 막히고 `CreateServiceLinkedRole`·`DeleteServiceLinkedRole`·`ListRoles` 만 허용된다. 순정 그대로면 거의 모든 세트가 첫 apply 에서 멈춘다.
+- IAM Role·Policy 생성 권한은 **지급된 것으로 전제한다**. 과제지가 이름까지 지정해 Role 을 요구하고 채점 스크립트가 그 Role 을 직접 읽으므로, 막혀 있으면 채점 자체가 성립하지 않는다. 사전 프로브로 확인하지 않는다 — 내가 만든 리소스는 애초에 Deny 대상이 아니라 아무것도 검증되지 않는다.
+- Deny 가 실제로 걸리는 지점은 **사전 제공 리소스의 삭제·수정**이다. 이름 충돌이 나도 기존 리소스를 지우려 하지 말고 이름 변수를 리네임해 우회한다. 그래도 AccessDenied 가 나면 코드 문제로 단정하지 말고 Deny 정책 여부를 감독에게 확인한다.
 - IAM Role·Policy 생성은 부수 효과가 아니라 **채점 항목 자체**다. 이름까지 지정된 Role(`unicorn-audit-role`, `wsc2026-book-pod-role`, ECS Execution/Task Role 분리 등)과 최소 권한 정책 내용을 채점 스크립트가 직접 읽는다.
-- EKS 의 앱 권한은 **Pod Identity** 를 쓴다. IRSA·OIDC provider 를 요구하는 과제·채점 항목은 지금까지 없다.
+- EKS 의 앱 권한은 기본적으로 **Pod Identity** 를 쓴다. 단 **채점 스크립트가 ServiceAccount 의 `eks.amazonaws.com/role-arn` annotation 을 직접 읽으면 IRSA(`iam.withOIDC: true` + `iam.serviceAccounts`) 로 간다** — Pod Identity 는 그 annotation 을 만들지 않아 무조건 미충족이다. set-08 task-2 채점 4-2 가 실제로 이 annotation 을 검사하므로 module-4 는 IRSA 다. Pod Identity 로 "정정"하지 말 것.
 
 ## 대회 환경
 

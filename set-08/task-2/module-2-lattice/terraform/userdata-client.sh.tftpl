@@ -1,0 +1,21 @@
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+set -uxo pipefail
+mkdir -p /opt/app
+base64 -d > /opt/app/client_app.py <<'B64'
+${app_b64}
+B64
+cat > /etc/systemd/system/lattice-client.service <<'UNIT'
+[Unit]
+Description=lattice client app
+After=network.target
+[Service]
+Environment=SERVICE_URL=${service_url}
+ExecStart=/usr/bin/python3 /opt/app/client_app.py
+Restart=always
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now lattice-client

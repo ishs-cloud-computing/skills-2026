@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# KEDA ScaledObject + TriggerAuthentication (과제지 6-6, 채점 4-4 직접 조회)
+# - min 0 / max 6, queueLength 2 → 12건 발송 시 6 pod (채점 4-6).
+# - pollingInterval 15: min=0 이라 0→1 활성화는 KEDA operator 직접 폴링 —
+#   과제지 상한(15초 이하) 그대로. (set-07 은 min=1 이라 삭제했던 필드)
+# - podIdentity aws: keda-operator SA 의 IRSA 역할로 SQS 조회
+#   (identityOwner 방식은 KEDA 3.0 제거 예정 — TriggerAuthentication 전환)
+# ${QUEUE_URL} ${REGION} 은 README 5단계에서 치환.
+# ---------------------------------------------------------------------------
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: sqs-worker-trigger-auth
+  namespace: skills-sqs
+spec:
+  podIdentity:
+    provider: aws
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: sqs-worker-scaledobject
+  namespace: skills-sqs
+spec:
+  scaleTargetRef:
+    name: sqs-worker
+  minReplicaCount: 0
+  maxReplicaCount: 6
+  pollingInterval: 15
+  cooldownPeriod: 30
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: sqs-worker-trigger-auth
+      metadata:
+        queueURL: "${QUEUE_URL}"
+        queueLength: "2"
+        awsRegion: "${REGION}"
