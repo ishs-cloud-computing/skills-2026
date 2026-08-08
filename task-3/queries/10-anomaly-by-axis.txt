@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# [조사 1단계] 축별 이상치 탐색 — IP 피벗에 차단율·URI 다양성·UA 다양성을 붙여 조사 대상을 고른다.
+# 언제: 01~04에서 이상 신호가 보일 때 조사 진입점으로 연다.
+# 입력: 없음. (다른 축으로 보려면 by 절만 교체: `by ua` / `by httpRequest.uri` / `by httpRequest.country`)
+# 다음: 이상 IP → 11(IP 드릴다운), 이상 UA → 12(UA 드릴다운), 경로 스캔 의심 → 13(비정상 경로).
+parse @message '"name":"User-Agent","value":"*"' as ua
+| stats count() as requests, sum(strcontains(action, "BLOCK")) as blocked, count_distinct(httpRequest.uri) as uriVariety, count_distinct(ua) as uaVariety by httpRequest.clientIp, httpRequest.country
+| sort blocked desc, requests desc
+| limit 25

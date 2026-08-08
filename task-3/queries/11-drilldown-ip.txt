@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# [조사 2단계] IP 드릴다운 — 한 IP가 언제, 어떤 경로·UA로, 어떤 룰에 걸리며 활동했는지.
+# 언제: 03/10/13에서 이상 IP를 찾았을 때.
+# 입력: {{target_ip}} (저장 쿼리 파라미터. 연습 시 예시: "2a09:bac0:1000:20e::299:91")
+# 다음: 걸린 룰의 매칭 원문 → 14(룰 매칭 상세), 정상 트래픽이 막힌 의심 → 15(오탐 후보).
+parse @message '"name":"User-Agent","value":"*"' as ua
+| filter httpRequest.clientIp = {{target_ip}}
+| stats count() as requests, sum(strcontains(action, "BLOCK")) as blocked by bin(30m) as t, httpRequest.httpMethod, httpRequest.uri, ua, terminatingRuleId
+| sort t asc, requests desc

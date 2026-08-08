@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# [상시] 룰별 BLOCK 집계. 특정 룰 급증 시 14(룰 매칭 상세)로. 커스텀 룰이 정상 경로를 막는 의심이 들면 15(오탐 후보)로.
+filter action = "BLOCK"
+| stats count() as blocked by terminatingRuleId
+| sort blocked desc

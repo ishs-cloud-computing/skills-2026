@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# [상시] Count 룰(비종결 매칭)의 예상 차단량 — 해당 룰을 BLOCK으로 승격하면 막힐 요청 수.
+# action="ALLOW" 행이 승격 시 추가로 차단될 분량. 승격 전 반드시 14(룰 매칭 상세)로 matchedData가 공격인지 확인 (정상이면 승격 = 감점).
+# 주의: 첫 번째 비종결 매칭 룰 기준. 한 요청이 여러 Count 룰에 걸리면 나머지는 이 집계에 빠짐.
+filter isPresent(nonTerminatingMatchingRules.0.ruleId)
+| stats count() as matched by nonTerminatingMatchingRules.0.ruleId, action
+| sort matched desc
