@@ -141,56 +141,9 @@ docker logs test                                                      # 부팅 �
 docker rm -f test
 ```
 
-### 3c — 계약 테스트: user·product (push 전, ~3분)
+### 3c — 계약 테스트: user·product (push 전)
 
-STEP 1·2가 도는 동안 진행 — 임계경로 밖이다. 로컬 mysql에 `db/01-schema.sql`을 먹여 앱을 붙인다.
-
-```bash
-# ── CloudShell ──
-docker run -d --name db -e MYSQL_ROOT_PASSWORD=pw -e MYSQL_DATABASE=dev \
-  public.ecr.aws/docker/library/mysql:8.0
-sleep 20   # mysqld 기동 대기
-docker exec -i db mysql -uroot -ppw dev < db/01-schema.sql
-
-docker run -d --link db --name test -p 8080:8080 \
-  -e MYSQL_HOST=db -e MYSQL_PORT=3306 -e MYSQL_DBNAME=dev \
-  -e MYSQL_USER=root -e MYSQL_PASSWORD=pw $REG/user:$TAG
-
-Q="requestid=999999999999&uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729"
-curl -s -o /dev/null -w '%{http_code} POST user\n' -X POST "localhost:8080/v1/user?$Q" \
-  -H 'Content-Type: application/json' \
-  -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","username":"t1","email":"t1@example.org"}'   # 201
-curl -s -o /dev/null -w '%{http_code} GET user\n' "localhost:8080/v1/user?email=t1@example.org&$Q"   # 200
-docker rm -f test
-```
-
-product는 S3까지 태워 **버킷 env 키·멀티파트 필드명·오브젝트 키**를 한 번에 확정한다 (STEP 1a에서 버킷이 생긴 뒤. CloudShell에는 자격증명이 있다).
-
-```bash
-# ── CloudShell ──
-BUCKET=<terraform.tfvars 의 bucket_name>
-docker run -d --link db --name test -p 8080:8080 \
-  -e MYSQL_HOST=db -e MYSQL_PORT=3306 -e MYSQL_DBNAME=dev \
-  -e MYSQL_USER=root -e MYSQL_PASSWORD=pw \
-  -e S3_BUCKET=$BUCKET -e AWS_REGION=ap-northeast-2 $REG/product:$TAG
-
-curl -s -o /dev/null -w '%{http_code} POST product\n' -X POST "localhost:8080/v1/product?$Q" \
-  -H 'Content-Type: application/json' \
-  -d '{"requestid":"999999999999","uuid":"7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729","id":"t1","name":"t1","price":1234}'   # 201
-head -c 1024 /dev/urandom > /tmp/t.jpg
-curl -s -o /dev/null -w '%{http_code} PUT product\n' -X PUT "localhost:8080/v1/product?$Q" \
-  -F "requestid=999999999999" -F "uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729" \
-  -F "id=t1" -F "image=@/tmp/t.jpg"      # 200. 400/415면 필드명이 틀린 것 → docker logs test 로 확인
-aws s3 ls s3://$BUCKET --recursive       # 실제 오브젝트 키 포맷 확인 → STEP 8의 /images/<key> 검증에 사용
-docker logs test                         # 버킷 env 키가 틀리면 여기서 S3 에러가 보인다
-docker rm -f test db
-```
-
-여기서 확정되는 것 — 안 하면 전부 STEP 8에서 CloudFront·WAF·ALB·파드 4개 레이어 너머로 발견된다:
-- 앱이 `MYSQL_*` env를 실제로 읽는지 (과제지 표와 일치하나 미검증)
-- `/healthcheck`가 DB를 건드리는지 → **STEP 6↔7 병행 가능 여부를 결정한다**
-- product 버킷 env 키. 틀리면 `k8s/11-product.yaml`의 그 2줄만 고친다
-- PUT 멀티파트 필드명과 업로드 오브젝트 키
+계약 테스트(user·product)는 STEP 1b의 RDS·프록시가 준비된 뒤 **실제 프록시 주소로 개인이 알아서 진행**한다.
 
 ### 3d — push
 
