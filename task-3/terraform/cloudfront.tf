@@ -2,9 +2,22 @@
 # Copyright 2026 The ISHS Cloud Computing Authors
 
 # 단일 엔드포인트: CloudFront
-#   기본 동작        → internet-facing ALB   : /v1/* API + 미지정 경로(ALB 404)
+#   기본 동작        → internet-facing ALB   : /v1/* API + 미지정 경로(Ingress 404)
 #   /images/*        → S3(OAC)               : 정적 이미지 캐싱
 # wait_for_deployment=false로 배포 완료를 기다리지 않고 도메인을 즉시 확보한다.
+
+# ALB는 AWS Load Balancer Controller가 k8s/20-ingress.yaml로부터 만든다.
+# 따라서 이 데이터 소스는 Ingress가 ALB를 프로비저닝한 뒤에만 읽을 수 있다 —
+# README의 STEP 순서(Ingress apply → 전체 terraform apply)가 이 제약에서 나온다.
+data "aws_lb" "this" {
+  name = local.alb_name
+}
+
+# k8s/20-ingress.yaml의 security-group-prefix-lists 주석 해제 시 쓰는 값.
+# (ALB를 CloudFront에서만 접근 가능하게 잠그는 선택 사항 — 과제 필수는 아니다)
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
 
 # /images/<key> → S3 오브젝트 키는 루트(<key>)이므로 prefix를 벗겨야 한다.
 # origin_path는 붙이기만 가능하고 제거는 불가 → CloudFront Function이 유일한 방법.
@@ -45,7 +58,7 @@ resource "aws_cloudfront_distribution" "this" {
 
   origin {
     origin_id   = "alb"
-    domain_name = aws_lb.this.dns_name
+    domain_name = data.aws_lb.this.dns_name
 
     custom_origin_config {
       http_port              = 80

@@ -8,45 +8,62 @@ metadata:
   name: skills-eks
   region: ap-northeast-2
   version: "1.36"
+  tags:
+    # 이 태그가 있어야 eksctl이 클러스터 공유 노드 SG를 karpenter.sh/discovery로
+    # 자동 태깅한다 → EC2NodeClass의 securityGroupSelectorTerms가 성립한다.
+    # 값은 terraform vpc.tf의 private subnet 태그와 동일해야 한다.
+    karpenter.sh/discovery: skills-eks
 
-# Terraform이 만든 private 서브넷 사용 (README 런북 STEP 2에서 치환)
+# Terraform이 만든 서브넷 사용 (README 런북에서 치환)
+# public도 등록한다 — LBC가 internet-facing ALB를 여기에 놓는다.
 vpc:
   subnets:
     private:
-      ap-northeast-2a: { id: subnet-REPLACE_A }
-      ap-northeast-2b: { id: subnet-REPLACE_B }
+      ap-northeast-2a: { id: subnet-REPLACE_PRIVATE_A }
+      ap-northeast-2b: { id: subnet-REPLACE_PRIVATE_B }
+    public:
+      ap-northeast-2a: { id: subnet-REPLACE_PUBLIC_A }
+      ap-northeast-2b: { id: subnet-REPLACE_PUBLIC_B }
 
-autoModeConfig:
-  enabled: true
-  nodePools: [] # 내장 general-purpose/system 둘 다 비활성화 → default NodeClass도 생성 안 됨
-
-# 커스텀 NodeClass가 쓸 노드 역할에 EC2 액세스 엔트리 부여.
-# (내장 NodePool을 껐으므로 EKS가 자동으로 만들어주지 않는다.)
-accessConfig:
-  accessEntries:
-    - principalARN: arn:aws:iam::ACCOUNT_ID:role/skills-eks-automode-node # = terraform output automode_node_role_arn
-      type: EC2
-      accessPolicies:
-        - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAutoNodePolicy
-          accessScope:
-            type: cluster
-
-addons:
-  # HPA 전제조건 (Auto Mode에 미포함) — EKS community addon
-  - name: metrics-server
-  # 모니터링(Container Insights) + 로깅(앱 stdout/stderr → CloudWatch Logs)
-  - name: amazon-cloudwatch-observability
-    podIdentityAssociations:
-      - namespace: amazon-cloudwatch
-        serviceAccountName: cloudwatch-agent
-        permissionPolicyARNs:
-          - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-
-# Pod Identity — Auto Mode는 에이전트가 내장이라 addon 불필요.
 iam:
+  # Karpenter 설치의 하드 요구사항. LBC IRSA도 이 위에서 만들어진다.
+  withOIDC: true
+  serviceAccounts:
+    # wellKnownPolicies가 AWSLoadBalancerControllerIAMPolicy를 대신 만들어 준다
+    # (iam_policy.json 다운로드 + aws iam create-policy 두 단계가 사라진다).
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+  # 앱 권한은 Pod Identity. eks-pod-identity-agent addon이 아래에 있어야 동작한다.
   podIdentityAssociations:
     - namespace: default
-      serviceAccountName: product-app-sa
+      serviceAccountName: product
       createServiceAccount: true
       permissionPolicyARNs:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+# 컨트롤러 IRSA·노드 IAM 역할(eksctl-KarpenterNodeRole-skills-eks)·인스턴스 프로파일·
+# 노드롤 access entry·Helm 설치까지 eksctl이 전부 처리한다.
+# 버전은 Karpenter 호환성 매트릭스를 따른다 — k8s 1.36은 Karpenter >= 1.13.
+# eksctl이 이 버전을 거부하면 한 단계 낮은 stable로 내린다(README STEP 2 참고).
+karpenter:
+  version: "1.14.0"
+
+# Karpenter 컨트롤러·CoreDNS·LBC가 앉을 부트스트랩 노드.
+# min=desired=max=1 — 유휴 시 EC2 총 1대가 목표이고, 증설은 전부 Karpenter가 맡는다.
+# taint를 걸지 않아 앱 파드도 이 노드를 쓴다(1대를 놀리지 않는다).
+managedNodeGroups:
+  - name: system
+    instanceType: t3.medium # 과제지: EC2는 t3.medium만
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    privateNetworking: true
+
+addons:
+  # HPA 전제조건. 차트 기본값이 replicas 1이라 그대로 둔다.
+  - name: metrics-server
+  # Auto Mode에선 내장이었다 — 표준 EKS에서는 Pod Identity를 쓰려면 명시해야 한다.
+  - name: eks-pod-identity-agent

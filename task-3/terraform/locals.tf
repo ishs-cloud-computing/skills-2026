@@ -13,8 +13,13 @@ locals {
 
   cluster_name = "skills-eks"
 
-  # 앱 목록은 variables.tf의 var.apps (기존 local.apps 참조 유지용 별칭)
-  apps = var.apps
+  # ALB는 AWS Load Balancer Controller가 Ingress로부터 만든다. 이 이름은
+  # k8s/20-ingress.yaml의 alb.ingress.kubernetes.io/load-balancer-name과
+  # 반드시 같아야 한다 — cloudfront.tf가 이 이름으로 ALB를 조회해 origin에 건다.
+  alb_name = "skills-alb"
+
+  # 앱 목록은 variables.tf의 var.apps (ECR 레포 for_each용 set 변환)
+  apps = toset(var.apps)
 
   # ── DB: 당일 엔진 변경(예: PostgreSQL) 시 engine/engine_version/port/username만 수정.
   # rds.tf·rds-proxy.tf만 이 값을 참조하고 다른 리소스는 DB를 참조하지 않으므로

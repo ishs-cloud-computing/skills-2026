@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-# product API: DB-IO 바운드 + S3 이미지 업로드 (Pod Identity → product-app-sa).
+# product API: DB-IO 바운드 + S3 이미지 업로드.
+# ServiceAccount 'product'는 eksctl podIdentityAssociations가 만든다(S3 권한 포함).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,7 +10,7 @@ metadata:
   labels:
     app: product
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: product
@@ -18,21 +19,21 @@ spec:
       labels:
         app: product
     spec:
-      serviceAccountName: product-app-sa # eksctl pod identity association
+      serviceAccountName: product
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app: product
       terminationGracePeriodSeconds: 45
       containers:
         - name: product
-          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 8)
+          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 6)
           ports:
             - containerPort: 8080
-          # <>는 README STEP 8에서 치환. DB 키는 과제지 표와 일치.
+          # <>는 README STEP 6에서 치환. DB 키는 과제지 표와 일치.
           env:
             - name: MYSQL_HOST
               value: "<PROXY_ENDPOINT>"
@@ -52,13 +53,11 @@ spec:
               value: "ap-northeast-2"
           resources:
             requests:
-              # demo 실측값 — t3.medium(allocatable ~1930m)에 2~3파드 패킹
-              cpu: 600m
-              memory: 768Mi
+              cpu: 250m
+              memory: 512Mi
             limits:
               # CPU limit 없음: 스로틀링이 p99를 깎아 0.2s SLO를 해친다
-              # memory request=limit: OOM 없이 예측 가능한 패킹 (demo 실측)
-              memory: 768Mi
+              memory: 512Mi
           readinessProbe:
             httpGet:
               path: /healthcheck
@@ -79,25 +78,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: product-svc
+  name: product
 spec:
   type: ClusterIP
   selector:
     app: product
   ports:
-    - port: 8080
+    - port: 80
       targetPort: 8080
----
-apiVersion: eks.amazonaws.com/v1
-kind: TargetGroupBinding
-metadata:
-  name: product
-spec:
-  serviceRef:
-    name: product-svc
-    port: 8080
-  targetGroupARN: "<TG_ARN>"
-  targetType: ip
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -108,15 +96,15 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: product
-  minReplicas: 2
-  maxReplicas: 9
+  minReplicas: 1
+  maxReplicas: 10
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 75
+          averageUtilization: 60
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 0
@@ -128,20 +116,9 @@ spec:
           value: 4
           periodSeconds: 15
       selectPolicy: Max
-    # 스파이크 종료 후 빠른 회수로 비용 ratio를 낮춘다 (demo 검증값)
     scaleDown:
-      stabilizationWindowSeconds: 120
+      stabilizationWindowSeconds: 40
       policies:
         - type: Percent
           value: 50
-          periodSeconds: 30
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: product
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: product
+          periodSeconds: 40

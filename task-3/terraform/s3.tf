@@ -2,23 +2,15 @@
 # Copyright 2026 The ISHS Cloud Computing Authors
 
 resource "aws_s3_bucket" "this" {
-  bucket = "${var.player_number}-bucket"
+  bucket = var.bucket_name
 
   tags = {
-    Name = "${var.player_number}-bucket"
+    Name = var.bucket_name
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# CloudFront(OAC)만 읽기 허용
+# CloudFront(OAC)만 읽기 허용 — 퍼블릭 버킷 없이 /images/*를 제공하기 위한
+# 기능 요구사항이다(보안 강화가 아니라 OAC 동작 조건).
 data "aws_iam_policy_document" "cdn_read" {
   statement {
     actions   = ["s3:GetObject"]
@@ -40,6 +32,4 @@ data "aws_iam_policy_document" "cdn_read" {
 resource "aws_s3_bucket_policy" "cdn_read" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.cdn_read.json
-
-  depends_on = [aws_s3_bucket_public_access_block.this]
 }

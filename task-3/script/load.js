@@ -6,8 +6,8 @@
 //   BASE_URL=https://<cloudfront_domain> VUS=20 DURATION=2m k6 run load.js
 //   # k6 미설치 시: docker run --rm -i -e BASE_URL=... grafana/k6:2.1.0 run - < load.js
 //
-// BASE_URL은 반드시 CloudFront. ALB는 SG가 CloudFront origin-facing prefix list로
-// 잠겨 있어 직접 닿지 않고, http로 부르면 redirect-to-https의 301을 측정하게 된다.
+// BASE_URL은 반드시 CloudFront(https). ALB를 직접 때리면 WAF·CloudFront 캐시를 건너뛰어
+// 채점 경로와 다른 것을 재게 되고, http로 부르면 redirect-to-https의 301을 측정하게 된다.
 // 종료 후 정리: DELETE FROM user WHERE username LIKE 'k6-%'; DELETE FROM product WHERE id LIKE 'k6-%';
 
 import http from 'k6/http';
