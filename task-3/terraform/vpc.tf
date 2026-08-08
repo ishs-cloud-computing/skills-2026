@@ -38,8 +38,6 @@ resource "aws_subnet" "private" {
     # EC2NodeClass subnetSelectorTerms가 이 태그로 노드 서브넷을 선택한다.
     # 값은 eksctl cluster.yaml의 metadata.tags와 동일해야 한다.
     "karpenter.sh/discovery" = local.cluster_name
-    # internal ELB용 서브넷 표시 (LBC가 internal 스킴을 쓸 때 대비)
-    "kubernetes.io/role/internal-elb" = "1"
   }
 }
 

@@ -26,18 +26,19 @@ vpc:
       ap-northeast-2b: { id: subnet-REPLACE_PUBLIC_B }
 
 iam:
-  # Karpenter 설치의 하드 요구사항. LBC IRSA도 이 위에서 만들어진다.
+  # eksctl karpenter 통합의 하드 요구사항("OIDC must be defined in order to install
+  # Karpenter"). 이 IRSA는 Karpenter 컨트롤러 SA 전용이고, 우리가 만드는 SA는 전부
+  # 아래 Pod Identity를 쓴다.
   withOIDC: true
-  serviceAccounts:
+  # eks-pod-identity-agent addon이 아래에 있어야 동작한다.
+  podIdentityAssociations:
     # wellKnownPolicies가 AWSLoadBalancerControllerIAMPolicy를 대신 만들어 준다
     # (iam_policy.json 다운로드 + aws iam create-policy 두 단계가 사라진다).
-    - metadata:
-        name: aws-load-balancer-controller
-        namespace: kube-system
+    - namespace: kube-system
+      serviceAccountName: aws-load-balancer-controller
+      createServiceAccount: true
       wellKnownPolicies:
         awsLoadBalancerController: true
-  # 앱 권한은 Pod Identity. eks-pod-identity-agent addon이 아래에 있어야 동작한다.
-  podIdentityAssociations:
     - namespace: default
       serviceAccountName: product
       createServiceAccount: true
@@ -57,6 +58,9 @@ karpenter:
 managedNodeGroups:
   - name: system
     instanceType: t3.medium # 과제지: EC2는 t3.medium만
+    # 노드 OS를 Bottlerocket으로 통일한다(Karpenter NodeClass alias와 같은 계열).
+    # 안 쓰면 eksctl 기본값 AL2023이 붙어 MNG와 Karpenter 노드의 OS가 갈린다.
+    amiFamily: Bottlerocket
     desiredCapacity: 1
     minSize: 1
     maxSize: 1

@@ -33,6 +33,20 @@ LBC가 직접 관리해 위 우회책 두 개가 통째로 사라진다. Karpent
 엔드포인트 제출이 T+20 → 약 T+35로 늦어진다(트래픽은 T+60부터라 여유는 있다).
 `terraform/cloudfront.tf`의 `data "aws_lb"`가 이 순서 제약의 실체다.
 
+## apply를 1a/1b로 나누는 이유
+
+임계경로는 RDS(~15분)와 EKS(~20분)를 겹치는 데 있다. EKS는 eksctl이 만들고 서브넷 id를
+`terraform output`으로 받으므로, 두 작업의 유일한 접점이 **state에 output이 기록된 시점**이다.
+
+네트워크와 RDS를 한 apply로 묶으면 그 apply가 RDS 때문에 15분 블로킹되는데, eksctl은 그보다 먼저
+출발해야 병렬이 된다. 즉 **진행 중인 apply의 state에서 output을 읽게 되고**, output 노드가 아직
+기록되기 전이면 `Output not found`로 실패한다. 로컬 state가 apply 도중 갱신되는 타이밍에 의존하는 셈이다.
+
+그래서 targeted apply를 네트워크·ECR·S3(1a, ~3분)와 RDS·Proxy(1b, ~15분)로 끊는다. 1a 완료가
+"이제 eksctl을 띄워도 된다"는 명시적 신호가 되고, 1b와 eksctl은 각자 자기 창에서 나란히 돈다.
+terraform apply는 언제나 한 번에 하나만 도므로 state 락 충돌도 없다. 총 소요는 늘지 않는다 —
+3분은 원래 한 덩어리였던 apply의 앞부분이다.
+
 ## 요구사항 ↔ 구현 매핑
 
 | 요구사항 | 구현 |
@@ -146,7 +160,8 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
   필요하다(호환성 매트릭스). 대회 당일 최신 stable을 확인해 갱신한다.
   eksctl은 **하한(0.28.0)만** 검사하고 상한은 없다 — 실패하면 그 버전의 Helm 차트가 없다는 뜻이다.
   (검증 시점: eksctl 0.229.0 / Karpenter 1.14 / k8s 1.36)
-- **eksctl이 만들어 주는 것**: 컨트롤러 IRSA(`iam.withOIDC: true` 필수),
+- **eksctl이 만들어 주는 것**: 컨트롤러 IRSA(`iam.withOIDC: true` 필수 — 저장소에 IRSA가 남는
+  유일한 지점이다. 나머지 SA는 전부 Pod Identity),
   노드 IAM 역할 `eksctl-KarpenterNodeRole-<cluster>`, 인스턴스 프로파일, 노드롤 access entry,
   Helm 설치. EC2NodeClass의 `role` 값이 이 이름 규칙을 따른다.
 - **discovery 태그가 세 곳에서 일치해야 한다**: `terraform/vpc.tf`의 private subnet 태그,
@@ -163,9 +178,11 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
   `NLBGatewayAPI`가 미설정). Ingress만 쓰므로 Gateway API CRD를 따로 설치할 필요가 없다.
 - 차트는 `replicaCount > 1`일 때만 PDB를 만든다 → `replicaCount=1`이면 PDB도 안 생겨
   노드 드레인을 막지 않는다.
-- IAM은 eksctl `iam.serviceAccounts[].wellKnownPolicies.awsLoadBalancerController: true`로 만든다.
-  공식 문서의 `curl iam_policy.json` + `aws iam create-policy` 두 단계가 사라진다(Windows에서 유리).
-  Helm은 `serviceAccount.create=false`로 그 SA를 재사용한다.
+- IAM은 eksctl `iam.podIdentityAssociations[].wellKnownPolicies.awsLoadBalancerController: true`로
+  만든다. 공식 문서의 `curl iam_policy.json` + `aws iam create-policy` 두 단계가 사라진다(Windows에서
+  유리). Helm은 `serviceAccount.create=false`로 그 SA를 재사용한다 — Pod Identity는 SA에 붙일
+  annotation이 없어 IRSA보다 오히려 단순하다. 인증 실패 시 증상은 Ingress ADDRESS가 안 차는 것이고,
+  `kubectl -n kube-system logs deploy/aws-load-balancer-controller`의 AccessDenied로 구분한다.
 - **서브넷 auto-discovery**: internet-facing ALB는 **퍼블릭 서브넷의 `kubernetes.io/role/elb` 태그**로
   찾는다(`terraform/vpc.tf`). 이 태그가 없으면 Ingress의 ADDRESS가 영원히 비어 있다 —
   ALB가 안 뜰 때 제일 먼저 확인할 곳.

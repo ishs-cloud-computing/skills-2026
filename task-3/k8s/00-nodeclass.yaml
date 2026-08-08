@@ -17,5 +17,7 @@ spec:
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: skills-eks
+  # MNG(cluster.yaml amiFamily)와 같은 계열로 맞춘다. alias를 쓰면 Karpenter가
+  # Bottlerocket용 blockDeviceMappings 기본값(OS 볼륨 + 데이터 볼륨)을 알아서 붙인다.
   amiSelectorTerms:
-    - alias: al2023@latest
+    - alias: bottlerocket@latest

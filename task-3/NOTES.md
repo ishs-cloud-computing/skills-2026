@@ -92,8 +92,75 @@ Count 매칭 중 오탐/실탐 판정:
 - 앱 컨테이너 stdout/stderr → CloudWatch 수집 대안: `amazon-cloudwatch-observability` addon 제거(사용자 결정)로 앱 로그는 `kubectl logs`로만 확인. 로그 기반 운영 채점에 CloudWatch 앱 로그가 필요해지면 Fluent Bit 단독 배포 검토
 - demo ACL(콘솔 생성, 커스텀 룰 포함)과 repo `waf.tf`(`skills-waf`)의 차이는 위 룰 설계안으로만 수렴 — terraform 반영은 당일 판단
 
+## 결정 로그
+
+### 2026-08-09 — STEP 1 apply를 1a/1b로 분리 (문서만)
+
+- **문제**: STEP 1이 `-target=aws_db_proxy_target.this`까지 한 덩어리라 RDS Multi-AZ 때문에 15분
+  블로킹되는데, 런북은 그 사이 새 창에서 STEP 2를 띄우라 지시했다. STEP 2 첫 줄이
+  `terraform output -json private_subnet_ids`라 **진행 중인 apply의 state를 읽는다.** output 노드가
+  아직 기록되기 전이면 `Output not found`. 당일 20분 임계경로에서 겪을 실패다.
+- **채택**: targeted apply를 1a(네트워크·ECR·S3, ~3분) / 1b(RDS·Proxy, ~15분)로 분리. 1a 완료 +
+  output 성공이 eksctl 시작 신호. `README.md`·`README.linux.md`·`ARCHITECTURE.md`만 변경, terraform
+  코드는 무변경.
+- **유지되는 것**: RDS ∥ EKS 병렬(1b와 STEP 2가 각자 창에서 동시), 총 소요(3분은 원래 apply의 앞부분),
+  STEP 3~11 번호. terraform apply가 항상 하나만 도므로 state 락 충돌도 없다.
+- **기각**: EKS를 terraform으로 흡수해 한 번의 apply로 RDS∥EKS를 자동 병렬화. eksctl의 addon·access
+  entry·`podIdentityAssociations`·karpenter 통합을 전부 수작업 재작성해야 해 4시간 예산 밖이다.
+- **기각**: 1a target 목록을 서브넷만으로 더 줄이기. NAT가 없으면 private 노드가 EKS API·ECR에 못
+  붙어 어차피 STEP 2가 실패한다. NAT 생성 시간이 1a 3분의 대부분이다.
+
+### 2026-08-09 — 노드 AMI를 Bottlerocket으로 (사용자 방침)
+
+- **채택**: 노드가 뜨는 경로가 둘이라 두 곳을 같이 바꿨다 — `eksctl/cluster.yaml` MNG에
+  `amiFamily: Bottlerocket` 추가, `k8s/00-nodeclass.yaml`의 `alias: al2023@latest` →
+  `bottlerocket@latest`. 이전에는 MNG가 amiFamily 미지정(=eksctl 기본 AL2023)이라 NodeClass와
+  우연히 일치했을 뿐 아무것도 고정돼 있지 않았다. 한쪽만 바꾸면 OS가 갈린다.
+- **영향 없음 확인**: `k8s/`에 hostPath·DaemonSet·privileged·hostNetwork가 전혀 없고 앱 로그는
+  stdout → `kubectl logs`뿐이라 노드 OS 의존이 0이다. 런북 명령도 무변경(README 손대지 않음).
+- **감수하는 것**: Bottlerocket에는 SSH·셸이 없고 SSM 에이전트도 MNG 기본 정책에 없다. 노드에
+  직접 붙을 수단이 사라지지만 런북이 노드 셸을 쓰지 않으므로 실사용 손실은 없다. 정말 필요하면
+  `kubectl debug node/<name>`.
+- **롤백 조건**: `aws ssm get-parameter --name /aws/service/bottlerocket/aws-k8s-1.36/x86_64/latest/image_id`
+  가 실패하면 그 k8s 버전용 Bottlerocket AMI가 아직 없다는 뜻이다. 위 2곳을 AL2023으로 되돌린다.
+- **기각**: `blockDeviceMappings` 직접 지정. alias를 쓰면 Karpenter가 Bottlerocket용 기본값
+  (OS 볼륨 + 데이터 볼륨 2개)을 알아서 붙인다.
+
+### 2026-08-09 — IAM은 Pod Identity, LB는 internet-facing 단일 (사용자 방침)
+
+- **채택**: AWS Load Balancer Controller SA를 IRSA(`iam.serviceAccounts`) → Pod Identity
+  (`iam.podIdentityAssociations`)로 이동. eksctl의 `podIdentityAssociations`가 `wellKnownPolicies`를
+  지원해 `awsLoadBalancerController: true` 편의 기능을 그대로 들고 갔다 — `iam_policy.json` 다운로드 +
+  `aws iam create-policy` 2단계는 여전히 불필요하다. `eks-pod-identity-agent` addon은 이미 있었다.
+  Helm 명령은 무변경(`serviceAccount.create=false`). 이제 우리가 만드는 SA는 전부 Pod Identity다.
+- **유지(기각한 대안)**: `iam.withOIDC: true` 제거. eksctl karpenter 통합의 하드 요구사항이다
+  ("OIDC must be defined in order to install Karpenter"). 지우려면 Karpenter를 IAM 역할·인스턴스
+  프로파일·노드롤 access entry·Helm 설치까지 수동으로 깔아야 해서 4시간 예산에 맞지 않는다.
+  Karpenter 컨트롤러 SA 한 곳만 IRSA로 남는다.
+- **삭제**: private subnet의 `kubernetes.io/role/internal-elb` 태그(`terraform/vpc.tf`).
+  internet-facing 단일 방침에서 쓰이지 않는다. internet-facing ALB의 서브넷 auto-discovery는
+  퍼블릭 서브넷의 `kubernetes.io/role/elb`가 담당하므로 무관하다.
+- **확인**: task-3는 CloudFront VPC Origin을 쓰지 않는다(`terraform/cloudfront.tf`는
+  `custom_origin_config`). VPC Origin은 private subnet 리소스만 지원하므로 internal ALB를 강제하는데,
+  여기엔 애초에 그 요구가 없다. 1·2과제 세트 셋(`set-05/task-1`, `set-05/task-2` module-2,
+  `set-07/task-1`)은 반대로 mark가 `internal`을 정확일치로 검사하므로 같은 방침을 적용하지 않았다.
+
 ## 문서 근거
 
+- eksctl `amiFamily: Bottlerocket` (managed node group):
+  https://docs.aws.amazon.com/eks/latest/userguide/launch-node-bottlerocket.html
+- Bottlerocket에 SSH·셸 없음(admin container 필요):
+  https://github.com/bottlerocket-os/bottlerocket#admin-container
+- Karpenter EC2NodeClass AMI alias(`bottlerocket@latest`)와 계열별 기본 blockDeviceMappings:
+  https://karpenter.sh/docs/concepts/nodeclasses/
+- eksctl Pod Identity Associations 스키마(`wellKnownPolicies` 지원):
+  https://docs.aws.amazon.com/eks/latest/eksctl/pod-identity-associations.html
+- eksctl Karpenter — `withOIDC: true` 필수:
+  https://docs.aws.amazon.com/eks/latest/eksctl/eksctl-karpenter.html
+- LBC 인증 옵션(IRSA / Pod Identity):
+  https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/
+- CloudFront VPC Origin은 private subnet 리소스 전용:
+  https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-vpc-origins.html
 - WAF 로그 필드: https://docs.aws.amazon.com/waf/latest/developerguide/logging-fields.html
 - Logs Insights QL 문법: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CWL_QuerySyntax.html
 - 저장 쿼리 파라미터 (`{{param}}`): https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CWL_Insights-Saving-Queries.html

@@ -43,9 +43,12 @@ cd task-3
 aws configure   # 지급 키 입력, region: ap-northeast-2, output: json
 ```
 
-## STEP 1 — 선행 apply: 네트워크·ECR·S3·RDS (로컬 bash, ~15분)
+## STEP 1 — 선행 apply: 네트워크·ECR·S3 → RDS (로컬 bash, ~3분 + ~15분)
 
 CloudFront·WAF·S3 정책은 ALB가 생겨야 하므로 STEP 7로 미룬다.
+apply를 **1a(짧음) / 1b(RDS, 김)** 로 나눈다. 근거는 [ARCHITECTURE.md](ARCHITECTURE.md)의 "apply를 1a/1b로 나누는 이유".
+
+### 1a — 네트워크·ECR·S3 (~3분)
 
 ```bash
 # ── 로컬 bash ──
@@ -56,13 +59,24 @@ terraform -chdir=terraform apply -auto-approve \
   -target=aws_route_table_association.public \
   -target=aws_route_table_association.private \
   -target=aws_ecr_repository.app \
-  -target=aws_s3_bucket.this \
-  -target=aws_db_proxy_target.this
+  -target=aws_s3_bucket.this
+
+terraform -chdir=terraform output -json private_subnet_ids   # 2개 id가 에러 없이 나와야 한다
 ```
 
-RDS Multi-AZ가 오래 걸린다. **끝나기를 기다리지 말고 STEP 2를 새 터미널에서 시작**한다.
+> **여기서 두 번째 터미널을 열어 STEP 2(eksctl)를 시작한다.** 위 output이 성공하는 것이 그 신호다.
+> 1a가 끝나기 전에 시작하면 output이 아직 state에 없어 실패한다.
 
-## STEP 2 — eksctl 클러스터 생성 (새 터미널, ~20분)
+### 1b — RDS + Proxy (~15분, STEP 2와 병렬)
+
+이 target 하나가 DB 인스턴스·프록시·Secret·SG·IAM 역할을 전부 물고 온다.
+
+```bash
+# ── 로컬 bash (첫 번째 터미널) ──
+terraform -chdir=terraform apply -auto-approve -target=aws_db_proxy_target.this
+```
+
+## STEP 2 — eksctl 클러스터 생성 (새 터미널, ~20분, STEP 1b와 병렬)
 
 ```bash
 # ── 로컬 bash (두 번째 터미널) ──

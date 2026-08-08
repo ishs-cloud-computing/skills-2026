@@ -40,10 +40,13 @@ cd task-3
 aws configure   # 지급 키 입력, region: ap-northeast-2
 ```
 
-## STEP 1 — 선행 apply: 네트워크·ECR·S3·RDS (PowerShell, ~15분)
+## STEP 1 — 선행 apply: 네트워크·ECR·S3 → RDS (PowerShell, ~3분 + ~15분)
 
 CloudFront·WAF·S3 정책은 ALB가 생겨야 하므로 STEP 7로 미룬다. 여기서는 나머지를 전부 만든다.
 리프 리소스만 지정 — VPC·서브넷·IGW·NAT·라우트는 종속성으로 딸려 온다.
+apply를 **1a(짧음) / 1b(RDS, 김)** 로 나눈다. 근거는 [ARCHITECTURE.md](ARCHITECTURE.md)의 "apply를 1a/1b로 나누는 이유".
+
+### 1a — 네트워크·ECR·S3 (~3분)
 
 ```powershell
 # ── Windows PowerShell ──
@@ -55,17 +58,27 @@ $targets = @(
   "-target=aws_route_table_association.private"
   "-target=aws_ecr_repository.app"
   "-target=aws_s3_bucket.this"
-  "-target=aws_db_proxy_target.this"
 )
 
 terraform -chdir=terraform apply -auto-approve @targets
+terraform -chdir=terraform output -json private_subnet_ids   # 2개 id가 에러 없이 나와야 한다
 ```
 
-RDS Multi-AZ가 오래 걸린다. **끝나기를 기다리지 말고 STEP 2를 새 창에서 시작**한다(서브넷은 몇 초 만에 생긴다).
+> **여기서 두 번째 창을 열어 STEP 2(eksctl)를 시작한다.** 위 output이 성공하는 것이 그 신호다.
+> 1a가 끝나기 전에 STEP 2를 시작하면 output이 아직 state에 없어 실패한다.
+
+### 1b — RDS + Proxy (~15분, STEP 2와 병렬)
+
+이 창에서 이어서 실행한다. 이 target 하나가 DB 인스턴스·프록시·Secret·SG·IAM 역할을 전부 물고 온다.
+
+```powershell
+# ── Windows PowerShell (첫 번째 창) ──
+terraform -chdir=terraform apply -auto-approve -target=aws_db_proxy_target.this
+```
 
 ## STEP 2 — eksctl 클러스터 생성 (새 PowerShell 창, ~20분)
 
-STEP 1과 병렬. 이 창은 생성이 끝날 때까지 점유되므로 STEP 3은 CloudShell에서 병행한다.
+STEP 1b와 병렬. 이 창은 생성이 끝날 때까지 점유되므로 STEP 3은 CloudShell에서 병행한다.
 
 ```powershell
 # ── Windows PowerShell (두 번째 창) ──
@@ -85,7 +98,7 @@ eksctl create cluster -f eksctl/cluster.rendered.yaml   # kubeconfig 자동 병�
 
 ## STEP 3 — 이미지 빌드/푸시 (CloudShell, 바이너리 수령 즉시)
 
-ECR 레포는 STEP 1 terraform이 생성했다 — 레포명 = `variables.tf`의 `apps` 항목 = k8s 이미지명.
+ECR 레포는 STEP 1a terraform이 생성했다 — 레포명 = `variables.tf`의 `apps` 항목 = k8s 이미지명.
 Dockerfile 수정(베이스 교체 등)이 필요하면 `app/Dockerfile` 주석을 참고해 직접 수정한다.
 
 **전제**: CloudShell에서 `git clone <repo> && cd task-3` 후, 제공 바이너리를 `app/` 아래에 파일명 `user`·`product`·`stress`로 복사해 둔다.
@@ -151,7 +164,7 @@ curl -s -o /dev/null -w '%{http_code} GET user\n' "localhost:8080/v1/user?email=
 docker rm -f test
 ```
 
-product는 S3까지 태워 **버킷 env 키·멀티파트 필드명·오브젝트 키**를 한 번에 확정한다 (STEP 1에서 버킷이 생긴 뒤. CloudShell에는 자격증명이 있다).
+product는 S3까지 태워 **버킷 env 키·멀티파트 필드명·오브젝트 키**를 한 번에 확정한다 (STEP 1a에서 버킷이 생긴 뒤. CloudShell에는 자격증명이 있다).
 
 ```bash
 # ── CloudShell ──
@@ -208,7 +221,7 @@ kubectl -n kube-system rollout status deploy/aws-load-balancer-controller
 kubectl get ingressclass alb   # 차트가 만든다. 없으면 Ingress가 무시된다
 ```
 
-ServiceAccount와 IAM 역할은 eksctl이 이미 만들었다(`iam.serviceAccounts` + `wellKnownPolicies`) — 정책 JSON을 받아 `aws iam create-policy` 할 필요가 없다.
+ServiceAccount와 IAM 역할은 eksctl이 이미 만들었다(`iam.podIdentityAssociations` + `wellKnownPolicies`) — 정책 JSON을 받아 `aws iam create-policy` 할 필요가 없다. Pod Identity라 SA에 `eks.amazonaws.com/role-arn` annotation은 붙지 않는다(정상).
 
 ## STEP 5 — 노드풀 적용 (PowerShell)
 
@@ -276,7 +289,7 @@ CloudFront는 `wait_for_deployment=false`라 도메인이 즉시 나온다(전�
 
 ## STEP 8 — DB 초기화 (RDS 콘솔 → CloudShell)
 
-STEP 1의 RDS가 생성됐으면 언제든 실행 가능하며, STEP 5~7과 병행해도 된다.
+STEP 1b의 RDS가 생성됐으면 언제든 실행 가능하며, STEP 5~7과 병행해도 된다.
 
 RDS 콘솔 → DB `apdev-rds-instance` → **Connectivity & security** → **Connect using CloudShell** 클릭.
 버튼이 접속 명령(엔드포인트·유저 포함)을 자동 입력한다 → Enter → password 입력. RDS **인스턴스** 콘솔에서 열리므로 자동으로 직결 엔드포인트다(프록시 아님 — 대량 적재가 프록시에 피닝되는 것을 피한다). `:exit`로 나오면 접속 명령이 히스토리(↑)에 남아 재사용할 수 있다.
