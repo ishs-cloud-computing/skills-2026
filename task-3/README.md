@@ -73,7 +73,7 @@ terraform -chdir=terraform output -json private_subnet_ids   # 2개 id가 에러
 
 ```powershell
 # ── Windows PowerShell (첫 번째 창) ──
-terraform -chdir=terraform apply -auto-approve -target=aws_db_proxy_target.this
+terraform -chdir=terraform apply -auto-approve "-target=aws_db_proxy_target.this"
 ```
 
 ## STEP 2 — eksctl 클러스터 생성 (새 PowerShell 창, ~20분)
