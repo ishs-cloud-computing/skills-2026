@@ -65,9 +65,13 @@ resource "aws_iam_role_policy" "proxy_secret" {
 }
 
 resource "aws_db_proxy" "this" {
-  # secret version은 그래프 리프라 README의 targeted apply에서 잘려 secret이 빈 채로 생성된다(실측).
-  # 이 간선이 version을 targeted plan에 포함시킨다 — outputs.tf db_password와 같은 함정.
-  depends_on = [aws_secretsmanager_secret_version.db]
+  # secret version은 리프, role policy는 role의 자손이라 둘 다 targeted apply의 조상 추적에서 잘린다(실측).
+  # 잘리면 secret이 비거나 프록시가 secret을 못 읽어 AUTH_FAILURE로 대상이 UNAVAILABLE이 된다.
+  # 이 간선이 둘을 targeted plan에 포함시킨다 — outputs.tf db_password와 같은 함정.
+  depends_on = [
+    aws_secretsmanager_secret_version.db,
+    aws_iam_role_policy.proxy_secret,
+  ]
 
   name          = local.db_proxy_name
   engine_family = contains(["mysql", "mariadb"], local.db_engine) ? "MYSQL" : "POSTGRESQL"

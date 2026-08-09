@@ -209,6 +209,31 @@ Count 매칭 중 오탐/실탐 판정:
 - **기각**: version을 proxy `auth.secret_arn`에서 직접 참조하도록 바꾸기 — `secret_arn`은 version이
   아니라 secret ARN을 받는 필드라 의미가 왜곡된다. depends_on이 의도를 그대로 말한다.
 
+### 2026-08-09 — proxy role policy도 같은 함정에 걸림 (위 항목의 일반화)
+
+- **문제(실측)**: 위 수정 뒤에도 앱이 `db error: ping: Error 1045 (28000): Access denied for user
+  'admin'@'10.0.2.195' (using password: YES)`로 죽고 프록시 대상이 UNAVAILABLE이었다. 계정 실물은
+  `describe-db-proxy-targets` → `AUTH_FAILURE / "Proxy does not have any registered credentials"`,
+  `list-role-policies --role-name skills-db-proxy-role` → `[]`. 즉 `aws_iam_role_policy.proxy_secret`이
+  계정에 아예 없었다. `-target`은 **조상만** 끌어오는데 role policy는 `aws_iam_role.proxy`의
+  **자손**이라 proxy_target의 조상이 아니다 — role(조상)은 생기고 권한만 빠진다. 위 항목을
+  "리프"로만 좁게 이해해서 자손 쪽을 놓쳤다.
+- **일반 규칙**: targeted apply에서 대상이 *동작하는 데* 필요하지만 조상이 아닌 리소스는 전부
+  `depends_on`으로 고정한다. 자손 policy·attachment·association, 아무도 참조하지 않는 leaf가 해당된다.
+  나머지를 훑은 결과 추가 대상은 없다 — `aws_s3_bucket_policy.cdn_read`와
+  `aws_wafv2_web_acl_logging_configuration.this`는 STEP 9 전체 apply에서 생성되고,
+  라우트 테이블 association은 STEP 1a가 명시적으로 target에 넣는다.
+- **채택**: `aws_db_proxy.this`의 `depends_on`에 `aws_iam_role_policy.proxy_secret` 추가.
+- **런북 교체**: 1b 검증을 `describe-secret`에서 `describe-db-proxy-targets`의 `TargetHealth`로 바꿨다.
+  전자는 이 장애를 **통과시켰다** — secret version은 멀쩡했기 때문이다. TargetHealth 하나가
+  시크릿 내용·IAM 권한·네트워크·비밀번호 일치를 한꺼번에 증명한다. 검증은 구성요소가 아니라
+  최종 성공 조건을 봐야 한다.
+- **기각**: 시크릿 JSON에 `engine`/`host`/`port`/`dbname`을 넣어 "RDS 타입 시크릿"으로 만들기 —
+  콘솔의 시크릿 타입 라벨은 JSON 키로 추론하는 UI 분류일 뿐 서버측 필드가 아니고, RDS Proxy는
+  `username`/`password`만 읽는다(AWS CLI 문서 경로가 정확히 그 두 키만 쓴다). 이번 장애와 무관하다.
+- **기각**: 프록시 정책에 `kms:Decrypt` 추가 — 시크릿이 기본 관리형 키(`KmsKeyId: null`)를 쓰고
+  그 키 정책이 계정 주체에 직접 허용한다. CMK로 바꿀 때만 필요하다.
+
 ### 2026-08-09 — STEP 1 apply를 1a/1b로 분리 (문서만)
 
 - **문제**: STEP 1이 `-target=aws_db_proxy_target.this`까지 한 덩어리라 RDS Multi-AZ 때문에 15분

@@ -44,7 +44,7 @@
 | `terraform/variables.tf` | `apps`, `image_tag` |
 | `terraform/locals.tf` | 리전·CIDR·DB 사양, 개별 리소스 이름 |
 
-`prefix` 를 바꿨으면 `eksctl/cluster.yaml`·`k8s/00-nodeclass.yaml`·`k8s/20-ingress.yaml`·`scripts/*.sh` 의 클러스터·ALB 이름도 같이 고친다.
+`prefix` 를 바꿨으면 `eksctl/cluster.yaml`·`k8s/00-nodeclass.yaml`·`k8s/20-ingress.yaml`·`scripts/*.sh`·`README.md` 의 클러스터·ALB·프록시 이름도 같이 고친다.
 
 ```powershell
 # ── 본 PC ──
@@ -79,9 +79,9 @@ output 이 나오면 새 창에서 STEP 2, CloudShell 에서 STEP 3 을 시작�
 # ── 본 PC ──
 terraform -chdir=terraform apply -auto-approve "-target=aws_db_proxy_target.this"
 
-aws secretsmanager describe-secret --secret-id skills-db-credentials --query VersionIdsToStages
-# {"<uuid>": ["AWSCURRENT"]}
-# {} 또는 null 이면 target 없이 terraform apply 재실행
+aws rds describe-db-proxy-targets --db-proxy-name skills-db-proxy --query "Targets[0].TargetHealth"
+# {"State": "AVAILABLE"}
+# UNAVAILABLE/AUTH_FAILURE 면 target 없이 terraform apply 재실행 후 1~2분 뒤 재확인
 ```
 
 ## STEP 2 — eksctl 클러스터 (본 PC 창2, ~20분)
