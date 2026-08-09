@@ -9,33 +9,23 @@ spec:
   template:
     spec:
       nodeClassRef:
-        group: eks.amazonaws.com
-        kind: NodeClass
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: default
       requirements:
-        # ── 인스턴스 타입: 바꾸려면 여기 값만 교체 ──────────────────────
-        # Auto Mode는 nano/micro/small 및 vCPU 1개 이하를 거부한다.
-        # → t3.micro 사용 불가. t 계열 최소 유효 크기가 t3.medium(2 vCPU/4 GiB)다.
         - key: "node.kubernetes.io/instance-type"
           operator: In
           values: ["t3.medium"]
         - key: "kubernetes.io/arch"
           operator: In
           values: ["amd64"]
-        # 안정성: Spot 중단 없이 예측 가능하게 On-Demand 고정.
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["on-demand"]
-  # 저비용: 노드 총량 상한(폭주·비용 캡). HPA 전체 상한 27파드 × 600m = 16.2 vCPU
-  # 를 수용하는 t3.medium 9대(18 vCPU). HPA 스케일아웃 여유를 보고 조정.
   limits:
-    cpu: "18"
-  # 빠름·저비용: 놀거나 저활용 노드를 걷어내 consolidation (30s = demo 검증값,
-  # HPA scaleDown 120s와 조합해 빈 노드를 빨리 회수 → 비용 ratio).
-  # 안정성: PDB를 존중하므로 HPA 대상 워크로드엔 PodDisruptionBudget을 함께 둔다.
+    cpu: "12"
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30s
-    # 자발적 중단(consolidation)은 한 번에 노드 1대까지 — PDB 위의 노드 단위 제한
     budgets:
       - nodes: "1"

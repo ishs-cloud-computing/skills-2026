@@ -14,7 +14,7 @@ provider "aws" {
   region = local.region
 }
 
-# WAF(scope=CLOUDFRONT)는 us-east-1에서만 생성 가능
+# WAF(scope=CLOUDFRONT)와 그 로그 그룹은 us-east-1에서만 만들 수 있다.
 provider "aws" {
   alias  = "use1"
   region = "us-east-1"
