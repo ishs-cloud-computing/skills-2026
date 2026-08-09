@@ -67,7 +67,7 @@ resource "aws_cloudfront_distribution" "this" {
   # 응답이 요청 uuid를 echo하므로 캐시하면 변조가 된다.
   default_cache_behavior {
     target_origin_id         = "alb"
-    viewer_protocol_policy   = "redirect-to-https"
+    viewer_protocol_policy   = "allow-all"
     allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods           = ["GET", "HEAD"]
     cache_policy_id          = local.cache_caching_disabled
@@ -77,7 +77,7 @@ resource "aws_cloudfront_distribution" "this" {
   ordered_cache_behavior {
     path_pattern           = "/images/*"
     target_origin_id       = "s3-images"
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = "allow-all"
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = local.cache_caching_optimized
