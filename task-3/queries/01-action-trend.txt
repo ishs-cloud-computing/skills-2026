@@ -1,5 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 The ISHS Cloud Computing Authors
-# [상시] ALLOW/BLOCK 추이 (5분 bin). blocked 급증 또는 allowed 급락 시 02(룰별 집계)로.
-stats count() as total, sum(strcontains(action, "ALLOW")) as allowed, sum(strcontains(action, "BLOCK")) as blocked by bin(5m) as t
-| sort t asc

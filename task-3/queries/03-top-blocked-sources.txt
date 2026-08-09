@@ -1,7 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 The ISHS Cloud Computing Authors
-# [상시] BLOCK 상위 소스 IP·국가와 활동 시간대. 특정 IP 집중 시 11(IP 드릴다운)로.
-filter action = "BLOCK"
-| stats count() as blocked, min(@timestamp) as firstSeen, max(@timestamp) as lastSeen by httpRequest.clientIp, httpRequest.country
-| sort blocked desc
-| limit 20
