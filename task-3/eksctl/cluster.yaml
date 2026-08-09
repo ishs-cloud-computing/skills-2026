@@ -8,14 +8,7 @@ metadata:
   name: skills-eks
   region: ap-northeast-2
   version: "1.36"
-  tags:
-    # 이 태그가 있어야 eksctl이 클러스터 공유 노드 SG를 karpenter.sh/discovery로
-    # 자동 태깅한다 → EC2NodeClass의 securityGroupSelectorTerms가 성립한다.
-    # 값은 terraform vpc.tf의 private subnet 태그와 동일해야 한다.
-    karpenter.sh/discovery: skills-eks
 
-# Terraform이 만든 서브넷 사용 (README 런북에서 치환)
-# public도 등록한다 — LBC가 internet-facing ALB를 여기에 놓는다.
 vpc:
   subnets:
     private:
@@ -26,40 +19,17 @@ vpc:
       ap-northeast-2b: { id: subnet-REPLACE_PUBLIC_B }
 
 iam:
-  # eksctl karpenter 통합의 하드 요구사항("OIDC must be defined in order to install
-  # Karpenter"). 이 IRSA는 Karpenter 컨트롤러 SA 전용이고, 우리가 만드는 SA는 전부
-  # 아래 Pod Identity를 쓴다.
-  withOIDC: true
-  # eks-pod-identity-agent addon이 아래에 있어야 동작한다.
   podIdentityAssociations:
-    # wellKnownPolicies가 AWSLoadBalancerControllerIAMPolicy를 대신 만들어 준다
-    # (iam_policy.json 다운로드 + aws iam create-policy 두 단계가 사라진다).
-    - namespace: kube-system
-      serviceAccountName: aws-load-balancer-controller
-      createServiceAccount: true
-      wellKnownPolicies:
-        awsLoadBalancerController: true
     - namespace: default
       serviceAccountName: product
       createServiceAccount: true
       permissionPolicyARNs:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
-# 컨트롤러 IRSA·노드 IAM 역할(eksctl-KarpenterNodeRole-skills-eks)·인스턴스 프로파일·
-# 노드롤 access entry·Helm 설치까지 eksctl이 전부 처리한다.
-# 버전은 Karpenter 호환성 매트릭스를 따른다 — k8s 1.36은 Karpenter >= 1.13.
-# eksctl이 이 버전을 거부하면 한 단계 낮은 stable로 내린다(README STEP 2 참고).
-karpenter:
-  version: "1.14.0"
-
-# Karpenter 컨트롤러·CoreDNS·LBC가 앉을 부트스트랩 노드.
-# min=desired=max=1 — 유휴 시 EC2 총 1대가 목표이고, 증설은 전부 Karpenter가 맡는다.
-# taint를 걸지 않아 앱 파드도 이 노드를 쓴다(1대를 놀리지 않는다).
 managedNodeGroups:
   - name: system
-    instanceType: t3.medium # 과제지: EC2는 t3.medium만
-    # 노드 OS를 Bottlerocket으로 통일한다(Karpenter NodeClass alias와 같은 계열).
-    # 안 쓰면 eksctl 기본값 AL2023이 붙어 MNG와 Karpenter 노드의 OS가 갈린다.
+    instanceType: t3.medium
+    # k8s/00-nodeclass.yaml 의 amiSelectorTerms alias 와 같은 계열이어야 노드 OS 가 갈리지 않는다.
     amiFamily: Bottlerocket
     desiredCapacity: 1
     minSize: 1
@@ -67,7 +37,5 @@ managedNodeGroups:
     privateNetworking: true
 
 addons:
-  # HPA 전제조건. 차트 기본값이 replicas 1이라 그대로 둔다.
   - name: metrics-server
-  # Auto Mode에선 내장이었다 — 표준 EKS에서는 Pod Identity를 쓰려면 명시해야 한다.
   - name: eks-pod-identity-agent

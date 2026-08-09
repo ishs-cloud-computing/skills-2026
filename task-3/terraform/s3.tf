@@ -9,8 +9,7 @@ resource "aws_s3_bucket" "this" {
   }
 }
 
-# CloudFront(OAC)만 읽기 허용 — 퍼블릭 버킷 없이 /images/*를 제공하기 위한
-# 기능 요구사항이다(보안 강화가 아니라 OAC 동작 조건).
+# 퍼블릭 버킷 없이 /images/*를 제공하기 위한 OAC 동작 조건이다(보안 강화가 아니다).
 data "aws_iam_policy_document" "cdn_read" {
   statement {
     actions   = ["s3:GetObject"]

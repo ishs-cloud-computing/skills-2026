@@ -6,18 +6,13 @@ kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  # eksctl karpenter 블록이 만든 노드 IAM 역할 (이름 규칙 고정)
-  role: eksctl-KarpenterNodeRole-skills-eks
-  # terraform vpc.tf가 private subnet에 붙인 태그
+  role: KarpenterNodeRole-skills-eks
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: skills-eks
-  # eksctl이 metadata.tags를 보고 공유 노드 SG에 자동으로 붙인 태그.
-  # ALB→파드 개방은 LBC가 이 SG에 규칙을 직접 넣으므로 별도 SG가 필요 없다.
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: skills-eks
-  # MNG(cluster.yaml amiFamily)와 같은 계열로 맞춘다. alias를 쓰면 Karpenter가
-  # Bottlerocket용 blockDeviceMappings 기본값(OS 볼륨 + 데이터 볼륨)을 알아서 붙인다.
+  # eksctl/cluster.yaml 의 amiFamily 와 같은 계열이어야 노드 OS 가 갈리지 않는다.
   amiSelectorTerms:
     - alias: bottlerocket@latest

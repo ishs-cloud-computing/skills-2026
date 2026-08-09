@@ -3,6 +3,7 @@
 ## WAF 로그 분석 (demo/, 연습 세션 2026-08-08)
 
 `demo/*.gz`는 연습 빌드에 트래픽을 받은 뒤 CloudWatch Logs에서 export한 WAF 로그다.
+**원본 파일(`demo/`)과 쿼리 파일(`queries/`)은 저장소에서 삭제됐다** — 아래 수치와 쿼리 설명만 근거로 남긴다.
 **당일 경로·UA·IP는 100% 달라진다** — 아래 수치는 쿼리·룰의 판별 *패턴*을 검증한 근거이지, 당일 기준값이 아니다.
 
 - 원본: us-east-1 로그 그룹 `aws-waf-logs-demo` (콘솔 생성 Web ACL `CreatedByCloudFront-ac43a69e`, repo `terraform/waf.tf`의 `skills-waf`와 다름)
@@ -55,13 +56,13 @@ Count 매칭 중 오탐/실탐 판정:
 | rate-based rule | — | **보류** | 공격·채점 트래픽이 단일 IP 공유(99.4%) → IP 집계 차단 불가 | — | 당일 소스 IP 분리가 확인되면 재검토 |
 | CommonRuleSet | managed | 기존 방침 유지 (미포함, 당일 필요 시 ARCHITECTURE.md의 ua-only count 블록) | XSS_BODY 7,002 count — body 미로깅으로 판정 불가 | — | — |
 
-로깅 설정안 (설계만): us-east-1에 `aws-waf-logs-<prefix>` 로그 그룹(CLOUDFRONT scope 로깅은 us-east-1 필수) + retention 지정,
-`aws_wafv2_web_acl_logging_configuration`으로 `skills-waf`에 연결. 볼륨이 부담이면 logging filter로 ALLOW 드롭하고 BLOCK/COUNT만 보존
-— 단 그러면 쿼리 01(추이)·10(전수 피벗)이 반쪽이 되므로 기본은 전량 보존.
+로깅 설정 (**terraform 반영 완료**, `terraform/waf.tf`): us-east-1에 `aws-waf-logs-<waf 이름>` 로그 그룹(CLOUDFRONT scope 로깅은 us-east-1 필수, retention 1일) +
+`aws_wafv2_web_acl_logging_configuration`으로 연결. 볼륨이 부담이면 logging filter로 ALLOW 드롭하고 BLOCK/COUNT만 보존
+— 단 그러면 추이·전수 피벗 쿼리가 반쪽이 되므로 기본은 전량 보존.
 
-## Logs Insights 쿼리 세트 (queries/)
+## Logs Insights 쿼리 세트 (파일은 삭제됨 — 아래는 검증 기록)
 
-상시 01–04, 조사 퍼널 10→11/12/13→14→15. 각 파일 상단 주석에 언제/입력/다음 명시.
+상시 01–04, 조사 퍼널 10→11/12/13→14→15로 구성했었다. 각 파일 상단 주석에 언제/입력/다음 명시.
 조사 대상값(IP·UA·룰명)은 저장 쿼리 파라미터 `{{target_ip}}`·`{{target_ua}}`·`{{target_rule}}` — 콘솔에서 저장 쿼리로 등록하면
 `$이름(target_ip="x.x.x.x")` 형태로 실행, 직접 붙여넣을 땐 수동 치환.
 정상 경로 목록 `<NORMAL_PATHS>`만은 regex 리터럴이라 파라미터화 불가 → 본문 한 줄 수동 치환 (13·15 주석에 예시).
@@ -87,12 +88,65 @@ Count 매칭 중 오탐/실탐 판정:
 
 ## 보류 항목
 
-- `<NORMAL_PATHS>`의 저장 쿼리 파라미터화: `{{param}}`은 문자열 치환이라 regex 리터럴 자리에 쓸 수 있는지 문서로 확인 안 됨 → 수동 치환으로 운용
+- 쿼리 파일을 저장소에 다시 둘지: 현재는 삭제 상태이고 당일 콘솔에서 직접 작성한다. `<NORMAL_PATHS>`의 저장 쿼리 파라미터화는 `{{param}}`이 문자열 치환이라 regex 리터럴 자리에 쓸 수 있는지 문서로 확인 안 됨 → 수동 치환으로 운용
 - 쿼리 04·14는 `nonTerminatingMatchingRules.0`(첫 요소)만 본다. 한 요청이 여러 Count 룰에 걸리면 두 번째 이후는 집계 누락 — demo에선 다중 매칭이 드물어 오차 없음, 필요 시 `unnest` 검토
 - 앱 컨테이너 stdout/stderr → CloudWatch 수집 대안: `amazon-cloudwatch-observability` addon 제거(사용자 결정)로 앱 로그는 `kubectl logs`로만 확인. 로그 기반 운영 채점에 CloudWatch 앱 로그가 필요해지면 Fluent Bit 단독 배포 검토
-- demo ACL(콘솔 생성, 커스텀 룰 포함)과 repo `waf.tf`(`skills-waf`)의 차이는 위 룰 설계안으로만 수렴 — terraform 반영은 당일 판단
+- demo ACL(콘솔 생성, 커스텀 룰 포함)과 repo `waf.tf`의 차이는 위 룰 설계안으로만 수렴 — 룰 자체의 terraform 반영은 당일 판단(로깅은 반영 완료)
 
 ## 결정 로그
+
+### 2026-08-09 — 본 PC를 terraform·eksctl로 축소, Karpenter·LBC를 스크립트로 분리 (사용자 방침)
+
+- **문제**: 본 PC가 terraform·eksctl·helm·kubectl·aws를 전부 돌렸다. 대회 PC는 재시동 시 초기화되고
+  AI 보조도 없어, 설치·PATH를 맞춰야 할 도구가 늘수록 실패 지점이 는다. 동시에 `eksctl/cluster.yaml`이
+  Karpenter 통합과 LBC IAM까지 떠안아 eksctl 버전 변화에 클러스터 생성 자체가 노출돼 있었다.
+- **채택**: 본 PC = terraform + eksctl. helm·kubectl은 리전 CloudShell로 옮기고, Karpenter·LBC는
+  공식 문서를 그대로 옮긴 `scripts/karpenter.sh`·`scripts/lbc.sh`로 뺐다. eksctl에는 클러스터·서브넷·
+  MNG 1대·addon 2개·`product` SA만 남는다.
+- **파생 효과**: Karpenter가 빠지면서 `iam.withOIDC: true`가 필요 없어졌다. 저장소에서 IRSA가 완전히
+  사라지고 모든 SA가 Pod Identity로 통일된다. Karpenter 공식 getting-started가 Pod Identity 경로를
+  제공하므로 "공식 문서를 따른다"는 조건과 충돌하지 않는다.
+- **공식 명령에서 벗어난 세 곳** (스크립트 주석에 근거를 남겼다):
+  ① `replicas=1`/`replicaCount=1` — 차트 기본 2는 두 번째 replica가 Pending이 되어 Karpenter가
+  자기 자신을 위한 노드를 띄운다. 유휴 EC2 1대가 비용 ratio 12점의 전제다.
+  ② Karpenter 컨트롤러 requests 미지정 — 공식 helm 명령의 `cpu=1/memory=1Gi`는 t3.medium
+  allocatable(~1930m)의 절반이라 앱 3종이 들어갈 자리가 없다. 차트 기본값은 `{}`이므로 플래그만 뺀다.
+  ③ 노드 역할 인가를 `eksctl create iamidentitymapping`(aws-auth) 대신 `aws eks create-access-entry
+  --type EC2_LINUX` — CloudShell에 eksctl을 두지 않기 위해서다. `--type EC2`는 Auto Mode 전용이라
+  self-managed EC2 노드에는 `EC2_LINUX`가 맞다.
+- **기각**: Karpenter를 걷어내고 MNG만으로 스케일 — MNG는 자체 오토스케일러가 없어 부하 구간에
+  노드가 안 늘고, 그러면 비용 ratio가 하한 0.50을 밑돌아 12점이 통째로 0이 된다.
+- **기각**: 이전 방식대로 eksctl `wellKnownPolicies.awsLoadBalancerController: true` 유지 —
+  LBC IAM만 eksctl에 남기면 "eksctl 최소" 방침이 반쪽이 되고, 정책 JSON 두 단계를 아끼는 이득은
+  스크립트가 대신 하면 사라진다.
+
+### 2026-08-09 — 실행 환경 3분할과 파일 전달 (사용자 방침)
+
+- **채택**: 본 PC(terraform·eksctl) / VPC CloudShell(이미지 빌드·DB 초기화) / 리전 CloudShell(k8s 전부).
+  RDS가 private subnet이고 SG가 VPC CIDR만 허용해 DB 초기화는 VPC 환경에서만 된다. 반대로 k8s 채점이
+  일반 CloudShell에서 도므로 kubectl 작업은 리전 환경에 둬 채점 경로를 계속 검증한다.
+- **VPC CloudShell 제약(공식 문서)**: Actions Upload/Download 불가, 홈 비영구, IAM 사용자당 2개,
+  인터넷은 private subnet + NAT일 때만. 이 중 업로드 불가가 설계를 결정했다.
+- **채택**: 텍스트(매니페스트·스크립트·SQL·dump)는 전부 heredoc 복사·붙여넣기. 붙여넣을 수 없는
+  제공 바이너리 3개만 S3 콘솔 수동 업로드 → `aws s3 cp`, push 후 `aws s3 rm`으로 지운다
+  (버킷이 `/images/*`로 노출되므로).
+- **기각**: S3를 상설 릴레이로 쓰기 — 릴레이는 또 하나의 동기화 대상이 되어, 당일 파일을 고칠 때마다
+  어느 쪽이 최신인지 따져야 한다. `k8s/rendered/` 렌더링 단계도 같은 이유로 삭제하고 파일을 직접 편집한다.
+- **기각**: DB 초기화를 리전 CloudShell + mysql 파드 + `kubectl cp`로 — 클러스터가 떠야 시작할 수
+  있어 DB 초기화가 STEP 2 뒤로 밀린다. dump 적재가 임계경로라 앞당기는 쪽이 맞다.
+
+### 2026-08-09 — 이름을 prefix 하나에서 파생 (사용자 방침)
+
+- **문제**: `skills-vpc`·`skills-igw`는 접두사가 있는데 `s3-vpce`·`public-rtb`·`private-subnet-1`은
+  없었고, DB 계열은 SG가 `skills-db`, 서브넷 그룹이 `skills-db-subnet`, IAM 역할과 프록시가 둘 다
+  `skills-db-proxy`로 겹쳤다.
+- **채택**: `variable "prefix"`(default `skills`) → `locals.tf`가 모든 이름을 파생. `terraform.tfvars`
+  한 줄로 전부 바뀌고, 개별 이름만 과제지가 지정하면 해당 local 한 줄을 리터럴로 덮어쓴다.
+  DB 계열 토큰은 `db`로 통일(`-db-sg`·`-db-subnet-group`·`-db-credentials`·`-db-proxy`·`-db-proxy-role`).
+- **예외 둘**: DB identifier는 과제지 명시·정확일치 채점이라 `var.db_identifier`, S3 버킷은 전역 유일
+  제약이라 `var.bucket_name`.
+- **기각**: 파생식을 각 리소스 파일에 인라인으로 두기 — 이름을 고칠 지점이 여러 파일로 흩어진다.
+  `locals.tf` 한 곳에 모아 두면 당일 검색 없이 바로 고친다.
 
 ### 2026-08-09 — proxy secret이 빈 채로 생성되는 함정 (targeted apply의 그래프 리프 절단)
 
@@ -168,8 +222,16 @@ Count 매칭 중 오탐/실탐 판정:
   https://karpenter.sh/docs/concepts/nodeclasses/
 - eksctl Pod Identity Associations 스키마(`wellKnownPolicies` 지원):
   https://docs.aws.amazon.com/eks/latest/eksctl/pod-identity-associations.html
-- eksctl Karpenter — `withOIDC: true` 필수:
-  https://docs.aws.amazon.com/eks/latest/eksctl/eksctl-karpenter.html
+- Karpenter 설치 (CloudFormation + Pod Identity + Helm):
+  https://karpenter.sh/docs/getting-started/getting-started-with-karpenter/
+- Karpenter 를 기존 클러스터에 추가 (노드 역할 인가·discovery 태깅):
+  https://karpenter.sh/docs/getting-started/migrating-from-cas/
+- EKS access entry type (`EC2` 는 Auto Mode 전용, self-managed EC2 는 `EC2_LINUX`):
+  https://docs.aws.amazon.com/eks/latest/APIReference/API_CreateAccessEntry.html
+- WAF → CloudWatch Logs 로그 그룹 요건 (`aws-waf-logs-` prefix, 같은 리전, resource policy 자동 생성):
+  https://docs.aws.amazon.com/waf/latest/developerguide/logging-cw-logs.html
+- CloudShell VPC 환경 제약 (Actions 업로드 불가·비영구 홈·NAT 필요·최대 2개):
+  https://docs.aws.amazon.com/cloudshell/latest/userguide/using-cshell-in-vpc.html
 - LBC 인증 옵션(IRSA / Pod Identity):
   https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/
 - CloudFront VPC Origin은 private subnet 리소스 전용:

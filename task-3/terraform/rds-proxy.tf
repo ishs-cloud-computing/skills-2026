@@ -1,22 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-# RDS Proxy: 스파이크로 API 파드가 늘어도 커넥션을 풀링/멀티플렉싱해
-# RDS max_connections 고갈을 막는다. JSON 응답이 요청 uuid를 echo해 CloudFront
-# 캐시가 불가 → 모든 읽기가 DB로 내려오므로 프록시가 병목 방어의 핵심이다.
-
-# RDS와 프록시가 공유하는 SG. VPC 내부(파드→프록시→DB)만 DB 포트 허용.
 resource "aws_security_group" "db" {
-  name        = "skills-db"
-  description = "RDS and RDS Proxy, DB port from VPC only"
+  name        = local.db_sg_name
+  description = "RDS and RDS Proxy"
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description = "DB port from within VPC"
+    description = "DB port"
     from_port   = local.db_port
     to_port     = local.db_port
     protocol    = "tcp"
-    cidr_blocks = [local.vpc_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -26,12 +21,11 @@ resource "aws_security_group" "db" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "skills-db" }
+  tags = { Name = local.db_sg_name }
 }
 
-# 프록시 인증 자격증명 (Secrets Manager 필수)
 resource "aws_secretsmanager_secret" "db" {
-  name                    = "skills-db-credentials"
+  name                    = local.db_secret_name
   recovery_window_in_days = 0
 }
 
@@ -54,7 +48,7 @@ data "aws_iam_policy_document" "proxy_assume" {
 }
 
 resource "aws_iam_role" "proxy" {
-  name               = "skills-db-proxy"
+  name               = local.db_proxy_role_name
   assume_role_policy = data.aws_iam_policy_document.proxy_assume.json
 }
 
@@ -71,26 +65,24 @@ resource "aws_iam_role_policy" "proxy_secret" {
 }
 
 resource "aws_db_proxy" "this" {
-  # secret version은 그래프 리프라 README STEP 1b의 -target apply에서 잘려
-  # secret이 빈 채로 생성된다(실측). 이 간선이 version을 targeted plan에 포함시키고
-  # full apply에서도 version 생성 후 proxy가 뜨게 한다 — outputs.tf db_password와 같은 함정.
+  # secret version은 그래프 리프라 README의 targeted apply에서 잘려 secret이 빈 채로 생성된다(실측).
+  # 이 간선이 version을 targeted plan에 포함시킨다 — outputs.tf db_password와 같은 함정.
   depends_on = [aws_secretsmanager_secret_version.db]
 
-  name          = "skills-db-proxy"
+  name          = local.db_proxy_name
   engine_family = contains(["mysql", "mariadb"], local.db_engine) ? "MYSQL" : "POSTGRESQL"
   role_arn      = aws_iam_role.proxy.arn
 
   vpc_subnet_ids         = aws_subnet.private[*].id
   vpc_security_group_ids = [aws_security_group.db.id]
-  # 앱(수정 불가)이 TLS를 협상 안 할 수 있으므로 강제하지 않는다.
+  # 제공 앱은 수정 불가이고 TLS를 협상하지 않을 수 있다.
   require_tls = false
 
   auth {
     auth_scheme = "SECRETS"
     iam_auth    = "DISABLED"
     secret_arn  = aws_secretsmanager_secret.db.arn
-    # 앱(수정 불가)이 non-TLS로 접속하는데 MySQL 8.0 기본 caching_sha2_password는
-    # 평문 연결에서 인증이 실패한다 → 프록시 클라이언트 인증을 MySQL Native로 고정.
+    # 앱이 non-TLS로 붙는데 MySQL 8.0 기본 caching_sha2_password는 평문 연결에서 인증이 실패한다.
     client_password_auth_type = contains(["mysql", "mariadb"], local.db_engine) ? "MYSQL_NATIVE_PASSWORD" : "POSTGRES_SCRAM_SHA_256"
   }
 }

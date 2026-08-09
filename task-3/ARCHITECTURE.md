@@ -12,6 +12,35 @@ ALB·타깃그룹·리스너 규칙 = AWS Load Balancer Controller가 k8s/20-ing
 user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 ```
 
+## 실행 환경을 셋으로 나눈 이유
+
+| 위치 | 하는 일 | 왜 거기여야 하나 |
+|---|---|---|
+| 본 PC (PowerShell 7) | terraform, eksctl | tfstate 가 여기 있다. 그 둘 말고는 아무것도 두지 않는다 — 대회 PC 는 재시동 시 초기화되고 AI 보조도 없어, 설치해야 할 도구가 늘수록 실패 지점이 는다 |
+| VPC CloudShell | 이미지 빌드/푸시, DB 초기화 | RDS 가 private subnet 에 있고 SG 가 VPC CIDR 만 허용한다 — VPC 안에서만 붙는다 |
+| 리전 CloudShell (일반) | kubectl·helm 전부 | **k8s 채점이 도는 환경이 바로 여기다.** 여기서 `aws eks update-kubeconfig` 한 줄로 붙는지가 곧 채점 성립 조건이라, 운영도 같은 환경에서 해서 그 경로를 계속 검증한다 |
+
+VPC CloudShell 은 Actions 업로드가 막혀 있고 홈이 비영구다. 그래서 붙여넣을 수 없는 제공 바이너리만
+S3 콘솔 수동 업로드 → `aws s3 cp` 로 넘기고, 나머지(매니페스트·스크립트·SQL·dump)는 전부 붙여넣는다.
+S3 를 릴레이로 상설화하지 않는 이유는 릴레이가 또 하나의 동기화 대상이 되기 때문이다 —
+당일 파일을 고칠 때마다 어느 쪽이 최신인지 따져야 한다.
+
+## Karpenter·LBC 는 eksctl 이 아니라 스크립트가 깐다
+
+`eksctl/cluster.yaml` 에는 클러스터·서브넷·MNG 1대·addon 2개·`product` SA 만 남는다.
+Karpenter 통합(`karpenter:` 블록)과 LBC IAM 을 빼면 `iam.withOIDC` 도 필요 없어져,
+저장소에서 IRSA 가 완전히 사라지고 모든 SA 가 Pod Identity 로 통일된다.
+
+- `scripts/karpenter.sh` — 공식 getting-started 의 CloudFormation(노드 역할 `KarpenterNodeRole-<cluster>`,
+  컨트롤러 정책 6개, 인터럽션 SQS 큐, EventBridge 룰 5개) → 컨트롤러 역할 + Pod Identity 연결 →
+  노드 역할 access entry → 클러스터 SG 태깅 → Helm.
+- `scripts/lbc.sh` — 공식 `iam_policy.json` → 역할 + Pod Identity 연결 → Helm.
+
+공식 명령에서 의도적으로 벗어나는 곳은 셋이고 스크립트 주석에 근거가 있다:
+`replicas=1`/`replicaCount=1`(유휴 1대), Karpenter 컨트롤러 requests 미지정(공식 `cpu=1/1Gi` 는
+t3.medium 한 대의 절반이다), 노드 역할 인가를 `eksctl create iamidentitymapping` 대신 access entry 로
+(본 PC 밖에 eksctl 을 두지 않기 위해).
+
 ## 왜 Auto Mode / TargetGroupBinding 을 버렸나
 
 이전 구성은 EKS Auto Mode + Terraform 소유 ALB + `TargetGroupBinding`(`eks.amazonaws.com/v1`)이었다.
@@ -32,6 +61,18 @@ LBC가 직접 관리해 위 우회책 두 개가 통째로 사라진다. Karpent
 **대가**: ALB를 Ingress가 만들므로 CloudFront가 ALB를 조회하려면 Ingress가 먼저 떠야 한다.
 엔드포인트 제출이 T+20 → 약 T+35로 늦어진다(트래픽은 T+60부터라 여유는 있다).
 `terraform/cloudfront.tf`의 `data "aws_lb"`가 이 순서 제약의 실체다.
+
+## 이름은 prefix 하나에서 파생한다
+
+`terraform.tfvars` 의 `prefix` 한 줄이 VPC·서브넷·라우트 테이블·EKS·ALB·WAF·CloudFront·DB 계열
+이름을 전부 결정한다. 파생식은 `terraform/locals.tf` 한 파일에만 있으므로, 과제지가 특정 리소스
+이름만 지정하면 그 줄을 리터럴로 덮어쓰면 된다 — 고칠 지점이 항상 한 곳이다.
+
+DB 계열 토큰은 `db` 로 통일한다(`-db-sg`·`-db-subnet-group`·`-db-credentials`·`-db-proxy`·
+`-db-proxy-role`). `rds-` 와 `db-` 를 섞으면 당일 콘솔에서 리소스를 찾는 시간이 늘어난다.
+
+prefix 파생에서 빠지는 값은 둘뿐이다: DB identifier 는 과제지 명시·정확일치 채점 대상이라
+`var.db_identifier`, S3 버킷은 전역 유일 제약 때문에 `var.bucket_name`.
 
 ## apply를 1a/1b로 나누는 이유
 
@@ -59,16 +100,16 @@ terraform apply는 언제나 한 번에 하나만 도므로 state 락 충돌도 
 | 최소 리소스(비용 ratio) | 유휴 1대 (아래 전용 절) |
 | DB 최소 운영 | db.t3.micro Multi-AZ 인스턴스 1대 + RDS Proxy (`rds.tf`, `rds-proxy.tf`) |
 | SLO 0.2s / 1.0s | RDS Proxy·email 인덱스·CPU limit 제거·선제 HPA |
-| 모니터링·로깅 | metrics-server + WAF 로그 Logs Insights (`queries/`, NOTES.md) — 앱 stdout은 `kubectl logs` |
+| 모니터링·로깅 | metrics-server + WAF 로그 CloudWatch Logs Insights (`waf.tf`) — 앱 stdout은 `kubectl logs` |
 | product S3 업로드 | Pod Identity `product` SA + S3FullAccess (`eksctl/cluster.yaml`) |
 | Fargate/Lambda 금지 | MNG·Karpenter 노드 모두 EC2 |
 
-주의: product 앱이 버킷 이름을 어떤 env로 받는지 과제지에 없음 — **당일 바이너리 확인 필수**
-(README STEP 3c에서 확정한다). 현재 `k8s/11-product.yaml`에 `S3_BUCKET`/`AWS_REGION`으로 넣어두었다.
+주의: product 앱이 버킷 이름을 어떤 env로 받는지 과제지에 없음 — **당일 바이너리 확인 필수**.
+현재 `k8s/11-product.yaml`에 `S3_BUCKET`/`AWS_REGION`으로 넣어두었다.
 
 env는 공용 ConfigMap/Secret 대신 각 앱 매니페스트에 직접 둔다: 채점이 블랙박스라 이들을
 검사하지 않고, 계정도 1회성이라 Secret의 이점이 없으며, 앱마다 env가 달라 자기완결적 파일이
-당일 변경에 안전하기 때문. 값은 README STEP 6에서 치환.
+당일 변경에 안전하기 때문. 값은 README STEP 8에서 파일을 직접 편집해 채운다.
 
 ## 유휴 EC2 = 1대
 
@@ -78,15 +119,13 @@ env는 공용 ConfigMap/Secret 대신 각 앱 매니페스트에 직접 둔다: 
 | # | 요인 | 조치 | 위치 |
 |---|---|---|---|
 | 1 | 부트스트랩 노드그룹 | MNG `min=desired=max=1` | `eksctl/cluster.yaml` |
-| 2 | Karpenter 차트 기본 `replicas: 2` + 하드 podAntiAffinity(hostname) + zone spread `DoNotSchedule` | `kubectl -n karpenter scale deploy/karpenter --replicas=1` | README STEP 4 |
-| 3 | LBC 차트 기본 `replicaCount: 2` | `helm ... --set replicaCount=1` | README STEP 4 |
+| 2 | Karpenter 차트 기본 `replicas: 2` + 하드 podAntiAffinity(hostname) + zone spread `DoNotSchedule` | `helm ... --set replicas=1` | `scripts/karpenter.sh` |
+| 3 | LBC 차트 기본 `replicaCount: 2` | `helm ... --set replicaCount=1` | `scripts/lbc.sh` |
 | 4 | 앱 zone spread `DoNotSchedule` | `ScheduleAnyway` | `k8s/1X-*.yaml` |
 | 5 | Karpenter 노드가 유휴에도 남음 | `consolidationPolicy: WhenEmptyOrUnderutilized`, `consolidateAfter: 30s` | `k8s/01-nodepool.yaml` |
 
-**2번은 순서가 중요하다.** Karpenter replica 축소는 **NodePool을 apply하기 전에** 한다. NodePool이
-없으면 Karpenter는 아무것도 프로비저닝할 수 없어 Pending인 2번째 replica가 노드를 유발하지 않는다.
-순서를 뒤집으면 Karpenter가 자기 자신을 위해 노드를 띄우고, 축소 후 consolidation이 회수할 때까지
-EC2가 2대다.
+**2번은 설치 시점에 1로 박는다.** 기본값 2로 깔았다가 나중에 줄이면, 그 사이 Pending 이던 2번째
+replica 때문에 Karpenter 가 자기 자신을 위한 노드를 띄우고 consolidation 이 회수할 때까지 EC2 가 2대다.
 
 **PodDisruptionBudget을 삭제한 이유**: `minAvailable: 1` + HPA `minReplicas: 1` 조합은 단일 파드의
 축출을 영구히 막아 Karpenter consolidation을 정지시킨다 — 유휴에도 노드가 안 줄어든다.
@@ -99,15 +138,14 @@ EC2가 2대다.
 | kube-proxy + aws-node(+nodeagent) | ~150m | ~150Mi | 2 |
 | coredns ×2 | 200m | 140Mi | 2 |
 | metrics-server | 100m | 200Mi | 1 |
-| karpenter ×1 / LBC ×1 | 0 (두 차트 모두 기본 requests 없음) | — | 2 |
-| cloudwatch-agent + fluent-bit (DaemonSet) | ~300m | ~400Mi | 2 |
-| **시스템 소계** | **~750m** | **~0.9Gi** | **9** |
+| karpenter ×1 / LBC ×1 | 0 (두 차트 모두 기본 requests 없음 — 공식 helm 명령의 `cpu=1/1Gi` 를 넘기지 않는 이유) | — | 2 |
+| **시스템 소계** | **~450m** | **~0.5Gi** | **7** |
 | 앱 3종 × min 1 × 250m/512Mi | 750m | 1.5Gi | 3 |
-| **합계** | **~1500m / 1930m** | **~2.4Gi / 3.4Gi** | **12 / 17** |
+| **합계** | **~1200m / 1930m** | **~2.0Gi / 3.4Gi** | **10 / 17** |
 
-여유 ~430m. 실제로 안 들어가면(파드가 Pending) 조정 순서:
+여유 ~730m. 실제로 안 들어가면(파드가 Pending) 조정 순서:
 ① `kubectl -n kube-system scale deploy/coredns --replicas=1` → ② 앱 requests 200m로
-→ ③ MNG를 2대로. 확인 명령은 README STEP 10.
+→ ③ MNG를 2대로. 확인 명령은 README STEP 11.
 
 **감수하는 것**: 노드 1대는 단일 장애점이다. 그 노드가 죽으면 MNG가 재기동할 때까지(~2분) 전면
 중단된다. 채점이 비율(availability %)이고 비용 ratio 배점이 12점이라 1대를 택했다.
@@ -156,36 +194,35 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 
 ## Karpenter 주의
 
-- **버전 고정**: `eksctl/cluster.yaml`의 `karpenter.version`. k8s 1.36은 Karpenter **>= 1.13**이
-  필요하다(호환성 매트릭스). 대회 당일 최신 stable을 확인해 갱신한다.
-  eksctl은 **하한(0.28.0)만** 검사하고 상한은 없다 — 실패하면 그 버전의 Helm 차트가 없다는 뜻이다.
-  (검증 시점: eksctl 0.229.0 / Karpenter 1.14 / k8s 1.36)
-- **eksctl이 만들어 주는 것**: 컨트롤러 IRSA(`iam.withOIDC: true` 필수 — 저장소에 IRSA가 남는
-  유일한 지점이다. 나머지 SA는 전부 Pod Identity),
-  노드 IAM 역할 `eksctl-KarpenterNodeRole-<cluster>`, 인스턴스 프로파일, 노드롤 access entry,
-  Helm 설치. EC2NodeClass의 `role` 값이 이 이름 규칙을 따른다.
+- **버전 고정**: `scripts/karpenter.sh`의 `KARPENTER_VERSION`. k8s 1.36은 Karpenter **>= 1.13**이
+  필요하다(호환성 매트릭스). 이 값이 CloudFormation 템플릿 URL과 Helm 차트 버전 양쪽에 쓰인다.
+  (검증 시점: Karpenter 1.14.0 / k8s 1.36)
+- **스크립트가 만드는 것**: CloudFormation이 노드 IAM 역할 `KarpenterNodeRole-<cluster>`,
+  컨트롤러 관리형 정책 6개, 인터럽션 SQS 큐(이름 = 클러스터 이름), EventBridge 룰 5개.
+  스크립트가 이어서 컨트롤러 역할 + Pod Identity 연결, 노드 역할 access entry(`EC2_LINUX`),
+  클러스터 SG 태깅을 한다. **인스턴스 프로파일은 아무도 안 만든다** — Karpenter가 직접 만든다.
+  EC2NodeClass의 `role` 값이 위 노드 역할 이름과 정확히 같아야 한다.
 - **discovery 태그가 세 곳에서 일치해야 한다**: `terraform/vpc.tf`의 private subnet 태그,
-  `eksctl/cluster.yaml`의 `metadata.tags`, `k8s/00-nodeclass.yaml`의 selector.
-  eksctl은 `metadata.tags`에 이 태그가 있을 때만 공유 노드 SG를 자동 태깅한다 —
-  없으면 `securityGroupSelectorTerms`가 아무것도 못 찾아 노드가 안 뜬다.
+  `scripts/karpenter.sh`가 클러스터 SG에 붙이는 태그, `k8s/00-nodeclass.yaml`의 selector 2곳.
+  SG 태그가 없으면 `securityGroupSelectorTerms`가 아무것도 못 찾아 노드가 안 뜬다.
 - MNG 노드는 Karpenter가 관리하지 않는다(consolidation 대상 아님). 그래서 MNG를 1대로 고정한다.
 
 ## AWS Load Balancer Controller 주의
 
-- **EKS 관리형 addon이 아니다.** Helm 차트로만 설치된다 → 대회 PC에 `helm.exe`가 필요하다.
+- **EKS 관리형 addon이 아니다.** Helm 차트로만 설치된다 → `scripts/lbc.sh`가 CloudShell에
+  helm을 없으면 설치한다. 본 PC에는 `helm.exe`가 필요 없다.
   (검증 시점: 차트 `eks/aws-load-balancer-controller` 3.5.0 / appVersion v3.5.0)
 - Gateway API는 차트 기본값에서 **꺼져 있다**(`controllerConfig.featureGates`의 `ALBGatewayAPI`·
   `NLBGatewayAPI`가 미설정). Ingress만 쓰므로 Gateway API CRD를 따로 설치할 필요가 없다.
 - 차트는 `replicaCount > 1`일 때만 PDB를 만든다 → `replicaCount=1`이면 PDB도 안 생겨
   노드 드레인을 막지 않는다.
-- IAM은 eksctl `iam.podIdentityAssociations[].wellKnownPolicies.awsLoadBalancerController: true`로
-  만든다. 공식 문서의 `curl iam_policy.json` + `aws iam create-policy` 두 단계가 사라진다(Windows에서
-  유리). Helm은 `serviceAccount.create=false`로 그 SA를 재사용한다 — Pod Identity는 SA에 붙일
-  annotation이 없어 IRSA보다 오히려 단순하다. 인증 실패 시 증상은 Ingress ADDRESS가 안 차는 것이고,
+- IAM은 `scripts/lbc.sh`가 공식 `iam_policy.json`으로 만들고 Pod Identity로 연결한다.
+  SA는 Helm 차트가 만든다(`serviceAccount.create` 기본값) — Pod Identity는 SA에 붙일 annotation이
+  없어 IRSA보다 단순하다. 인증 실패 시 증상은 Ingress ADDRESS가 안 차는 것이고,
   `kubectl -n kube-system logs deploy/aws-load-balancer-controller`의 AccessDenied로 구분한다.
-- **서브넷 auto-discovery**: internet-facing ALB는 **퍼블릭 서브넷의 `kubernetes.io/role/elb` 태그**로
-  찾는다(`terraform/vpc.tf`). 이 태그가 없으면 Ingress의 ADDRESS가 영원히 비어 있다 —
-  ALB가 안 뜰 때 제일 먼저 확인할 곳.
+- **서브넷 auto-discovery**: internet-facing ALB는 퍼블릭 서브넷의 `kubernetes.io/role/elb`와
+  `kubernetes.io/cluster/<cluster>` 태그로 찾는다(`terraform/vpc.tf`). Ingress에 `subnets`·`vpcId`를
+  쓰지 않는 이유이며, 태그가 없으면 ADDRESS가 영원히 비어 있다 — ALB가 안 뜰 때 제일 먼저 확인할 곳.
 - `load-balancer-name` 어노테이션 값은 `terraform/locals.tf`의 `alb_name`과 **반드시 같아야 한다**.
   `cloudfront.tf`의 `data "aws_lb"`가 이 이름으로 조회한다.
 - `defaultBackend`의 서비스 포트 이름이 `use-annotation`이면 그 이름의 Service는 실재하지 않아도
@@ -198,17 +235,19 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 
 | 값 | A | B | C |
 |---|---|---|---|
+| prefix | `terraform/terraform.tfvars` `prefix` | `terraform/locals.tf` 파생식 전부 | 아래 세 행이 terraform 밖의 짝 |
 | ALB 이름 | `terraform/locals.tf` `alb_name` | `k8s/20-ingress.yaml` `load-balancer-name` | — |
-| 클러스터 이름 | `terraform/locals.tf` `cluster_name` | `eksctl/cluster.yaml` `metadata.name` | `k8s/00-nodeclass.yaml` `role`, helm `--set clusterName` |
-| discovery 태그 | `terraform/vpc.tf` private subnet | `eksctl/cluster.yaml` `metadata.tags` | `k8s/00-nodeclass.yaml` selector 2곳 |
+| 클러스터 이름 | `terraform/locals.tf` `cluster_name` | `eksctl/cluster.yaml` `metadata.name` | `k8s/00-nodeclass.yaml` `role`, `scripts/*.sh` `CLUSTER_NAME` |
+| discovery 태그 | `terraform/vpc.tf` private subnet | `scripts/karpenter.sh` 클러스터 SG 태깅 | `k8s/00-nodeclass.yaml` selector 2곳 |
+| Karpenter 버전 | `scripts/karpenter.sh` `KARPENTER_VERSION` | CloudFormation 템플릿 URL | Helm 차트 `--version` |
 | 앱 목록 | `terraform/variables.tf` `apps` (ECR) | `k8s/1X-<app>.yaml` (Deploy/Svc/HPA) | `k8s/20-ingress.yaml` path 블록 |
 | Service 이름 | `k8s/1X-<app>.yaml` Service | `k8s/20-ingress.yaml` backend | — |
 | 이미지 태그 | `terraform/variables.tf` `image_tag` | README STEP 3의 `TAG` | — |
 
 ## RDS
 
-- gp3 20GB(baseline 3000 IOPS/125MB·s)로 충분: user 50만행 ≈ 수십 MB → InnoDB 버퍼풀(~375MB)에
-  전부 상주, 디스크 IOPS는 쓰기 flush뿐.
+- gp3 200GiB(`locals.tf` `db_allocated_storage`): user 50만행 ≈ 수십 MB라 용량이 아니라 baseline
+  3000 IOPS/125MB·s를 사는 셈이다. 데이터는 InnoDB 버퍼풀(~375MB)에 전부 상주하고 디스크는 쓰기 flush뿐.
 - db.t3.micro(1GB)의 병목은 **max_connections(~85)와 CPU**. 커넥션은 RDS Proxy 멀티플렉싱으로
   해결(파드가 늘어도 백엔드 커넥션 고정). 파라미터 그룹 튜닝은 1GB 메모리에서 얻을 게 없다.
 - **`ALTER TABLE user ADD INDEX idx_email (email)`은 필수** — `GET /v1/user?email=`이 유일한 조회
@@ -218,26 +257,29 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 - **프록시 클라이언트 인증 = MySQL Native** (`client_password_auth_type = MYSQL_NATIVE_PASSWORD`,
   `rds-proxy.tf`). 제공 앱은 수정 불가이고 TLS를 협상하지 않아 `require_tls=false`인데, MySQL 8.0
   기본 `caching_sha2_password`는 평문 연결에서 password 교환이 실패한다 → 앱→프록시 인증을 native로
-  고정한다. 이에 맞춰 백엔드 `admin` 유저도 `mysql_native_password`여야 한다(README STEP 8-2).
+  고정한다. 이에 맞춰 백엔드 `admin` 유저도 `mysql_native_password`여야 한다(README STEP 4-2).
   엔진이 바뀌면 `locals.tf`의 `db_engine` 삼항으로 자동 파생(postgres → `POSTGRES_SCRAM_SHA_256`).
 - **DB 초기화 순서 = 스키마 → ALTER USER → dump → 인덱스.** 앞의 둘은 즉시 끝나면서 앱·프록시 연결의
-  하드 전제조건이고, dump 적재만 느리다. 스키마·인증이 끝난 시점에 앱 배포(README STEP 6)를 병행하면
+  하드 전제조건이고, dump 적재만 느리다. 스키마·인증이 끝난 시점에 앱 배포(README STEP 8)를 병행하면
   노드 생성·파드 기동·타깃 등록이 dump 적재와 겹친다. dump→인덱스 순서는 유지(dump가 DROP/CREATE
   TABLE을 포함할 수 있고, InnoDB 벌크 적재 후 세컨더리 인덱스 생성이 더 빠르다).
 
 ## 이미지 빌드는 CloudShell에서
 
-- 제공 바이너리 이미지 빌드/푸시(README STEP 3)는 **ap-northeast-2 CloudShell**에서 수행한다.
-  Docker 내장 + 인터넷 + ECR 접근을 모두 제공해 in-region으로 push가 끝난다. CloudShell은 x86_64라
-  제공 바이너리(x86 AL2023 빌드)와 아키텍처가 일치한다. buildkit provenance 매니페스트를 피하려
-  `docker buildx --push` 대신 classic `docker build`+`docker push`를 쓴다.
+- 제공 바이너리 이미지 빌드/푸시(README STEP 3)는 **VPC CloudShell**에서 수행한다. Docker 내장 +
+  NAT 경유 인터넷 + ECR 접근을 모두 제공해 in-region으로 push가 끝나고, CloudShell은 x86_64라
+  제공 바이너리(x86 AL2023 빌드)와 아키텍처가 일치한다. 대회 PC에는 Docker가 없다.
+- **빌드 절차는 런북이 자동화하지 않는다.** 당일 바이너리 개수·이름·필요한 env가 바뀌므로,
+  `app/Dockerfile`을 참고해 직접 빌드·푸시한다. 태그만 `terraform`의 `image_tag`와 맞추면 된다.
+  buildkit provenance 매니페스트를 피하려면 `docker buildx --push` 대신 classic
+  `docker build` + `docker push`를 쓴다.
 - **베이스는 `distroless/base`(glibc 포함), `static` 아님.** 과제지가 바이너리를 AL2023 기본
   빌드(cgo on)라고 명시하므로 Gin의 `net`·`os/user`가 cgo resolver를 끌어와 glibc에 동적 링크될
   가능성이 높다. 불일치 시 `exec /app/server: no such file or directory`로 즉사하며, 이 메시지는
   없는 것이 바이너리가 아니라 ELF 인터프리터라는 사실을 감춘다. `base`는 ~18MB로 이 분기를 산다.
-- **push 전에 앱을 검증한다(README STEP 3a–3c).** STEP 9의 CloudFront 스모크는 CF·WAF·ALB·파드
-  4개 레이어 너머라 앱 결함과 인프라 결함이 구분되지 않는다. CloudShell에서 `file` + `docker run` +
-  로컬 mysql:8.0으로 부팅·포트·healthcheck·env 키·PUT 멀티파트 필드명·S3 오브젝트 키를 먼저 확정한다.
+- **push 전에 앱을 확인한다.** STEP 10의 CloudFront 스모크는 CF·WAF·ALB·파드 4개 레이어 너머라
+  앱 결함과 인프라 결함이 구분되지 않는다. `file`로 링크 방식을, `docker run` + `curl
+  localhost:8080/healthcheck`로 부팅·포트·env 키를 먼저 확정한다.
 
 ## 보안 범위
 
@@ -245,9 +287,19 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 실제로 걷어낸 것:
 
 - ALB SG를 CloudFront 관리형 prefix list로 잠그던 구성 → 삭제. LBC가 만드는 기본 SG(0.0.0.0/0:80)를
-  쓴다. 필요하면 `k8s/20-ingress.yaml`의 `security-group-prefix-lists` 한 줄만 주석 해제한다
-  (값은 `terraform output cloudfront_prefix_list_id`).
+  쓴다. 필요하면 `k8s/20-ingress.yaml`에 `alb.ingress.kubernetes.io/security-group-prefix-lists`
+  한 줄을 추가한다(값은 `terraform output cloudfront_prefix_list_id`).
 - `aws_s3_bucket_public_access_block` → 삭제. 2023-04 이후 신규 버킷 기본값과 동일하다.
+
+**의도적으로 넓게 둔 것**:
+- **`skills-cloudshell-sg` 인바운드 0.0.0.0/0** (`terraform/cloudshell.tf`) — VPC CloudShell 환경을
+  만들 때 고를 SG다. private subnet에 붙고 퍼블릭 IP가 없어 인터넷에서 도달할 경로가 없으며,
+  CloudShell은 애초에 아웃바운드만 쓴다. 당일 SG를 잘못 골라 RDS·ECR에 못 붙는 사고가
+  블랙박스 채점에서 훨씬 비싸므로 넓게 열어 둔다.
+- **`skills-db-sg` 인바운드 3306 0.0.0.0/0** (`terraform/rds-proxy.tf`) — 같은 이유다. RDS와 프록시
+  모두 private subnet 전용이고 퍼블릭 접근이 꺼져 있어 도달 경로가 없다. SG 하나를 RDS와 프록시가
+  공유하므로(`rds.tf`·`rds-proxy.tf` 둘 다 `aws_security_group.db`) 한쪽만 열려 프록시가 백엔드에
+  못 붙는 어긋남도 생기지 않는다.
 
 **남긴 것과 이유**:
 - **WAF** — "비정상 요청 403"이 채점 항목(1-5~1-8) 자체다. 보안이 아니라 기능이다.
@@ -264,6 +316,12 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 두 관리형 룰만 block으로 둔다. CommonRuleSet은 NoUserAgent·SizeRestrictions 등이 정상 채점
 트래픽을 오차단할 수 있어(availability 12점 손실이 Exception Handling 2점 이득보다 크다) 기본
 구성에서 뺐다.
+
+**로그**는 us-east-1의 `aws-waf-logs-<waf 이름>` 로그 그룹으로 전량 보낸다(`waf.tf`,
+`terraform output waf_log_group`). CLOUDFRONT scope Web ACL은 로그 그룹도 us-east-1이어야 하고
+이름이 `aws-waf-logs-`로 시작해야 한다. 로그 전달용 CloudWatch resource policy는 WAF가
+`PutLoggingConfiguration` 시점에 스스로 만든다. retention은 대회 길이에 맞춰 1일이다.
+ALLOW까지 전량 보존하는 이유는 차단/통과 비율과 정상 경로 오차단을 같은 쿼리로 봐야 하기 때문이다.
 
 **당일 User-Agent 계열 비정상 요청이 관측되면** 아래를 `waf.tf`에 추가한다 — CommonRuleSet을 넣되
 `NoUserAgent_HEADER`만 block으로 두고 오차단 위험군은 전부 count로 내린다.
@@ -322,9 +380,9 @@ rule {
    `db_username = "postgres"` (+ 과제지의 identifier)
 2. `terraform -chdir=terraform apply` — DB·프록시만 재생성(engine_family·인증 타입·SG 포트 자동 파생),
    CloudFront·EKS는 no-op
-3. `k8s/10-user.yaml`·`k8s/11-product.yaml`의 env 키 이름을 새 과제지 표에 맞게 수정 → 재적용(STEP 6)
+3. `k8s/10-user.yaml`·`k8s/11-product.yaml`의 env 키 이름을 새 과제지 표에 맞게 수정 → 재적용(STEP 8)
 4. `kubectl rollout restart deploy user product`
-5. DB 초기화는 CloudShell에서 새 엔진 클라이언트로 (`sudo dnf install -y postgresql16` →
+5. DB 초기화는 VPC CloudShell에서 새 엔진 클라이언트로 (`sudo dnf install -y postgresql16` →
    `psql -h <endpoint> -U postgres`)
 
 ### ② API 추가/삭제 — 약 10분
@@ -332,7 +390,7 @@ rule {
 1. `terraform/variables.tf`의 `apps` 목록에 항목 추가/삭제 → `terraform apply` (~1분: ECR만)
 2. `k8s/1X-<app>.yaml` 복사 → 이름·라벨·이미지 placeholder 수정 (DB 안 쓰면 env 블록 제거)
 3. `k8s/20-ingress.yaml`에 path 블록 하나 추가 → apply (LBC가 리스너 규칙·타깃그룹을 자동 생성)
-4. 바이너리 빌드/푸시(STEP 3) → 치환+apply(STEP 6)
+4. 바이너리 빌드/푸시(STEP 3) → 값 채워 apply(STEP 8)
 
 ### ③ 인스턴스 타입 교체 — 약 5분 + 노드 롤링
 

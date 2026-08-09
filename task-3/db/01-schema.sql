@@ -1,4 +1,4 @@
--- 과제지 SQL 그대로 (수정 금지). 직결 엔드포인트로 적재 — db/README.md 참고.
+-- 과제지 SQL 그대로. 프록시가 아니라 RDS 직결 엔드포인트로 적재한다(README STEP 4).
 CREATE TABLE user (
     id VARCHAR(255) NOT NULL,
     username VARCHAR(255) NOT NULL,

@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-# stress API: CPU 바운드 (DB 미사용) — 노드 스케일아웃을 견인하는 워크로드.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,15 +27,15 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: stress
-          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 6)
+          image: <IMAGE>
           ports:
             - containerPort: 8080
           resources:
             requests:
               cpu: 250m
               memory: 512Mi
+            # CPU limit 을 두지 않는다 — burst 허용이 1.0s SLO 에 유리하다.
             limits:
-              # CPU limit 없음: burst 허용이 1.0s SLO에 유리
               memory: 512Mi
           readinessProbe:
             httpGet:

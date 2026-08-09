@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-# user API: DB-IO 바운드. 당일 API가 바뀌면 이 파일을 복사해 이름·이미지·env만 수정하고
-# k8s/20-ingress.yaml에 경로 블록을 하나 추가한다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,8 +18,6 @@ spec:
         app: user
     spec:
       topologySpreadConstraints:
-        # ScheduleAnyway — 존 분산 때문에 파드가 Pending으로 막히면 availability를
-        # 직접 깎는다. 분산은 "가능하면"이고 배치 성공이 우선이다.
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: ScheduleAnyway
@@ -31,15 +27,13 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: user
-          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 6)
+          image: <IMAGE>
           ports:
             - containerPort: 8080
-          # 채점은 블랙박스(응답코드/시간/비용)라 Secret/ConfigMap을 검사하지 않는다.
-          # 계정도 대회용 1회성 → 앱별 env를 매니페스트에 직접 둬 자기완결적으로 유지.
-          # <>는 README STEP 6에서 치환. 키 이름은 과제지 환경변수 표와 정확히 일치.
+          # 키 이름은 과제지 환경변수 표와 정확히 일치해야 한다.
           env:
             - name: MYSQL_HOST
-              value: "<PROXY_ENDPOINT>" # RDS 직결이 아닌 프록시 (커넥션 풀링)
+              value: "<PROXY_ENDPOINT>"
             - name: MYSQL_PORT
               value: "<DB_PORT>"
             - name: MYSQL_DBNAME
@@ -52,9 +46,8 @@ spec:
             requests:
               cpu: 250m
               memory: 512Mi
+            # CPU limit 을 두지 않는다 — CFS 스로틀링이 p99 를 깎아 0.2s SLO 를 해친다.
             limits:
-              # CPU limit 없음: 스로틀링이 p99를 깎아 0.2s SLO를 해친다
-              # memory request=limit: OOM 없이 예측 가능한 패킹
               memory: 512Mi
           readinessProbe:
             httpGet:
@@ -69,7 +62,6 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 15
           lifecycle:
-            # ALB deregistration_delay(15s, Ingress 어노테이션) 동안 in-flight 처리 후 종료
             preStop:
               exec:
                 command: ["sleep", "15"]
@@ -77,7 +69,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: user # Ingress backend가 이 이름을 참조한다
+  name: user
 spec:
   type: ClusterIP
   selector:
@@ -105,7 +97,6 @@ spec:
           type: Utilization
           averageUtilization: 60
   behavior:
-    # T+60분에 트래픽이 스텝으로 들어오므로 스케일아웃은 즉시·공격적으로
     scaleUp:
       stabilizationWindowSeconds: 0
       policies:
@@ -116,7 +107,6 @@ spec:
           value: 4
           periodSeconds: 15
       selectPolicy: Max
-    # 스파이크 종료 후 빠른 회수로 비용 ratio를 낮춘다
     scaleDown:
       stabilizationWindowSeconds: 40
       policies:

@@ -1,20 +1,27 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-# S3 버킷 이름은 전역 유일이라 안전한 default가 없다 → default 없이 두어
-# terraform.tfvars 누락 시 apply가 즉시 실패하게 한다.
+variable "prefix" {
+  description = "모든 리소스 이름의 대표 접두사. locals.tf의 이름이 전부 여기서 파생된다."
+  type        = string
+  default     = "skills"
+}
+
 variable "bucket_name" {
-  description = "product 이미지 S3 버킷 이름"
+  description = "product 이미지 S3 버킷 이름. 전역 유일이라 prefix 파생에서 빠지며, 안전한 default가 없어 tfvars 누락 시 apply가 즉시 실패한다."
   type        = string
 }
 
-# ── 앱 목록: ECR 레포가 이 목록에서 생성된다.
-# 레포명 = k8s 매니페스트 이미지명 (정확 일치 필수).
-# ALB 경로·포트·헬스체크는 k8s/20-ingress.yaml로 옮겼다 —
-# 당일 API 추가/삭제 = 여기 한 줄 + k8s/1X-<app>.yaml + Ingress 경로 한 블록.
+variable "db_identifier" {
+  description = "RDS DB identifier. 과제지 명시값을 정확일치로 채점하므로 prefix 파생에서 빠진다."
+  type        = string
+  default     = "apdev-rds-instance"
+}
+
 variable "apps" {
-  type    = list(string)
-  default = ["user", "product", "stress"]
+  description = "앱 목록. ECR 레포가 이 목록에서 생성되고 레포명이 k8s 매니페스트의 이미지명과 정확히 일치해야 한다."
+  type        = list(string)
+  default     = ["user", "product", "stress"]
 }
 
 variable "image_tag" {

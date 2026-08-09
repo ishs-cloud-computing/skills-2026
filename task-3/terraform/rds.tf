@@ -1,23 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-# 엔진 중립 RDS. 당일 다른 엔진(예: PostgreSQL)이 나오면 locals.tf의
-# db_engine/db_engine_version/db_port/db_username만 바꿔 apply — DB 스택만 재생성된다.
 resource "aws_db_subnet_group" "this" {
-  name       = "skills-db-subnet"
+  name       = local.db_subnet_group_name
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "skills-db-subnet"
+    Name = local.db_subnet_group_name
   }
 }
 
 resource "aws_db_instance" "this" {
-  identifier     = local.db_identifier
+  identifier     = var.db_identifier
   engine         = local.db_engine
   engine_version = local.db_engine_version
   instance_class = local.db_instance_class
-  multi_az       = local.db_multi_az # primary + standby, 채점상 인스턴스 1대
+  multi_az       = local.db_multi_az
 
   storage_type      = "gp3"
   allocated_storage = local.db_allocated_storage
