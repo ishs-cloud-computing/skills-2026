@@ -17,7 +17,7 @@ user/product → RDS Proxy → RDS(Multi-AZ db.t3.micro)
 | 위치 | 하는 일 | 왜 거기여야 하나 |
 |---|---|---|
 | 본 PC (PowerShell 7) | terraform, eksctl | tfstate 가 여기 있다. 그 둘 말고는 아무것도 두지 않는다 — 대회 PC 는 재시동 시 초기화되고 AI 보조도 없어, 설치해야 할 도구가 늘수록 실패 지점이 는다 |
-| VPC CloudShell | 이미지 빌드/푸시, DB 초기화 | RDS 가 private subnet 에 있고 SG 가 VPC CIDR 만 허용한다 — VPC 안에서만 붙는다 |
+| VPC CloudShell | 이미지 빌드/푸시, DB 초기화 | RDS 가 private subnet 에 있고 퍼블릭 접근이 꺼져 있다 — VPC 안에서만 붙는다 |
 | 리전 CloudShell (일반) | kubectl·helm 전부 | **k8s 채점이 도는 환경이 바로 여기다.** 여기서 `aws eks update-kubeconfig` 한 줄로 붙는지가 곧 채점 성립 조건이라, 운영도 같은 환경에서 해서 그 경로를 계속 검증한다 |
 
 VPC CloudShell 은 Actions 업로드가 막혀 있고 홈이 비영구다. 그래서 붙여넣을 수 없는 제공 바이너리만
@@ -257,12 +257,14 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 - **프록시 클라이언트 인증 = MySQL Native** (`client_password_auth_type = MYSQL_NATIVE_PASSWORD`,
   `rds-proxy.tf`). 제공 앱은 수정 불가이고 TLS를 협상하지 않아 `require_tls=false`인데, MySQL 8.0
   기본 `caching_sha2_password`는 평문 연결에서 password 교환이 실패한다 → 앱→프록시 인증을 native로
-  고정한다. 이에 맞춰 백엔드 `admin` 유저도 `mysql_native_password`여야 한다(README STEP 4-2).
-  엔진이 바뀌면 `locals.tf`의 `db_engine` 삼항으로 자동 파생(postgres → `POSTGRES_SCRAM_SHA_256`).
-- **DB 초기화 순서 = 스키마 → ALTER USER → dump → 인덱스.** 앞의 둘은 즉시 끝나면서 앱·프록시 연결의
-  하드 전제조건이고, dump 적재만 느리다. 스키마·인증이 끝난 시점에 앱 배포(README STEP 8)를 병행하면
-  노드 생성·파드 기동·타깃 등록이 dump 적재와 겹친다. dump→인덱스 순서는 유지(dump가 DROP/CREATE
-  TABLE을 포함할 수 있고, InnoDB 벌크 적재 후 세컨더리 인덱스 생성이 더 빠르다).
+  고정한다. **백엔드(프록시→DB) 는 손댈 필요가 없다** — `client_password_auth_type` 은 클라이언트 레그
+  전용이고, 프록시→DB 는 TLS 라 MySQL 8.0 기본 `caching_sha2_password` 로 붙는다. 오히려 AWS 문서가
+  "caching_sha2_password 는 일부 go-sql 드라이버 버전과 호환 문제가 있다"고 적어 둬, 앱 쪽만 native 로
+  고정하는 지금이 맞다. 엔진이 바뀌면 `locals.tf`의 `db_engine` 삼항으로 자동 파생(postgres → `POSTGRES_SCRAM_SHA_256`).
+- **DB 초기화 순서 = 스키마 → dump → 인덱스.** 스키마는 즉시 끝나면서 앱 연결의 하드 전제조건이고,
+  dump 적재만 느리다. 스키마가 끝난 시점에 앱 배포(README STEP 8)를 병행하면 노드 생성·파드 기동·
+  타깃 등록이 dump 적재와 겹친다. dump→인덱스 순서는 유지(dump가 DROP/CREATE TABLE을 포함할 수 있고,
+  InnoDB 벌크 적재 후 세컨더리 인덱스 생성이 더 빠르다).
 
 ## 이미지 빌드는 CloudShell에서
 
