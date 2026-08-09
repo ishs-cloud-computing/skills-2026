@@ -74,6 +74,10 @@ terraform -chdir=terraform output -json private_subnet_ids   # 2개 id가 에러
 ```powershell
 # ── Windows PowerShell (첫 번째 창) ──
 terraform -chdir=terraform apply -auto-approve "-target=aws_db_proxy_target.this"
+
+aws secretsmanager describe-secret --secret-id skills-db-credentials --query VersionIdsToStages
+# {"<uuid>": ["AWSCURRENT"]} 이 나와야 한다. {} 또는 null이면 secret이 비어 있어
+# 프록시가 DB에 인증하지 못한다 → terraform apply를 target 없이 다시 실행
 ```
 
 ## STEP 2 — eksctl 클러스터 생성 (새 PowerShell 창, ~20분)
@@ -85,11 +89,14 @@ STEP 1b와 병렬. 이 창은 생성이 끝날 때까지 점유되므로 STEP 3�
 cd task-3
 $prv = terraform -chdir=terraform output -json private_subnet_ids | ConvertFrom-Json
 $pub = terraform -chdir=terraform output -json public_subnet_ids  | ConvertFrom-Json
+$prv; $pub   # subnet- id가 총 4개 나와야 한다. 비면 STEP 1a 미완료 — 진행 금지
 
 $yaml = Get-Content eksctl/cluster.yaml -Raw
 $yaml = $yaml.Replace('subnet-REPLACE_PRIVATE_A', $prv[0]).Replace('subnet-REPLACE_PRIVATE_B', $prv[1])
 $yaml = $yaml.Replace('subnet-REPLACE_PUBLIC_A',  $pub[0]).Replace('subnet-REPLACE_PUBLIC_B',  $pub[1])
-$yaml | Set-Content -Encoding ascii eksctl/cluster.rendered.yaml
+$yaml | Set-Content eksctl/cluster.rendered.yaml
+
+Select-String 'REPLACE' eksctl/cluster.rendered.yaml   # 출력이 없어야 한다(치환 누락 검사)
 
 eksctl create cluster -f eksctl/cluster.rendered.yaml   # kubeconfig 자동 병합
 ```
@@ -186,7 +193,8 @@ kubectl get ec2nodeclass,nodepool   # Ready 확인
 
 ## STEP 6 — 앱 + Ingress 배포 (PowerShell)
 
-env는 각 앱 매니페스트에 직접 들어있다. 한 파일씩 치환 후 apply하고, 마지막에 Ingress를 올린다 — 이 Ingress가 LBC에게 ALB를 만들게 하는 방아쇠다.
+env는 각 앱 매니페스트에 직접 들어있다. `k8s/rendered/`에 전부 치환해 두고 폴더를 통째로 apply한다 —
+알파벳 순 적용이라 Ingress(20)가 마지막이고, 이 Ingress가 LBC에게 ALB를 만들게 하는 방아쇠다.
 
 ```powershell
 # ── Windows PowerShell ──
@@ -196,13 +204,21 @@ $dbport = terraform -chdir=terraform output -raw db_port
 $dbpw   = terraform -chdir=terraform output -raw db_password
 $bucket = terraform -chdir=terraform output -raw bucket_name
 
+# 치환 전 검증 — 출력이 없어야 한다. EMPTY가 뜨면 해당 terraform output부터 해결
+foreach ($kv in @{IMG_USER=$img.user; IMG_PRODUCT=$img.product; IMG_STRESS=$img.stress;
+                  PROXY=$proxy; DBPORT=$dbport; DBPW=$dbpw; BUCKET=$bucket}.GetEnumerator()) {
+  if (-not $kv.Value) { Write-Warning "EMPTY: $($kv.Name)" }
+}
+
+New-Item -ItemType Directory -Force k8s/rendered | Out-Null
+
 # user (DB만)
 $y = Get-Content k8s/10-user.yaml -Raw
 $y = $y.Replace('<IMAGE>', $img.user)
 $y = $y.Replace('<PROXY_ENDPOINT>', $proxy)
 $y = $y.Replace('<DB_PORT>', $dbport)
 $y = $y.Replace('<DB_PASSWORD>', $dbpw)
-$y | kubectl apply -f -
+$y | Set-Content k8s/rendered/10-user.yaml
 
 # product (DB + S3)
 $y = Get-Content k8s/11-product.yaml -Raw
@@ -211,15 +227,20 @@ $y = $y.Replace('<PROXY_ENDPOINT>', $proxy)
 $y = $y.Replace('<DB_PORT>', $dbport)
 $y = $y.Replace('<DB_PASSWORD>', $dbpw)
 $y = $y.Replace('<BUCKET_NAME>', $bucket)
-$y | kubectl apply -f -
+$y | Set-Content k8s/rendered/11-product.yaml
 
 # stress (env 없음 — 이미지만)
 $y = Get-Content k8s/12-stress.yaml -Raw
 $y = $y.Replace('<IMAGE>', $img.stress)
-$y | kubectl apply -f -
+$y | Set-Content k8s/rendered/12-stress.yaml
 
-# Ingress (치환할 값 없음)
-kubectl apply -f k8s/20-ingress.yaml
+# Ingress (치환할 값 없음 — 일괄 apply에 포함)
+Copy-Item k8s/20-ingress.yaml k8s/rendered/
+
+# 치환 후 검증 — 출력이 없어야 한다(placeholder 잔존 검사, 주석 속 <...>는 제외)
+Select-String '^[^#]*<[A-Z_]+>' k8s/rendered/*.yaml
+
+kubectl apply -f k8s/rendered/
 
 kubectl get pods -w                       # Running 확인
 kubectl get ingress skills -w             # ADDRESS에 ALB DNS가 뜰 때까지 (~3분)
@@ -277,7 +298,8 @@ RDS 콘솔 → DB `apdev-rds-instance` → **Connectivity & security** → **Con
 
 ## STEP 9 — 검증 (PowerShell)
 
-PowerShell의 `curl`은 Invoke-WebRequest 별칭이므로 반드시 **`curl.exe`**를 쓴다.
+전제: PS 7.3 이상(`$PSVersionTable.PSVersion`) — 미만이면 `-d`의 JSON 따옴표가 벗겨져 400이 난다.
+`curl.exe`로 명시한다(PS7은 무관하지만, 5.1 창에 잘못 붙여넣어도 Invoke-WebRequest로 오작동하지 않게).
 `/images/...` 경로의 오브젝트 키는 STEP 3c에서 확인한 실제 키로 바꾼다.
 
 ```powershell
@@ -299,7 +321,7 @@ curl.exe -s -o NUL -w "%{http_code} POST product`n" -X POST "$CF/v1/product?$Q" 
 c "$CF/v1/product?id=dbdump500001&$Q"                                      # 200
 
 # product 이미지 업로드(PUT) → /images 다운로드
-[IO.File]::WriteAllBytes("$env:TEMP\smoke.jpg", (New-Object byte[] 1024))
+[IO.File]::WriteAllBytes("$env:TEMP\smoke.jpg", [byte[]]::new(1024))
 curl.exe -s -o NUL -w "%{http_code} PUT product image`n" -X PUT "$CF/v1/product?$Q" `
   -F "requestid=999999999999" -F "uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729" `
   -F "id=dbdump500001" -F "image=@$env:TEMP\smoke.jpg"                     # 200

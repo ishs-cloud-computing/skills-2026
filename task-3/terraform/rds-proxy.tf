@@ -71,6 +71,11 @@ resource "aws_iam_role_policy" "proxy_secret" {
 }
 
 resource "aws_db_proxy" "this" {
+  # secret version은 그래프 리프라 README STEP 1b의 -target apply에서 잘려
+  # secret이 빈 채로 생성된다(실측). 이 간선이 version을 targeted plan에 포함시키고
+  # full apply에서도 version 생성 후 proxy가 뜨게 한다 — outputs.tf db_password와 같은 함정.
+  depends_on = [aws_secretsmanager_secret_version.db]
+
   name          = "skills-db-proxy"
   engine_family = contains(["mysql", "mariadb"], local.db_engine) ? "MYSQL" : "POSTGRESQL"
   role_arn      = aws_iam_role.proxy.arn

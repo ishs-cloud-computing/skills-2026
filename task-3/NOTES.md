@@ -94,6 +94,19 @@ Count 매칭 중 오탐/실탐 판정:
 
 ## 결정 로그
 
+### 2026-08-09 — proxy secret이 빈 채로 생성되는 함정 (targeted apply의 그래프 리프 절단)
+
+- **문제(실측)**: STEP 1b `apply -target=aws_db_proxy_target.this` 후 `skills-db-credentials`의
+  내용이 비어 프록시가 DB 인증에 실패했다. `-target`은 의존성 조상만 끌고 오는데
+  `aws_secretsmanager_secret_version.db`는 아무도 참조하지 않는 그래프 리프라 plan에서 잘린다 —
+  secret 리소스(조상)는 생기고 version(내용)만 빠진다. `outputs.tf`의 `db_password` output이
+  이미 겪고 `depends_on`으로 가드한 함정과 같은 부류인데 secret version은 누락돼 있었다.
+- **채택**: `aws_db_proxy.this`에 `depends_on = [aws_secretsmanager_secret_version.db]` 한 간선.
+  targeted plan에 version이 포함되고, full apply에서도 version 생성 후 proxy가 뜨는 순서가 보장된다.
+  런북에는 1b 직후 `aws secretsmanager describe-secret --query VersionIdsToStages` 검증을 추가했다.
+- **기각**: version을 proxy `auth.secret_arn`에서 직접 참조하도록 바꾸기 — `secret_arn`은 version이
+  아니라 secret ARN을 받는 필드라 의미가 왜곡된다. depends_on이 의도를 그대로 말한다.
+
 ### 2026-08-09 — STEP 1 apply를 1a/1b로 분리 (문서만)
 
 - **문제**: STEP 1이 `-target=aws_db_proxy_target.this`까지 한 덩어리라 RDS Multi-AZ 때문에 15분

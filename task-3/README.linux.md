@@ -74,6 +74,10 @@ terraform -chdir=terraform output -json private_subnet_ids   # 2개 id가 에러
 ```bash
 # ── 로컬 bash (첫 번째 터미널) ──
 terraform -chdir=terraform apply -auto-approve -target=aws_db_proxy_target.this
+
+aws secretsmanager describe-secret --secret-id skills-db-credentials --query VersionIdsToStages
+# {"<uuid>": ["AWSCURRENT"]} 이 나와야 한다. {} 또는 null이면 secret이 비어 있어
+# 프록시가 DB에 인증하지 못한다 → terraform apply를 target 없이 다시 실행
 ```
 
 ## STEP 2 — eksctl 클러스터 생성 (새 터미널, ~20분, STEP 1b와 병렬)
@@ -83,10 +87,13 @@ terraform -chdir=terraform apply -auto-approve -target=aws_db_proxy_target.this
 cd task-3
 PRV=($(terraform -chdir=terraform output -json private_subnet_ids | jq -r '.[]'))
 PUB=($(terraform -chdir=terraform output -json public_subnet_ids  | jq -r '.[]'))
+echo "${PRV[@]} ${PUB[@]}"   # subnet- id가 총 4개 나와야 한다. 비면 STEP 1a 미완료 — 진행 금지
 
 sed -e "s/subnet-REPLACE_PRIVATE_A/${PRV[0]}/" -e "s/subnet-REPLACE_PRIVATE_B/${PRV[1]}/" \
     -e "s/subnet-REPLACE_PUBLIC_A/${PUB[0]}/"  -e "s/subnet-REPLACE_PUBLIC_B/${PUB[1]}/" \
     eksctl/cluster.yaml > eksctl/cluster.rendered.yaml
+
+grep -n REPLACE eksctl/cluster.rendered.yaml   # 출력이 없어야 한다(치환 누락 검사)
 
 eksctl create cluster -f eksctl/cluster.rendered.yaml   # kubeconfig 자동 병합
 ```
@@ -130,7 +137,8 @@ kubectl get ec2nodeclass,nodepool   # Ready 확인
 
 ## STEP 6 — 앱 + Ingress 배포 (로컬 bash)
 
-env는 각 앱 매니페스트에 직접 들어있다. 치환 후 apply하고, 마지막에 Ingress를 올린다 — 이 Ingress가 LBC에게 ALB를 만들게 하는 방아쇠다.
+env는 각 앱 매니페스트에 직접 들어있다. `k8s/rendered/`에 전부 치환해 두고 폴더를 통째로 apply한다 —
+알파벳 순 적용이라 Ingress(20)가 마지막이고, 이 Ingress가 LBC에게 ALB를 만들게 하는 방아쇠다.
 
 ```bash
 # ── 로컬 bash ──
@@ -140,17 +148,28 @@ DBPORT=$(terraform -chdir=terraform output -raw db_port)
 DBPW=$(terraform -chdir=terraform output -raw db_password)
 BUCKET=$(terraform -chdir=terraform output -raw bucket_name)
 
+# 치환 전 검증 — 출력이 없어야 한다. EMPTY가 뜨면 해당 terraform output부터 해결
+for v in PROXY DBPORT DBPW BUCKET; do [ -n "${!v}" ] || echo "EMPTY: $v"; done
+echo "$IMG" | jq -e '.user and .product and .stress' >/dev/null || echo "EMPTY: IMG"
+
+mkdir -p k8s/rendered
 for a in user product stress; do
+  f=(k8s/1?-$a.yaml)
   sed -e "s|<IMAGE>|$(echo "$IMG" | jq -r ".$a")|" \
       -e "s|<PROXY_ENDPOINT>|$PROXY|" \
       -e "s|<DB_PORT>|$DBPORT|" \
       -e "s|<DB_PASSWORD>|$DBPW|" \
       -e "s|<BUCKET_NAME>|$BUCKET|" \
-      k8s/1?-$a.yaml | kubectl apply -f -
+      "$f" > "k8s/rendered/$(basename "$f")"
 done
 
-# Ingress (치환할 값 없음)
-kubectl apply -f k8s/20-ingress.yaml
+# Ingress (치환할 값 없음 — 일괄 apply에 포함)
+cp k8s/20-ingress.yaml k8s/rendered/
+
+# 치환 후 검증 — 출력이 없어야 한다(placeholder 잔존 검사, 주석 속 <...>는 제외)
+grep -nE '^[^#]*<[A-Z_]+>' k8s/rendered/*.yaml
+
+kubectl apply -f k8s/rendered/
 
 kubectl get pods -w                       # Running 확인
 kubectl get ingress skills -w             # ADDRESS에 ALB DNS가 뜰 때까지 (~3분)
