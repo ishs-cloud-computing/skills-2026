@@ -9,6 +9,9 @@ metadata:
   region: ap-northeast-2
   version: "1.36"
 
+autoModeConfig:
+  enabled: false
+
 vpc:
   subnets:
     private:
