@@ -100,7 +100,7 @@ terraform apply는 언제나 한 번에 하나만 도므로 state 락 충돌도 
 | 최소 리소스(비용 ratio) | 유휴 1대 (아래 전용 절) |
 | DB 최소 운영 | db.t3.micro Multi-AZ 인스턴스 1대 + RDS Proxy (`rds.tf`, `rds-proxy.tf`) |
 | SLO 0.2s / 1.0s | RDS Proxy·email 인덱스·CPU limit 제거·선제 HPA |
-| 모니터링·로깅 | metrics-server + WAF 로그 CloudWatch Logs Insights (`waf.tf`) — 앱 stdout은 `kubectl logs` |
+| 모니터링·로깅 | Container Insights + Fluent Bit (`amazon-cloudwatch-observability` addon) 으로 앱 stdout → CloudWatch Logs, metrics-server(HPA), WAF 로그 Logs Insights (`waf.tf`) |
 | product S3 업로드 | Pod Identity `product` SA + S3FullAccess (`eksctl/cluster.yaml`) |
 | Fargate/Lambda 금지 | MNG·Karpenter 노드 모두 EC2 |
 
@@ -139,11 +139,14 @@ replica 때문에 Karpenter 가 자기 자신을 위한 노드를 띄우고 cons
 | coredns ×2 | 200m | 140Mi | 2 |
 | metrics-server | 100m | 200Mi | 1 |
 | karpenter ×1 / LBC ×1 | 0 (두 차트 모두 기본 requests 없음 — 공식 helm 명령의 `cpu=1/1Gi` 를 넘기지 않는 이유) | — | 2 |
-| **시스템 소계** | **~450m** | **~0.5Gi** | **7** |
+| cloudwatch-agent + fluent-bit (DaemonSet, **모든 노드**) | 300m | 153Mi | 2 |
+| cloudwatch operator ×1 | 100m | 64Mi | 1 |
+| **시스템 소계** | **~850m** | **~0.7Gi** | **10** |
 | 앱 3종 × min 1 × 250m/512Mi | 750m | 1.5Gi | 3 |
-| **합계** | **~1200m / 1930m** | **~2.0Gi / 3.4Gi** | **10 / 17** |
+| **합계** | **~1600m / 1930m** | **~2.2Gi / 3.4Gi** | **13 / 17** |
 
-여유 ~730m. 실제로 안 들어가면(파드가 Pending) 조정 순서:
+여유 ~330m. Karpenter가 붙이는 노드도 DaemonSet 2개(300m)를 먼저 떼고 시작하므로 노드당 앱 파드가
+하나 덜 들어간다. 실제로 안 들어가면(파드가 Pending) 조정 순서:
 ① `kubectl -n kube-system scale deploy/coredns --replicas=1` → ② 앱 requests 200m로
 → ③ MNG를 2대로. 확인 명령은 README STEP 11.
 

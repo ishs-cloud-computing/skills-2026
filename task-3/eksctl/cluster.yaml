@@ -39,3 +39,12 @@ managedNodeGroups:
 addons:
   - name: metrics-server
   - name: eks-pod-identity-agent
+  # 일반 버전: 전 네임스페이스 로그 + Application Signals 까지 기본값 그대로.
+  # 수집 범위를 줄이려면 클러스터 생성 후 eksctl/cloudwatch-tuned.yaml 을 적용한다.
+  - name: amazon-cloudwatch-observability
+    podIdentityAssociations:
+      - namespace: amazon-cloudwatch
+        serviceAccountName: cloudwatch-agent
+        permissionPolicyARNs:
+          - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+          - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess

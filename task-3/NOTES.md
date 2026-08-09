@@ -90,10 +90,58 @@ Count 매칭 중 오탐/실탐 판정:
 
 - 쿼리 파일을 저장소에 다시 둘지: 현재는 삭제 상태이고 당일 콘솔에서 직접 작성한다. `<NORMAL_PATHS>`의 저장 쿼리 파라미터화는 `{{param}}`이 문자열 치환이라 regex 리터럴 자리에 쓸 수 있는지 문서로 확인 안 됨 → 수동 치환으로 운용
 - 쿼리 04·14는 `nonTerminatingMatchingRules.0`(첫 요소)만 본다. 한 요청이 여러 Count 룰에 걸리면 두 번째 이후는 집계 누락 — demo에선 다중 매칭이 드물어 오차 없음, 필요 시 `unnest` 검토
-- 앱 컨테이너 stdout/stderr → CloudWatch 수집 대안: `amazon-cloudwatch-observability` addon 제거(사용자 결정)로 앱 로그는 `kubectl logs`로만 확인. 로그 기반 운영 채점에 CloudWatch 앱 로그가 필요해지면 Fluent Bit 단독 배포 검토
+- 로그 볼륨을 더 줄이려면 `containerLogs.fluentBit.config.extraFiles`의 `dataplane-log.conf`·`host-log.conf`를 빈 문자열로 덮어써 dataplane/host 로그 그룹을 없애는 안 — **미검증**(빈 `@INCLUDE` 파일을 fluent-bit가 받아들이는지 확인 안 함). 현재는 기본값 유지
 - demo ACL(콘솔 생성, 커스텀 룰 포함)과 repo `waf.tf`의 차이는 위 룰 설계안으로만 수렴 — 룰 자체의 terraform 반영은 당일 판단(로깅은 반영 완료)
 
 ## 결정 로그
+
+### 2026-08-09 — `amazon-cloudwatch-observability` addon 재도입 (사용자 방침)
+
+- **문제**: 3과제는 "앱을 로그·메트릭으로 운영"하는 과제(`task-sample.md:145`)인데 앱 로그
+  파이프라인이 없었다. `4b6e55c`에서 addon을 걷어낸 뒤 앱 stdout은 `kubectl logs`뿐이라
+  로그 분석·장애 감지 항목에 보여줄 게 없다.
+- **채택**: 두 버전으로 나눈다. **일반 버전**은 `eksctl/cluster.yaml`의 addon 블록(기본값 그대로,
+  클러스터 생성에 포함 → 런북 명령 무변경), **최적화 버전**은 `eksctl/cloudwatch-tuned.yaml`을
+  `eksctl update addon -f eksctl/cloudwatch-tuned.yaml` 한 줄로 덧씌운다. 되돌릴 때는
+  `cluster.yaml`의 일반 버전 블록을 같은 명령으로 다시 적용한다. **버전을 나누는 이유는 당일
+  바이너리가 계측된 버전일 수 있어서다** — 그때는 일반 버전(Application Signals·X-Ray 포함)이
+  그대로 답이고, 계측이 없다고 확인되면 최적화 버전으로 수집 범위만 줄인다.
+- **채택**: IAM은 Pod Identity(`podIdentityAssociations`, SA `cloudwatch-agent`).
+  `aws eks describe-addon-configuration ... --query podIdentityConfiguration`은
+  `CloudWatchAgentServerPolicy` 하나만 권장하지만, **공식 문서가 이 addon에 요구하는 두 정책
+  (`CloudWatchAgentServerPolicy` + `AWSXrayWriteOnlyAccess`)을 두 파일 모두에 붙인다.**
+  X-Ray를 빼면 당일 계측 바이너리가 나왔을 때 IAM부터 되돌려야 하고, Application Signals를
+  다시 켜는 것만으로 끝나지 않는다. 최적화 버전에서도 정책은 그대로 두고 수집 범위만 줄인다.
+  `iam.withOIDC` 없는 현재 구조를 그대로 두고 저장소의 Pod Identity 통일도 유지된다.
+  IRSA로 바꿀 이유가 없다(채점이 annotation을 읽지 않는다).
+- **최적화 버전이 기본값에서 벗어난 두 곳** (`configurationValues`):
+  ① `applicationSignals.enabled: false` — **현재 제공 바이너리 기준**으로 Go라 자동 계측 대상
+  언어(Java·Python·Node·.NET)가 아니어서 webhook과 트레이스 파이프라인만 돈다. 당일 바이너리가
+  바뀌면 이 파일을 쓰지 않는다(일반 버전 유지).
+  ② 컨테이너 로그를 `default` ns만 수집 — 기본 `application-log.conf`의 INPUT `Path`가
+  `/var/log/containers/*.log` 전체다. `*_default_*.log`로 좁히고, 무의미해진 `Exclude_Path`와
+  fluent-bit·cloudwatch-agent 자기 로그 INPUT 2개를 뺐다. 원본은 `aws-observability/helm-charts`
+  의 `charts/amazon-cloudwatch-observability/values.yaml`.
+- **CPU/메모리 requests는 기본값 유지**. 부하 중 agent가 스로틀되면 로그·메트릭이 끊기는데,
+  그건 채점 축(로그 기반 운영)을 직접 깎는다. 줄이려면 수집 범위를 줄이는 쪽이 맞다.
+- **감수하는 것 (a)**: DaemonSet 2개가 **모든 노드**에서 300m/153Mi를 먼저 뗀다(operator는
+  시스템 노드에 100m 추가). t3.medium allocatable ~1930m 기준 여유가 730m → 330m로 줄고,
+  Karpenter 노드도 노드당 앱 파드를 하나 덜 받는다 → 비용 ratio에 불리. 용량 검산표는
+  `ARCHITECTURE.md`에 갱신했다. `kubeStateMetrics`·`nodeExporter`는 차트 주석상
+  `otelContainerInsights.enabled`(기본 false)일 때만 생성되므로 안 뜬다.
+- **감수하는 것 (b)**: 아래 Bottlerocket 결정의 "k8s에 hostPath·DaemonSet·privileged가 전혀
+  없다"는 전제가 깨진다. 배포 후 `kubectl -n amazon-cloudwatch get pods`로 두 DaemonSet이
+  Bottlerocket 노드에서 Running인지, application 로그 그룹에 실제로 들어오는지 확인할 것.
+- **함정(실측) ①**: addon의 `podIdentityAssociations`도 `namespace`가 필수다. 공식 문서 예제는
+  `serviceAccountName`만 보여주는데 그대로 쓰면 eksctl이
+  `podIdentityAssociations[0].namespace must be set`으로 막는다(eksctl 0.229.0, `--dry-run`).
+- **함정 ②**: `update addon`에서 `podIdentityAssociations`는 상태의 단일 소스라, 최적화 파일에서
+  빼면 검증 에러가 난다(빈 목록으로 두면 연결이 지워진다). 그래서 두 파일에 같은 블록이 중복된다.
+  `resolveConflicts: overwrite`도 필요하다 — 기존 configMap과 충돌한다.
+- **검증**: 두 파일의 `configurationValues`를 `describe-addon-configuration`의
+  `configurationSchema`(`additionalProperties: false`)에 jsonschema로 통과시켰고,
+  `eksctl create cluster --dry-run`과 `eksctl get addon -f cloudwatch-tuned.yaml`(설정 파일
+  파싱·검증 통과 후 클러스터 부재로 404)이 정상이다. 실제 수집 확인은 배포 후 몫.
 
 ### 2026-08-09 — 본 PC를 terraform·eksctl로 축소, Karpenter·LBC를 스크립트로 분리 (사용자 방침)
 

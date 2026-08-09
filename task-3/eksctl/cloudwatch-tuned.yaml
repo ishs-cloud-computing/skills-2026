@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# amazon-cloudwatch-observability 최적화 버전. 클러스터 생성 후 적용한다:
+#   eksctl update addon -f eksctl/cloudwatch-tuned.yaml
+# 되돌리려면 cluster.yaml 의 일반 버전 블록을 같은 명령으로 다시 적용한다.
+# metadata 는 cluster.yaml 과 같은 값이어야 한다 (이름·리전을 바꿨다면 여기도 바꾼다).
+
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: skills-eks
+  region: ap-northeast-2
+
+addons:
+  - name: amazon-cloudwatch-observability
+    podIdentityAssociations:
+      - namespace: amazon-cloudwatch
+        serviceAccountName: cloudwatch-agent
+        permissionPolicyARNs:
+          - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+          - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+    # configMap 이 이미 있으므로 덮어써야 반영된다.
+    resolveConflicts: overwrite
+    configurationValues: |-
+      # 제공 앱은 Go 라 자동 계측 대상이 아니다. 켜두면 webhook 과 트레이스 파이프라인만 논다.
+      applicationSignals:
+        enabled: false
+      containerLogs:
+        fluentBit:
+          config:
+            extraFiles:
+              # 기본 INPUT 은 /var/log/containers/*.log 전체다. 채점에 쓰는 앱 3종이 default ns
+              # 에만 있으므로 Path 를 default ns 로 좁혀 수집량을 줄인다. 한 섹션을 덮어쓰면
+              # 그 섹션 전체를 다시 줘야 해서 FILTER·OUTPUT 도 기본값 그대로 함께 옮겼다.
+              # Namespace 지정이 생길 경우 Path의 값을 *_변경NS_* 형식으로 변경한다.
+              application-log.conf: |
+                [INPUT]
+                  Name                tail
+                  Tag                 application.*
+                  Path                /var/log/containers/*_default_*.log
+                  multiline.parser    docker, cri
+                  DB                  /var/fluent-bit/state/flb_container.db
+                  Mem_Buf_Limit       50MB
+                  Skip_Long_Lines     On
+                  Refresh_Interval    10
+                  Rotate_Wait         30
+                  storage.type        filesystem
+                  Read_from_Head      ${READ_FROM_HEAD}
+
+                [FILTER]
+                  Name                aws
+                  Match               application.*
+                  az                  false
+                  ec2_instance_id     false
+                  Enable_Entity       true
+
+                [FILTER]
+                  Name                kubernetes
+                  Match               application.*
+                  Kube_URL            https://kubernetes.default.svc:443
+                  Kube_Tag_Prefix     application.var.log.containers.
+                  Merge_Log           On
+                  Merge_Log_Key       log_processed
+                  K8S-Logging.Parser  On
+                  K8S-Logging.Exclude Off
+                  Labels              Off
+                  Annotations         Off
+                  Use_Kubelet         On
+                  Kubelet_Port        10250
+                  Buffer_Size         0
+                  Use_Pod_Association On
+
+                [OUTPUT]
+                  Name                cloudwatch_logs
+                  Match               application.*
+                  region              ${AWS_REGION}
+                  log_group_name      /aws/containerinsights/${CLUSTER_NAME}/application
+                  log_stream_prefix   ${HOST_NAME}-
+                  auto_create_group   true
+                  extra_user_agent    container-insights
+                  add_entity          true
