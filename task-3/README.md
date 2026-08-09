@@ -304,3 +304,21 @@ kubectl logs -f deploy/user
 - WAF 콘솔(us-east-1) → sampled requests
 
 당일 변경 절차는 [ARCHITECTURE.md](ARCHITECTURE.md) "당일 변경 시나리오".
+
+## STEP 99 — teardown
+
+ALB는 Ingress가 만들었으므로 Ingress → 클러스터 → Terraform 순으로 지운다.
+
+```bash
+# ── 리전 CloudShell ──
+kubectl delete -f k8s/20-ingress.yaml   # ALB 삭제까지 대기
+```
+
+```powershell
+# ── 본 PC ──
+eksctl delete cluster -f eksctl/cluster.yaml --disable-nodegroup-eviction
+# ALB가 이미 없으므로 data.aws_lb 조회를 꺼야 plan 이 통과한다
+terraform -chdir=terraform destroy -auto-approve -var alb_exists=false
+```
+
+S3 버킷에 객체가 남아 삭제가 막히면 `aws s3 rm s3://<bucket> --recursive` 후 재실행.

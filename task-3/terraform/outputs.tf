@@ -44,7 +44,7 @@ output "db_password" {
 }
 
 output "alb_dns" {
-  value = data.aws_lb.this.dns_name
+  value = one(data.aws_lb.this[*].dns_name)
 }
 
 output "cloudfront_domain" {

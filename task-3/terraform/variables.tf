@@ -30,6 +30,12 @@ variable "image_tag" {
   default     = "v1"
 }
 
+variable "alb_exists" {
+  description = "ALB(Ingress 생성분) 조회 여부. destroy 시 ALB가 이미 없으면 false로 꺼야 plan이 통과한다."
+  type        = bool
+  default     = true
+}
+
 variable "db_password" {
   description = "RDS master 비밀번호"
   type        = string

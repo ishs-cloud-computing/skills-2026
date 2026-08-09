@@ -3,8 +3,10 @@
 
 # ALB는 AWS Load Balancer Controller가 k8s/20-ingress.yaml로부터 만든다. 이 데이터 소스는
 # Ingress가 ALB를 띄운 뒤에만 읽히며, README의 STEP 순서가 이 제약에서 나온다.
+# ALB가 이미 지워진 뒤 destroy 하면 이 조회가 plan 자체를 막는다. -var alb_exists=false 로 끈다.
 data "aws_lb" "this" {
-  name = local.alb_name
+  count = var.alb_exists ? 1 : 0
+  name  = local.alb_name
 }
 
 data "aws_ec2_managed_prefix_list" "cloudfront" {
@@ -47,8 +49,9 @@ resource "aws_cloudfront_distribution" "this" {
   wait_for_deployment = false
 
   origin {
-    origin_id   = "alb"
-    domain_name = data.aws_lb.this.dns_name
+    origin_id = "alb"
+    # alb_exists=false 는 destroy 전용이라 이 대체값은 실제로 배포되지 않는다.
+    domain_name = try(data.aws_lb.this[0].dns_name, "alb-already-deleted.invalid")
 
     custom_origin_config {
       http_port              = 80
