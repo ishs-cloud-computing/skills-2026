@@ -24,14 +24,13 @@ locals {
   # ── DB: 당일 엔진 변경(예: PostgreSQL) 시 engine/engine_version/port/username만 수정.
   # rds.tf·rds-proxy.tf만 이 값을 참조하고 다른 리소스는 DB를 참조하지 않으므로
   # apply 시 DB 스택만 재생성된다 (ALB·CloudFront·EKS는 no-op).
-  db_identifier     = "apdev-rds-instance" # 과제지에 명시된 DB identifier
-  db_instance_class = "db.t3.micro"
-  db_engine         = "mysql" # mysql 또는 postgres (proxy engine_family·인증 타입이 자동 파생됨)
-  db_engine_version = "8.0"
-  db_name           = "dev" # 논리 데이터베이스 이름 (앱의 MYSQL_DBNAME)
-  db_username       = "admin"
-  db_port           = 3306 # mysql 3306, postgres 5432
-  db_multi_az       = true
-  # gp3 스토리지(GB). 이 워크로드는 버퍼풀+PK/인덱스 조회라 baseline 3000 IOPS로 충분.
-  db_allocated_storage = 20
+  db_identifier        = "apdev-rds-instance" # 과제지에 명시된 DB identifier
+  db_instance_class    = "db.t3.micro"
+  db_engine            = "mysql" # mysql 또는 postgres (proxy engine_family·인증 타입이 자동 파생됨)
+  db_engine_version    = "8.0"
+  db_name              = "dev" # 논리 데이터베이스 이름 (앱의 MYSQL_DBNAME)
+  db_username          = "admin"
+  db_port              = 3306 # mysql 3306, postgres 5432
+  db_multi_az          = true
+  db_allocated_storage = 200
 }
