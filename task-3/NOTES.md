@@ -95,6 +95,29 @@ Count 매칭 중 오탐/실탐 판정:
 
 ## 결정 로그
 
+### 2026-08-10 — teardown 이 스크립트 잔여물을 안 지워 `Karpenter-skills-eks` 가 DELETE_FAILED
+
+- **문제**: STEP 99(Ingress → 클러스터 → terraform)가 `scripts/karpenter.sh`·`scripts/lbc.sh` 가 만든 걸
+  하나도 안 지웠다. 계정에 `Karpenter-skills-eks` 스택이 `DELETE_FAILED` 로 남았고, 실패 이벤트는 정책 6개
+  전부 `Cannot delete a policy attached to entities. (Service: Iam, Status Code: 409)` 였다.
+- **원인 ①**: 정책 6개(`KarpenterController*Policy-skills-eks`)는 CFN 소유인데, 그걸 붙인 역할
+  `KarpenterControllerRole-skills-eks` 는 `karpenter.sh` 가 `aws iam create-role` 로 **스택 밖에** 만든다.
+  CFN 은 자기가 안 만든 역할을 안 지우므로 역할이 정책을 붙든 채 남아 정책 삭제가 전부 409 다.
+  `AWSLoadBalancerControllerRole-skills-eks` 도 같은 구조로 고아가 된다.
+- **원인 ②**: `00-nodeclass.yaml` 이 `role` 만 지정하므로 인스턴스 프로파일 `skills-eks_<hash>` 는
+  **Karpenter 가 런타임에** 만든다 — CFN·terraform·eksctl 어디에도 없다. ①만 고치면 이번엔 프로파일이
+  `KarpenterNodeRole` 삭제를 막아 스택이 또 DELETE_FAILED 로 떨어진다. EC2NodeClass 삭제 시 finalizer 로
+  정리되는 것으로 보이나 [nodeclasses 문서](https://karpenter.sh/docs/concepts/nodeclasses/)에 lifecycle
+  명시가 없어 **teardown 에서 명시적으로 지운다**(있으면 지우고 없으면 넘어간다).
+- **채택**: `scripts/teardown.sh` 하나로 프로파일 → 컨트롤러 역할 2개 → 스택 순으로 되돌린다. 정상 teardown 과
+  이미 DELETE_FAILED 인 스택 복구가 같은 명령이라 복구용 분기를 두지 않았다. STEP 99 에는 NodePool·NodeClass
+  삭제 단계를 클러스터 삭제 앞에 넣었다 — Karpenter 가 살아 있어야 자기가 띄운 EC2 를 회수한다.
+- **지우지 않는 것**: `AWSLoadBalancerControllerIAMPolicy`. 이름에 클러스터명이 없어 다른 세트와 공유하고
+  (실측 AttachmentCount 3), `lbc.sh` 는 이미 있으면 그냥 넘어간다. 역할에서 detach 만 한다.
+- **기각**: `delete-stack --retain-resources` 로 정책 6개를 남기고 스택만 지우는 안 — 이름이 고정이라
+  다음 배포에서 `aws cloudformation deploy` 가 AlreadyExists 로 깨진다. 콘솔 수동 삭제 — 재현이 안 된다.
+- **검증**: 실행 후 스택 부재, `skills-eks` 이름의 IAM 역할·정책·인스턴스 프로파일·SQS 큐 전부 없음.
+
 ### 2026-08-09 — `amazon-cloudwatch-observability` addon 재도입 (사용자 방침)
 
 - **문제**: 3과제는 "앱을 로그·메트릭으로 운영"하는 과제(`task-sample.md:145`)인데 앱 로그
