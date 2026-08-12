@@ -1,0 +1,3 @@
+(union[[:space:]]+select|information_schema|sleep\([0-9])
+(<script|javascript:|onerror=)
+(\.\./|/etc/passwd|/proc/self)

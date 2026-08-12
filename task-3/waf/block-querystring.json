@@ -1,0 +1,21 @@
+{
+  "Name": "BlockDeniedQuery",
+  "Priority": 4,
+  "Statement": {
+    "RegexPatternSetReferenceStatement": {
+      "ARN": "arn:aws:wafv2:us-east-1:346151107821:global/regexpatternset/denied-query/<id>",
+      "FieldToMatch": { "QueryString": {} },
+      "TextTransformations": [
+        { "Priority": 0, "Type": "URL_DECODE" },
+        { "Priority": 1, "Type": "HTML_ENTITY_DECODE" },
+        { "Priority": 2, "Type": "LOWERCASE" }
+      ]
+    }
+  },
+  "Action": { "Block": { "CustomResponse": { "ResponseCode": 403 } } },
+  "VisibilityConfig": {
+    "SampledRequestsEnabled": true,
+    "CloudWatchMetricsEnabled": true,
+    "MetricName": "BlockDeniedQuery"
+  }
+}
