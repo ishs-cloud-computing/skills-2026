@@ -7,11 +7,13 @@
 <!-- 덮어쓴다. 코드와 어긋난 줄은 지우고 다시 쓴다. append 금지. -->
 
 - 구성: terraform(단일 리전 종합 인프라) + eksctl(private cluster, Pod Identity) + k8s(app/logging/monitoring).
-  머신 4분할 — 본 PC(PS7, terraform) / 일반 CloudShell(이미지 빌드) / SSM bastion(eksctl·helm·kubectl) /
-  `unicorn-mark` CloudShell(채점).
+  머신 3분할 — 본 PC(PS7: terraform·eksctl·시드·정리) / 일반 CloudShell(이미지 빌드) /
+  `unicorn-mark` CloudShell VPC environment(helm·kubectl·채점). **작업용 bastion 없음.**
 - 미해결: 배포 실측 미수행 — apply·`mark-2026-08-10.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
-- 채점 신원은 PowerUser~Administrator 수준 **IAM 사용자**의 CloudShell 이다(2026-08-04 답변). root 가 아니므로
-  access entry 사후 보정이 가능하다 — step 9 권한 게이트는 조기 검출용으로만 남긴다.
+- 채점 신원은 PowerUser~Administrator 수준 **IAM 사용자**의 CloudShell 이다(2026-08-04 답변). 본 PC 가
+  클러스터를 만들므로 본 PC 신원이 그 IAM 사용자와 같아야 하고, 어긋나면 access entry 로 사후 보정한다.
+- 새 필수 절차: eksctl 이 fully-private 클러스터를 public+private 로 만든 뒤 public 을 끄므로,
+  생성 후 `endpointPublicAccess=false` 확인이 채점 6-1-A 방어선이다(런북 step 3 말미).
 
 ## 채점 커버리지
 <!-- mark.sh / mark/markN.sh 항목 대비 현재 구현이 어디까지 왔는지. -->
@@ -106,6 +108,60 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-15 S3 릴레이에서 텍스트 제거 — `outputs.json`·`Dockerfile` 은 붙여넣기로
+- 맥락: 릴레이가 4개를 나르는데 그중 둘이 텍스트였다. 릴레이가 존재하는 이유는 CloudShell 에 파일을 넣을
+  방법이 없어서인데(VPC environment 는 Actions 업로드 자체가 막혀 있고 레포가 비공개라 clone 불가),
+  **터미널 붙여넣기는 된다**. `CLAUDE.md:30` 이 "README 는 그대로 복붙 가능한 형태를 유지한다"고 규정하고
+  `set-02/task-1/README.md:269-281`(heredoc)·`task-3/README.md:14-15`(`vim` + `:set paste`) 가 선례다.
+- 채택: `outputs.json` → 본 PC 가 값을 박아 만든 `.env` heredoc 을 콘솔에 출력해 붙여넣는다.
+  CloudShell 쪽 `jq` 블록 10줄이 통째로 사라지고, `outputs.json` 자체가 릴레이에서 빠진다.
+  `Dockerfile` → 일반 CloudShell 에서 heredoc 붙여넣기. README 에 내용을 복제하지 않고 자리표시자만 둔다
+  (drift 방지) — `wc -l` = 22 대조를 붙여 붙여넣기 무결성을 확인한다.
+  릴레이에 남는 건 `unicorn-cs.tgz`(k8s 13파일 + mark 스크립트)와 `book`(8.7 MB) 둘뿐이다.
+- 기각: k8s 도 붙여넣기 → 13파일 732줄이라 실패 지점이 많고, README 에 manifest 를 복제하면 drift 가 생긴다.
+  본 PC 에서 heredoc 을 생성해 출력하면 drift 는 없지만, `book` 때문에 릴레이는 어차피 남으므로
+  **없애는 S3 객체가 0**이다. 붙여넣기 단계만 는다.
+- 기각: `book` 을 일반 CloudShell Actions → Upload 로 → 릴레이가 어차피 남으므로 수동 단계만 늘어난다
+  (2026-07-27 "이미지 빌드를 일반 CloudShell 로" 항목과 같은 판단).
+- 기각: mark 스크립트만 tgz 에서 빼서 붙여넣기(`set-03/task-1/NOTES.md:108-112` 선례) → tgz 는 그대로
+  남으므로 S3 객체가 안 줄고 137줄 붙여넣기만 는다. tgz 에 얹혀 가는 한계비용이 0이다.
+- 대가: 붙여넣기 경로에 **Windows 클립보드 CRLF** 위험이 새로 생긴다. `sed -i 's/\r$//' ~/.env` 가드를
+  블록 끝에 넣고 CloudShell 쪽에 `grep -c $'\r' ~/.env` 확인을 뒀다
+  (`set-08/task-2/NOTES.md:58` 이 실측한 함정 — 값 끝 `\r` 로 push 가 조용히 깨진다).
+- 덤: CloudFront s3-origin 이 버킷 루트를 서빙하므로 `https://<CF>/_transfer/outputs.json` 이 공개로
+  열려 있었다. 그 노출이 사라진다. 채점에는 원래 무관했다 — mark 3-1-A·8-2-A 는 전부 버킷 레벨 API 라
+  객체 목록을 보지 않는다(`mark-2026-08-10.sh:27-33,76`). step 8 정리는 위생 목적으로 그대로 남긴다.
+
+### 2026-08-15 작업용 bastion 제거 — eksctl 을 본 PC 로, helm·kubectl 을 `unicorn-mark` CloudShell 로
+- 맥락: 런북이 머신을 4분할하며 SSM bastion 을 수동 생성/삭제하고 있었다. 그런데 (a) `task.md:57` 유의사항
+  14 가 `unicorn-mark` CloudShell VPC Environment 를 이미 강제하고 "그 쉘 안에서 kubectl 을 조작"하라고
+  못박고, (b) `changelog.txt:96-99` 2026-08-04 답변이 "직종설명서 개정본상 스크립트는 **Bastion 대신**
+  Admin 수준 IAM 으로 접속한 CloudShell 에서 실행"이라고 명시했다. `task.md`·`mark.md`·`errata/1과제.txt`
+  어디에도 bastion 이 없다 — `CLAUDE.md` 기준으로 불필요 리소스 감점 대상이고, 게다가 `t3.small` 이라
+  유의사항 12(모든 EC2 t3.medium)와도 어긋났다.
+- **"private cluster 라 eksctl 은 VPC 내부에서만 가능하다"가 틀렸다**: eksctl 은 fully-private 클러스터를
+  public+private 엔드포인트로 만든 뒤 **모든 작업이 끝나면 public 을 끈다**(eksctl 공식 문서 Limitations).
+  같은 `privateCluster.enabled: true` 구성인 `set-03/task-1` 이 본 PC PowerShell 에서 이미 그렇게 돌린다
+  (`set-03/task-1/README.md:119-175`). bastion 의 존재 이유였던 전제가 사실이 아니었다.
+- 채택: 3분할. 본 PC(terraform·eksctl·시드·정리) / 일반 CloudShell(이미지 빌드) / `unicorn-mark`
+  CloudShell(helm·kubectl·채점). 20분짜리 `eksctl create` 가 본 PC 로 빠지면서 CloudShell 이 맡는 건
+  helm 3개 + `kubectl apply` 뿐이라, VPC environment 의 비영구 홈·유휴 타임아웃이 더 이상 병목이 아니다.
+  VPC 내부 접근이 필요한 리소스는 EKS private API 하나뿐이고(RDS 없음, 내부 ALB 는 CloudFront VPC Origin
+  경유, Grafana ALB 는 public, 시드는 공개 CloudFront), 그 경로는 `security.tf:108-143` 의
+  `unicorn-mark-sg` → cp-extra-sg 443 이 이미 깔아뒀다 — bastion 은 그 SG 를 빌려 쓰던 것뿐이었다.
+  **terraform·eksctl·k8s 코드는 한 줄도 바뀌지 않는다.** 런북 3개 파일만 바뀐다.
+- 기각: bastion 유지 → 감점 대상인 데다 `aws login --remote` 자격증명 이관, 상태 백업/복구, 삭제 전
+  권한 게이트라는 절차 3개를 계속 지고 간다. 그 3개는 전부 "bastion 신원 ≠ 채점 신원" 을 메우려는
+  장치였는데, 생성을 본 PC 로 옮기면 신원 하나로 정리된다.
+- 기각: 클러스터를 public+private 로 유지(set-07 task-2 module-3 방식) → `task.md:113` 위반이고
+  채점 6-1-A 가 `endpointPublicAccess` 를 직접 읽는다. 0점.
+- 대가: eksctl 이 생성 중 public 엔드포인트를 잠깐 연다. **중단되면 켜진 채 남으므로**
+  `describe-cluster` 로 `false true` 확인하는 절차가 런북 step 3 말미에 새로 필수가 됐다.
+- 대가: 본 PC 신원이 이제 채점 신원과 같아야 한다(기존엔 "계정만 맞으면 무관"이었다).
+  신원이 IAM 사용자라 어긋나도 access entry 로 보정된다.
+- 대가: CloudShell VPC environment 는 홈이 비영구(20~30분 유휴 시 `$HOME` 삭제)라 세션이 끊기면
+  런북 step 4 부트스트랩을 다시 돌려야 한다. 그래서 step 4 를 "통째로 재실행 가능한 한 블록"으로 묶었다.
 
 ### 2026-08-15 로그 timestamp 접미사를 `Z` → `+09:00`, 채점 신원 전제를 root → IAM 사용자
 - 맥락: 2026-08-04·2026-08-10 정정 8건(errata 5~12)을 구현과 대조했다. 실제로 어긋난 곳은 두 군데뿐이다.
