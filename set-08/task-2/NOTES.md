@@ -47,7 +47,7 @@
 - [x] 4-1 EKS Cluster, VPC, Fargate Profile 구성 — `eksctl/cluster.yaml`: `skills-sqs-cluster`(us-west-2, public+private 엔드포인트) + `terraform/vpc.tf`(private 서브넷, karpenter.sh/discovery 태그) + Fargate profile `skills-sqs-fp-keda`·`skills-sqs-fp-karpenter`(과제지 명시 2개) + `skills-sqs-fp-kube-system`(coredns용 추가) — 실채점 통과: Cluster ACTIVE + Fargate profile 2개 ACTIVE(selector keda/karpenter), CloudShell kubectl 로 fargate 노드 8대 Ready (2026-08-04)
 - [x] 4-2 SQS Queue 및 IAM ServiceAccount 구성 — `terraform/sqs.tf`(`skills-sqs-queue`) + `eksctl/cluster.yaml` IRSA `iam.serviceAccounts`(keda-operator/karpenter/sqs-worker-sa 3개, `attachPolicyARNs`로 role-arn annotation 자동 부여) — 실채점 통과: QueueArn 출력 + VisibilityTimeout 30(기준 >=30), SA 3개 role-arn annotation 전부 비어 있지 않음 (2026-08-04)
 - [x] 4-3 KEDA/Karpenter Controller Fargate 배포 구성 — `README.md` 4단계 helm install(karpenter -n karpenter, keda -n keda) + Fargate profile 2개로 두 네임스페이스가 Fargate 노드에 스케줄 — 실채점 통과: keda 3개·karpenter 1개 Deployment Available, Pod 전부 Running, NODE 열 전부 `fargate-ip-*` (2026-08-04)
-- [x] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30) — 실채점 통과: min 0·max 6 정확, pollingInterval 15(<=15)·cooldownPeriod 30(<=30), trigger `aws-sqs-queue` queueLength "2", TriggerAuthentication 존재 (2026-08-04)
+- [x] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30) — 실채점 통과: min 0·max 6 정확, pollingInterval 15(<=15)·cooldownPeriod 30(<=30), trigger `aws-sqs-queue` queueLength "2", TriggerAuthentication 존재 (2026-08-04). 2026-08-07 정정으로 `podIdentity.provider=aws-eks` 판정 기준이 신설되어 `provider`를 `aws`→`aws-eks`로 교체 — 실채점(2026-08-04) 당시 기준에는 없던 항목이라 재검증 미실시
 - [x] 4-5 Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 — `k8s/10-karpenter-nodepool.yaml`(`skills-sqs-nodeclass`/`skills-sqs-nodepool`, label `skills-nodepool=event-worker`, `disruption.consolidationPolicy` 포함) — 실채점 통과: NodePool 4개 필드 + EC2NodeClass `role` 출력. 4-5 조회 시점 노드·파드 0은 정상(min 0) — 라벨 조건은 4-6 의 동일 label selector 출력으로 충족 (2026-08-04)
 - [x] 4-6 SQS 기반 Scale Out 및 처리 기능 검증 — ScaledObject queueLength 2 + max 6(12건 발송 시 6 pod) + NodePool 인스턴스 타입 t3.medium/large(500m 요청 pod 다수 스케줄 시 노드 증설 유도) — 실채점 통과: sent=12, after_60s 에 pod 6/6 + Karpenter 노드 2대 Ready(기준 180초), 메시지 12 → after_120s 0 (2026-08-04)
 
@@ -90,6 +90,34 @@
 - helm karpenter+keda: ~2분 / module-4 scale out(12건→pod 6+노드 2): 60초 이내 / scale in: 큐 소진 후 ~3분
 - module-3 실경로 복구(CloudTrail→EventBridge→Lambda): **19.6초** (기준 180초, "수 분" 상정보다 훨씬 빠름)
 - 채점 스크립트: mark2-1/2/3 각 1~3분, **mark2-4는 ~11분**(CloudShell kubectl 설치 + 4-6의 sleep 60×3)
+
+---
+## 정정 로그
+<!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
+
+### 2026-08-12 [module-4] 4-5 min 0 예외 판정 범위가 Node 까지 확대
+- 출처: `provided/20260812_CHANGELOG.md` (답변일 2026-08-12). 대응 PATCH 파일 없음
+- 내용: 0809 판정 기준은 "Pod 가 없을 경우 4-6 결과를 포함해 판정"이었으나, 0812 는 "Worker EC2 **Node 또는** Worker Pod 가 없을 수 있으므로"로 예외 범위를 노드까지 넓혔다. 4-5 는 **0812 가 판정 기준 최종본**, 채점 명령은 0809 PATCH 적용본이 최종이다(0812 는 스크립트를 건드리지 않음)
+- 판정: **영향없음** — 구제 범위 확대라 구현 요구가 늘지 않는다. `k8s/10-karpenter-nodepool.yaml`(consolidationPolicy `WhenEmpty`/30s)로 채점 시점에 노드가 비어 있을 수 있는 상황 자체는 종전과 동일
+
+### 2026-08-09 [module-4] 4-5 노드 조회에 nodepool/skillsNodepool 라벨 출력 추가
+- 출처: `provided/20260809_PATCH.patch`·`20260809_CHANGELOG.md` (답변일 2026-08-09)
+- 판정: **수정완료(채점 스크립트만)** — `mark/mark2-4.sh` 4-5 노드 조회를 패치본 jq 로 교체. 구현은 `k8s/10-karpenter-nodepool.yaml`의 `spec.template.metadata.labels`에 `skills-nodepool: event-worker`가 이미 있어 Karpenter 가 노드에 두 라벨을 모두 부여한다 — 구현 변경 없음
+
+### 2026-08-07 [module-4] 4-4 podIdentity.provider 판정 기준 신설 (aws → aws-eks)
+- 출처: `provided/20260807_CHANGELOG.md` (답변일 2026-08-07)
+- 내용: 0801 판정 기준은 TriggerAuthentication 의 존재만 봤으나, 0807 이 `podIdentity.provider=aws-eks이어야 합니다`를 새로 넣었다
+- 판정: **수정완료** — `k8s/30-keda-scaledobject.yaml` `provider: aws` → `aws-eks`. 아래 2026-08-01 결정(`aws` 채택)을 채점 기준 우선 원칙(CLAUDE.md 작업규칙 4)으로 번복한다
+- 확인: KEDA 공식 문서상 `aws-eks`는 deprecated 이나 제거는 v3 예정이고 최신 문서가 2.20 이라 설치 버전(helm 최신)에서 여전히 유효하다. deprecated 경고만 뜬다
+
+### 2026-08-07 [module-4] 4-1/4-3/4-4/4-5 채점 조회 축소, [module-2] 2-2/2-3/2-5 변수명·출력
+- 출처: `provided/20260807_PATCH.patch`·`20260807_CHANGELOG.md` (답변일 2026-08-07)
+- 판정: **수정완료(채점 스크립트만)** — `mark/mark2-2.sh`(`CLIENT_IP`→`LATTICE_CLIENT_EC2_PUBLIC_IP`, `VPC_ASSOCIATION_ID` echo 추가), `mark/mark2-4.sh`(4-1 Version·Role 제거 + Namespaces·노드 이름만, 4-3 Deployment 고정 조회, 4-4 TriggerAuthentication 3필드, 4-5 jq 최소 출력)
+- 구현 영향 없음: 4-1 에서 `Version` 이 빠져 **EKS 버전은 풀이자 지정**으로 확정 — `eksctl/cluster.yaml`의 현재 버전을 그대로 둔다. 4-3 이 Deployment 이름을 `keda-operator`/`karpenter`로 고정 조회하므로 helm release 이름을 바꾸면 안 된다(README 4단계 그대로 유지)
+
+### 2026-08-07 [module-2] 2-4 Service EC2 SG 8080 인바운드 재확인
+- 출처: `provided/20260807_CHANGELOG.md` 판정 기준 (변경이 아닌 재기재)
+- 판정: **영향없음** — `terraform/sg.tf`가 `prefix_list_ids = [data.aws_ec2_managed_prefix_list.vpc_lattice.id]`만 두고 `cidr_blocks`를 쓰지 않아 `0.0.0.0/0` 허용이 없다
 
 ---
 ## 결정 로그
