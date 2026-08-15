@@ -147,9 +147,11 @@ echo $BUCKET && aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "web/main/
 예상 출력 (정확히 일치):
 
 ```
-wskorea26-concert-bucket-103
+wskorea26-concert-bucket-<비번호>
 web/main/index.html web/main/main.jpeg
 ```
+
+> 정정 2026-08-07: 원본 채점지는 `<비번호>` 자리에 `103`이 고정 기재돼 있었다. `<비번호>` 부분은 채점 대상에서 제외한다.
 
 ##### 2-2-A · S3 Configuration (1점)
 
@@ -434,10 +436,6 @@ curl -s -X GET -H 'Content-Type: application/json' "https://$CF_DOMAIN/book?conc
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -X GET -H 'Content-Type: application/json' "https://$CF_DOMAIN/book"
-GRAFANA_ALB_DNS=$(aws elbv2 describe-load-balancers --names wskorea26-grafana-alb --query "LoadBalancers[0].DNSName" --output text)
-echo "URL: http://$GRAFANA_ALB_DNS/d/wskorea26/wskorea26-monitoring"
-echo "Login: skills-<비번호>-admin / \$korea26!!"
-echo "Manual Marking"
 ```
 
 예상 출력:
@@ -452,18 +450,28 @@ echo "Manual Marking"
 
 #### 10. Monitoring
 
-> **수동 채점 항목입니다.** 아래 명령으로 Grafana ALB 주소를 확인한 뒤 브라우저로 접속합니다.
+> **수동 채점 항목입니다.**
+>
+> 정정 2026-08-07: 원본 채점지는 "대시보드에 접근이 가능하고, 파드의 CPU, Memory 지표를 확인할 수 있을 경우 정답"으로만 적혀 있어 과제지 요구 메트릭 범위와 어긋났다. 아래 10-0 접속 절차와 10-1~4 판정 기준이 정정본이다. **10-1-A 의 「명령어 입력」 항목은 제외**한다.
+
+##### 10-0 · Grafana 접속 (게이트, 배점 없음)
+
+1. 다음 명령으로 출력되는 경로로 Grafana 에 접속합니다.
 
 ```bash
-ALB_DNS=$(aws elbv2 describe-load-balancers --names wskorea26-grafana-alb --query "LoadBalancers[0].DNSName" --output text)
+aws elbv2 describe-load-balancers --names wskorea26-grafana-alb --query "LoadBalancers[0].DNSName" --output text
 ```
 
-Grafana 로그인 정보 — userid: `skills-<비번호>-admin` / password: `$korea26!!`
+2. Grafana 에 다음 인증 정보로 로그인합니다.
 
-대시보드에 접근이 가능하고 아래 지표를 각각 확인할 수 있으면 정답으로 인정합니다.
+   userid / password : `skills-<비번호>-admin` / `$korea26!!`
 
-- **10-1-A** Grafana Dashboard Check (1.5점)
-- **10-2-A** POD (1.5점)
-- **10-3-A** RESTART (1점)
-- **10-4-A** NETWORK (1점)
+3. `wskorea26-monitoring` 대시보드에 접근이 가능할 경우, 아래 10-1~4 채점을 진행합니다.
+
+##### 10-1-A ~ 10-4-A · Dashboard Metrics
+
+- **10-1-A** (1.5점) `book app` 파드의 CPU, Memory 지표를 확인할 수 있을 경우 정답
+- **10-2-A** (1.5점) 실행중인 `book app` Pod 개수 지표를 확인할 수 있을 경우 정답
+- **10-3-A** (1점) `book app` 컨테이너 재시작 횟수 지표를 확인할 수 있을 경우 정답
+- **10-4-A** (1점) `book app` 컨테이너 네트워크 수신량 지표를 확인할 수 있을 경우 정답
 

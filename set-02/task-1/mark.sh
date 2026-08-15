@@ -141,11 +141,17 @@ echo ====================
 echo ""
 curl -s -o /dev/null -w "%{http_code}\n" -X GET -H 'Content-Type: application/json' "https://$CF_DOMAIN/book"
 
-# 10 Monitoring Configure (수동 채점 안내 - 기준표 맞춤)
+# 10 Monitoring (수동 채점 안내 - 2026-08-07 정정본 기준)
 echo ====================
-echo "  10-1 Monitoring Configure (수동)"
+echo "  10-0 Grafana 접속 (게이트)"
 echo ====================
 GRAFANA_ALB_DNS=$(aws elbv2 describe-load-balancers --names wskorea26-grafana-alb --query "LoadBalancers[0].DNSName" --output text)
 echo "URL: http://$GRAFANA_ALB_DNS/d/wskorea26/wskorea26-monitoring"
 echo "Login: skills-<비번호>-admin / \$korea26!!"
+echo "wskorea26-monitoring 대시보드 접근 가능 시 아래 10-1~4 를 채점한다."
+echo ""
+echo "  10-1-A book app 파드 CPU / Memory 지표 (1.5점)"
+echo "  10-2-A 실행중인 book app Pod 개수 지표 (1.5점)"
+echo "  10-3-A book app 컨테이너 재시작 횟수 지표 (1점)"
+echo "  10-4-A book app 컨테이너 네트워크 수신량 지표 (1점)"
 echo "Manual Marking"
