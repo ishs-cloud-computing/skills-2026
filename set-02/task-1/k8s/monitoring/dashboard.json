@@ -40,7 +40,7 @@
     },
     {
       "id": 3,
-      "title": "Running Pods",
+      "title": "Running Book App Pods",
       "type": "stat",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
@@ -49,8 +49,8 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(kube_pod_status_phase{phase=\"Running\"})",
-          "legendFormat": "running"
+          "expr": "sum(kube_pod_status_phase{namespace=\"wskorea26\", pod=~\"wskorea26-book-deploy-.*\", phase=\"Running\"})",
+          "legendFormat": "book app running"
         }
       ]
     },
