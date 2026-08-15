@@ -66,7 +66,8 @@
 - [x] 3-4-A KEDA — 실채점: keda-operator Running / 1 5 aws-sqs-queue 5 정확 일치
 - [x] 3-5-A Karpenter — 실채점: WhenEmptyOrUnderutilized 60s / t3.medium,t3.small / taint 1 / nodeclass 정확 일치
 - [x] 3-6-A Scale-out — 실채점: Max Ready Pods 5·Max App Nodes 2 (설계상 상한과 동일: maxReplicaCount 5, 용량 계산상 노드 2대)
-- [x] 3-7-A Scale-in — 실채점: purge 후 150초 창 내 Final Pods 1·Final Nodes 1 (scaleDown behavior 오버라이드 유효 실증)
+- [x] 3-7-A Scale-in — 실채점: purge 후 150초 창 내 Final Pods 1·Final Nodes 1 (scaleDown behavior 오버라이드 유효 실증).
+  단 이때 안정화 15초 기준 ~140초 소요 — 2026-08-01 정정("2분 내")에 맞춰 안정화 0 으로 변경했고, 재배포 후 도달 시각 재실측 필요
 
 #### module-3 함정 (구현 중 발견)
 
@@ -87,7 +88,8 @@
   + nodeAffinity 로 자기 nodepool 노드 배제 → addon 노드 1대에선 두 번째 pod 영구 Pending, `--wait` 가 안 끝난다.
   `--set replicas=1` 필수. 행 상태에서 중단하면 release 가 `pending-upgrade` 로 잠겨 재-upgrade 가
   "another operation is in progress" 로 막힘 → `helm uninstall karpenter -n kube-system` 후 재설치.
-- **채점 전 상시 상태**: Pod 1개·Karpenter 노드 1대·큐 비움. 부하 테스트 후 재채점 시 2분 대기(과제지 명시).
+- **채점 전 상시 상태**: Pod 1개·Karpenter 노드 1대·큐 비움. 부하 테스트 후 재채점 시 2분 대기.
+  2026-08-01 정정으로 과제지 문구가 "채점 시 2분 대기"에서 "**2분 내에 scale in/out 완료**"로 바뀌었다 — 대기 시간이 아니라 우리 쪽 목표치다.
 - **치환 리터럴 범위**: `${...}` 플레이스홀더(cluster.yaml·k8s manifest)는 terraform output 으로 런북에서 치환 —
   k8s 는 `rendered/` 폴더로 전체 렌더링 후 디렉토리 apply.
   cluster_name 변경 시 cluster.yaml·10-karpenter-nodepool.yaml(NodeClass role/태그 셀렉터)·20-deployment.yaml(nodeSelector 값은 nodepool 이름)·helm settings.clusterName 을 함께 바꿔야 한다.
@@ -108,7 +110,7 @@
 
 #### module-4 함정 (구현 중 발견)
 
-- **지급 Dockerfile 은 flask 미설치**: `python:3.12-slim` + `COPY app.py` 뿐인데 app.py 가 flask import (requirements.txt 도 미지급) → 그대로 빌드하면 ModuleNotFoundError CrashLoop. provided/ 수정 금지라 `app/Dockerfile` 수정본을 커밋 — CloudShell 빌드는 반드시 수정본 사용.
+- **최초 지급 Dockerfile 은 flask 미설치**: `python:3.12-slim` + `COPY app.py` 뿐인데 app.py 가 flask import (requirements.txt 도 미지급) → 그대로 빌드하면 ModuleNotFoundError CrashLoop. 2026-08-01 정정으로 `RUN pip install --no-cache-dir Flask==3.1.3` 이 지급본에 추가됐다 → `provided/module-4/Dockerfile-2026-08-01`·`app/Dockerfile`(동일 본문). CloudShell 빌드는 최초 지급본(`provided/module-4/Dockerfile`)이 아니라 이 정정본을 쓴다.
 - **Loki/Grafana helm chart 는 grafana-community 로 이관**: 구 `grafana/loki`(6.x)·`grafana/grafana` repo 는 동결. `grafana-community/loki` 는 18.x 로 리넘버링, `deploymentMode: SingleBinary` 는 `Monolithic` 의 deprecated 별칭.
 - **Loki chart 18.x 기본값 함정 5종** (전부 loki-values.yaml 에서 오버라이드): ① `singleBinary.replicas` 기본 0 — 아무것도 안 뜸 ② `auth_enabled` 기본 true — 무인증 push/query 401 ③ `storage.type` 기본 s3 — 버킷 없이 기동 실패 ④ `schemaConfig` 기본 빈 값 — 기동 실패 ⑤ chunksCache 기본 memcached requests/limits 9830Mi(`allocatedMemory` 8192MB × 1.2, resultsCache 는 1229Mi) — t3.medium 스케줄 불가. 캐시를 살려야 하면 `resources` 오버라이드가 아니라 `chunksCache.allocatedMemory` 를 낮춘다. 추가: backend/read/write 기본 replicas 가 0이 아니라 Monolithic 과 공존 검증 에러 — 명시적 0 필요 (helm template 실렌더에서 발견).
 - **OTel 공식 chart 는 DaemonSet 이름에 `-agent` 접미사 강제**: fullnameOverride 로도 `o11y-otel` 정확 일치 불가 → raw manifest (결정 로그 참조).
@@ -135,8 +137,39 @@
 - 공통 병목: EC2 user-data pip 설치(~1-2분)가 healthcheck 가능 시점을 늦춘다
 
 ---
+## 정정 로그
+<!-- 과제지·채점지의 오류로 구현을 바꿨으면 질의일·답변일·출처와 함께 적는다. task.pdf·mark.pdf·provided/ 원본은 고치지 않는다. -->
+
+### 2026-08-01 답변 (질의일 2026-07-31, 출처: `set-07/2026-08-01.txt` + `set-07/task-2/2과제.txt`)
+
+원본 파일(`task.md`·`mark.md`·`mark/mark3.sh`·`provided/module-4/Dockerfile`)은 전부 그대로 두고,
+내용이 바뀐 실행 파일만 **날짜 접미사 사본**으로 추가했다 (`mark/mark3-2026-08-01.sh`, `provided/module-4/Dockerfile-2026-08-01`).
+원본과 정정본을 나란히 두면 대회 당일 또 정정이 와도 어느 답변에서 온 사본인지 파일명으로 구분된다.
+
+| # | 정정 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 공통 1 | 채점지 Timestamp 는 UTC 표기지만 채점은 KST 기준 (채점 시 유의사항 17번) | **없음** — task-2 채점 항목에 timestamp 값 비교가 없다. module-4 노드 TZ 는 이미 KST(`eksctl/cluster.yaml` preBootstrapCommands, 과제지 4-1 요구), 앱 `ts` 는 지급 app.py 가 UTC 고정이라 손댈 수 없고, Grafana 대시보드는 `timezone` 미지정 = browser 기본이라 채점자 브라우저에서 KST 로 보인다 |
+| M2-1 | 과제지 5번 "Distribution Name" → "Distribution Comment" | **없음** — 표기 정정일 뿐. 구현은 처음부터 `comment = var.distribution_name`(cloudfront.tf)이고 mark2.sh 도 `.Comment` 로 distribution 을 찾는다. 변수명 개명은 tfvars 까지 파급되고 채점 이득이 0이라 하지 않음 |
+| M3-1 | "Scale in/out 채점 시 2분 대기" → "**Pod/Node level Scale in/out 모두 2분 내**로 이루어져야 함" | **있음** — 기준이 "채점 스크립트 150초 창"에서 "2분"으로 좁아졌다. ScaledObject `scaleDown.stabilizationWindowSeconds` 15 → 0 (결정 로그 참조) |
+| M3-2 | 3-3-A `57m`·`.5-eks-3385e9b`, 3-5-A `-8c66dbc4-r4fnp` 는 파란 글씨 = 채점 시 무시 | **없음** — 노드 가동시간·EKS patch version·pod 해시라 구현이 정하는 값이 아니다. 클러스터 version `1.35` 는 그대로 유지 |
+| M3-3 | 채점 스크립트 3-6-A `seq 1 24` → `seq 1 30` (scale-out 대기 30초 연장, Nitro 부팅 시간 반영) | **없음**(완화 방향) — 자가채점만 정정본 `mark/mark3-2026-08-01.sh` 사용. `mark.md` 3-6-B 블록은 PDF 전사본이라 24 그대로 둔다 |
+| M4-1 | 지급 Dockerfile 3행(`WORKDIR /app` 다음)에 `RUN pip install --no-cache-dir Flask==3.1.3` 삽입 | **있음** — 우리 우회본과 사실상 같은 조치가 공식화됐다. `provided/module-4/Dockerfile-2026-08-01` 추가, `app/Dockerfile` 을 정정본과 동일 본문(설치 줄을 COPY 앞으로, 버전 핀)으로 맞춤 |
+
+---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-04 [module-3] scale-in 목표를 "채점 창 150초" → "2분"으로, scaleDown 안정화 15초 → 0
+- 맥락: 2026-08-01 정정으로 과제지가 "Pod/Node scale in/out 모두 2분 내"를 명시. 기존 설계는 안정화 15초 + consolidateAfter 60초로 노드 반환 ~140초 — 채점 스크립트 창(150초)엔 들어가도 과제지 기준은 초과, 여유도 10초뿐
+- 채택: `stabilizationWindowSeconds: 0`. HPA 안정화 0 은 즉시 축소이고 축소 하한은 컨트롤러 sync 15초라 purge → ~15초 Pod 1 → consolidateAfter 60s → ~110초 노드 1 (문서 확인: k8s HPA 안정화 기본 300초·sync 15초 / KEDA min≥1 이면 cooldownPeriod·pollingInterval 무효, 1→N 은 HPA behavior 지배 / Karpenter 1.0 consolidateAfter 는 pod 제거 시점부터 카운트)
+- 기각: consolidateAfter 단축 → 과제지가 60초 명시. terminationGracePeriodSeconds 단축 → 지급 app.py 에 SIGTERM 핸들러가 없어 기본 종료라 이미 빠름, 실측이 120초를 넘을 때만 꺼낼 카드
+- 대가: 짧은 트래픽 골에도 즉시 축소 (채점용 워크로드라 무관). 실측값은 재배포 후 갱신 필요
+
+### 2026-08-04 [module-4] Dockerfile 은 지급본 정정 반영본으로 (2026-07-31 "수정본" 결정의 사유 소멸)
+- 맥락: 2026-08-01 정정이 지급 Dockerfile 3행에 `RUN pip install --no-cache-dir Flask==3.1.3` 을 넣는 것으로 공식화. 우리가 flask 미설치를 우회하려고 만든 `app/Dockerfile` 의 존재 이유가 공식 조치와 겹침
+- 채택: `provided/module-4/Dockerfile-2026-08-01`(정정본 사본, 원본 유지) 추가 + `app/Dockerfile` 본문을 정정본과 동일하게(설치 줄을 COPY 앞 3행, 버전 핀). 런북 빌드 경로는 계속 app/ — 대회 당일 지급본이 또 다르면 수정 여지가 한 곳에 남는다
+- 기각: app/Dockerfile 삭제 후 provided 직빌드 → 지급본 변형 시 손댈 곳이 provided/ 밖에 없어짐. provided/Dockerfile 원본 덮어쓰기 → provided/ 는 수령 원본이라는 규칙 위반
+- 대가: 같은 내용 파일 2개 공존 (헤더 주석만 차이, 정정 로그에 관계 명시)
 
 ### 2026-07-31 [module-4] ALB·TG 는 Terraform 정확 이름 생성 + LBC TargetGroupBinding 으로 pod IP 등록
 - 맥락: 채점 4-2 가 `describe-target-groups --names o11y-app-tg` 로 TG 이름을 정확 조회하고, app-tg healthy 2·grafana-tg healthy 1 (pod 수와 일치)을 요구

@@ -9,14 +9,32 @@
 - 구성: terraform(단일 리전 종합 인프라) + eksctl(private cluster, Pod Identity) + k8s(app/logging/monitoring).
   머신 4분할 — 본 PC(PS7, terraform) / 일반 CloudShell(이미지 빌드) / SSM bastion(eksctl·helm·kubectl) /
   `unicorn-mark` CloudShell(채점).
-- 미해결: 배포 실측 미수행 — apply·mark.sh 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
-- 미해결: 계정 root 로 운영할 때 EKS access entry 로 사후 보정이 되는지 미확인. 현재는 step 9 권한 게이트로
-  bastion 삭제 전에 걸러내는 방식으로 회피한다.
+- 미해결: 배포 실측 미수행 — apply·`mark-2026-08-10.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
+- 채점 신원은 PowerUser~Administrator 수준 **IAM 사용자**의 CloudShell 이다(2026-08-04 답변). root 가 아니므로
+  access entry 사후 보정이 가능하다 — step 9 권한 게이트는 조기 검출용으로만 남긴다.
 
 ## 채점 커버리지
 <!-- mark.sh / mark/markN.sh 항목 대비 현재 구현이 어디까지 왔는지. -->
 
-- [ ] 미실행 — `bash mark.sh` 결과 수신 후 항목별로 채운다.
+정정(errata) 대비 — `set-07/errata/1과제.txt` 12건 전부 판정 완료. 근거는 정정 로그 표.
+
+| 정정 # | 채점항목 | 판정 | 근거 |
+|--------|---------|------|------|
+| 0 | 6-1-A | 영향없음 | `eksctl/cluster.yaml:22-25` |
+| 1 | 9-1-A | 영향없음 | `terraform/iam.tf:195,205,213` (액션 와일드카드 0) |
+| 2 | 12-1-A | 수정완료(07-31) | `k8s/logging/fluent-bit.yaml:82`, `eksctl/cluster.yaml:104-107` |
+| 3 | 8-6-A, 12-2-A | 수정완료(07-31) | `terraform/waf.tf:41-54` |
+| 4 | 4-1-A, 8-3/8-4-A | 영향없음 | `terraform/dynamodb.tf:32-37`, `terraform/lambda/index.py:46` |
+| 5 | 8-2/8-3/10-1/12-1/12-2-A | 영향없음 | `terraform/cloudfront.tf:47` |
+| 6 | 9-1-A | 영향없음 | `terraform/iam.tf:218-222` (인라인) |
+| 7 | 12-1-A | 영향없음 | 문구 변경만 |
+| 8 | 6-3-A | 영향없음 | `k8s/app/service.yaml:11` |
+| 9 | 절차 | 영향없음 | `README.md` step 9 주석 |
+| 10 | 9-2-A | 수정완료 | `mark-2026-08-10.sh` (정정본 사본) |
+| 11 | 12-1-A | 영향없음 | 채점 측 지침 |
+| 12 | 12-1-A | 수정완료 | `k8s/logging/fluent-bit.yaml:106`, `mark-2026-08-10.sh:123` |
+
+배포 실측 대비 — [ ] 미실행. `bash mark-2026-08-10.sh` 결과 수신 후 항목별로 채운다.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거가 된다. -->
@@ -28,6 +46,36 @@
 ---
 ## 정정 로그
 <!-- 과제지·채점지의 오류/정정. task.pdf·mark.pdf 와 전사본 task.md·mark.md 는 원본 대조용으로 고치지 않는다. -->
+
+정정 정본은 `set-07/errata/1과제.txt` 하나뿐이고, 배경·"수정없음" 판정·답변과 정본이 어긋난 지점은
+`set-07/changelog.txt` 에 있다. 내용이 바뀐 실행 파일은 원본을 두고 **날짜 접미사 사본**으로 추가한다
+(`mark-2026-08-10.sh`) — task-2 와 같은 규칙이다(`set-07/task-2/NOTES.md` 정정 로그).
+
+### 2026-08-10 답변 (출처: `set-07/errata/1과제.txt` 10~12 + `changelog.txt`)
+
+| # | 정정 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:210-215`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
+| 11 | 12-1-A 예상 출력에 "`None` 등의 값이 출력될 경우 무시" 추가 | **없음** — `filter-log-events` 페이지네이션이 만드는 값이라 구현이 손댈 수 없다 |
+| 12 | 12-1-A 기준선 명령을 `date -u "+…Z"` → `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` | **있음** — `k8s/logging/fluent-bit.yaml` 의 `reshape.lua` 가 KST 값을 계산하면서 접미사만 `Z` 였다. `+09:00` 으로 변경(결정 로그 2026-08-15 참조). `mark-2026-08-10.sh` 의 기준선 명령도 정정본으로 교체 |
+
+`changelog.txt` 2026-08-10 의 `주의:` 3건은 위 표에 흡수했다. 다만 **08-04 의 "과제지 예시 형식(`Z`)에 맞출 것"과
+08-10 의 "로그 timestamp 도 `+09:00` 으로 기록할 것"이 정면 충돌**한다 — 후행·구체적인 08-10 을 채택했다(결정 로그).
+
+### 2026-08-04 답변 (출처: `set-07/errata/1과제.txt` 5~9 + `changelog.txt`)
+
+| # | 정정 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 5 | CloudFront 를 "`unicorn-svc-cf` 이름으로" → "`unicorn-svc-cf` **Comment** 를 가지도록" 생성 | **없음** — Distribution 에는 Name 필드가 없고 처음부터 `terraform/cloudfront.tf:47` `comment = "unicorn-svc-cf"` 다. 채점도 전부 `DistributionList.Items[?Comment=='unicorn-svc-cf']` 로 찾는다(`mark.sh:79,111,130`). `cloudfront.tf:110` 의 `Name` 태그는 무해한 여분이라 남긴다 |
+| 6 | 과제지 11 "와일드카드 액션은…" 앞에 "**Inline Policy 를 사용하며,**" 추가 | **없음** — `terraform/iam.tf:218-222` 가 이미 `aws_iam_role_policy`(인라인)다. 채점 9-1-A 가 `aws iam list-role-policies`(인라인 전용)만 쓰므로 고객 관리형으로 붙였으면 0점이었다 |
+| 7 | 12-1-A "출력값 **형식**이 위와 같고" → "**출력된 로그**가 위와 같고" | **없음**(문구) — 다만 형식 엄격성이 완화됐다는 근거로 정정 12 판단에 쓰인다. 유의사항 16 에 따라 IP 등 변동값은 무시 |
+| 8 | 6-3-A 예상 출력 `unicorn-book-app-svc` → `unicorn-book-app-svc ClusterIP` | **없음** — `k8s/app/service.yaml:11` 이 이미 `type: ClusterIP`. `mark.sh:60` 이 `TYPE:.spec.type` 을 출력하고 있어 출력값도 이미 일치 |
+| 9 | 유의사항 19 추가 — `source kubectl-connect` 오류 시 1회에 한해 `rm -rf .kube/` 로 초기화 허용 | **없음**(채점 절차) — 런북 step 9 에 한 줄만 반영. kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인 |
+
+`changelog.txt` 2026-08-04 의 나머지 `주의:` 판정 —
+**12-2-A 재채점**(수정없음): `terraform/waf.tf:83-106` 의 limit 50 / evaluation window 60초가 과제지와 일치하고
+채점 스크립트도 60초 대기하므로 영향없음.
+**9-2-A 채점 주체**(수정없음): errata 정본에는 없으나 저장소 설계와 어긋나 문서만 고쳤다 — 아래 결정 로그 참조.
 
 ### 2026-08-01 답변 (질의 ~2026-07-30 / 출처: `set-07/2026-08-01.txt`)
 
@@ -58,6 +106,28 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-15 로그 timestamp 접미사를 `Z` → `+09:00`, 채점 신원 전제를 root → IAM 사용자
+- 맥락: 2026-08-04·2026-08-10 정정 8건(errata 5~12)을 구현과 대조했다. 실제로 어긋난 곳은 두 군데뿐이다.
+- **timestamp 접미사 `+09:00`**: 채택 — `reshape.lua` 를 `os.date("!…%H:%M:%S", sec+KST_OFFSET) .. "+09:00"` 으로.
+  정정 12 가 12-1-A 기준선을 `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` 로 바꿨다. 값은 이미 KST 였으므로
+  접미사만 틀린 상태였는데, 기준선이 `+09:00` 인데 로그가 `Z` 면 **채점자가 로그를 UTC 로 읽어 9시간 차로 판정**할
+  여지가 남는다. 오프셋을 맞추면 두 줄의 차가 문자 그대로 몇 초다.
+  기각: `Z` 유지 → `task.md:194` 예시·`mark.md:737` 전사본과는 리터럴이 맞지만, 그 둘은 정정 **전** 문서다.
+  정정 7 이 "출력값 **형식**" → "출력된 **로그**" 로 완화한 것이 형식 일치를 요구하지 않는다는 근거다.
+  기각: 컨테이너 TZ 로 해결 → 2026-08-04 항목과 같은 이유(tzdata 없으면 조용히 UTC).
+  대가: 전사본 `mark.md`·`task.md` 의 예시와 리터럴이 다르다. 두 문서는 원본 대조용이라 고치지 않는다.
+- **채점 신원 root → IAM 사용자**: 채택 — 런북의 "채점은 root 로 한다" 전제를 걷어냈다. `changelog.txt` 2026-08-04
+  `9-2-A 채점 주체` 답변이 "PowerUser 이상 Administrator 이하 IAM 계정, 직종설명서 개정본상 스크립트는 Bastion 이
+  아니라 Admin 수준 IAM 으로 접속한 CloudShell 에서 실행"이라고 못박았다. root 는 애초에 Assume Role 을 못 해
+  9-2-A 자체가 성립하지 않는다.
+  **이 변경으로 위험이 하나 사라진다** — 그동안 step 9 권한 게이트를 반드시 통과시켜야 했던 이유가 "root ARN 은
+  access entry 대상으로 문서화돼 있지 않아 사후 보정이 안 될 수 있다"였는데, 신원이 IAM 사용자면
+  `create-access-entry` + `associate-access-policy` 가 정상 복구 경로가 된다.
+  기각: `eksctl/cluster.yaml` 에 `accessEntries` 를 추가해 채점 principal 을 못박기 →
+  `bootstrapClusterCreatorAdminPermissions: true` 와 principal 이 같으면 create 단계에서 중복 엔트리로 실패한다.
+  게이트 실패 시 두 줄로 복구되는 지금이 더 안전하다. 환경변수 오타 하나로 클러스터 생성이 깨지는 쪽으로 가지 않는다.
+  대가: 정정 정본(errata)에 없는 변경이라 문서만 고쳤다. 구현은 그대로다.
 
 ### 2026-08-04 Platform MRK 프라이머리를 서울로, 타임스탬프를 KST 로, WAF XSS 룰에 Custom Response
 - 맥락: 2026-07-31 정정 4건과 2026-08-01 답변을 현재 구현과 대조한 결과 세 곳이 어긋났다(위 정정 로그).
