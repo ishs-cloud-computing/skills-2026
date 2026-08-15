@@ -57,6 +57,9 @@ book 애플리케이션은 콘서트 예매 정보를 저장하기 위해 Dynamo
 - Table Name : `wskorea26-data-table`
 - Primary Key : `client_id(S)`
 - CMK : `wskorea26-dynamodb-key`
+- GSI Name / PK,SK : `concert_name-created_at-index` / `concert_name`(PK), `created_at`(SK)
+
+> 정정 2026-08-07: Reference03이 `concert_name` 조회와 `created_at` 최신순 정렬을 요구하는데 원본 과제지에는 `client_id` Primary Key만 있어 GSI 요구사항이 추가 명시됐다.
 
 ## 8. Elastic Kubernetes Service
 
