@@ -8,7 +8,7 @@ EKS 1.35(Multi-AZ·KST 노드) + ECR 이미지 앱 + OTel Collector(DaemonSet) +
 ```
 module-4-container-logging/
 ├── app/
-│   └── Dockerfile               # 지급본 수정판 — flask 설치 추가 (지급본은 미설치 → CrashLoop)
+│   └── Dockerfile               # 지급본의 2026-08-01 정정 반영본 (Flask==3.1.3 설치)
 ├── terraform/
 │   ├── vpc.tf                   # 자체 VPC + pub/priv 서브넷(1a/1c) + NAT
 │   ├── ecr.tf                   # o11y-log-generator 저장소
@@ -121,7 +121,7 @@ docker build -t $ECR/o11y-log-generator:latest .
 docker push $ECR/o11y-log-generator:latest
 ```
 
-> 지급 Dockerfile(provided/module-4/Dockerfile)이 아니라 **app/ 수정본**을 쓴다. 지급본은 flask 를 설치하지 않아 그대로 빌드하면 CrashLoopBackOff.
+> 최초 지급 Dockerfile(provided/module-4/Dockerfile)이 아니라 **app/ 정정 반영본**을 쓴다. 최초 지급본은 flask 를 설치하지 않아 그대로 빌드하면 CrashLoopBackOff — 2026-08-01 정정으로 pip install 이 추가됐고 그 내용이 app/Dockerfile(= provided/module-4/Dockerfile-2026-08-01)이다.
 
 ### 4) [본 PC·PowerShell] 노드 검증 (채점 4-1)
 

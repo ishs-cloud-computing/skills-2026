@@ -6,9 +6,10 @@
 # - Pod 1개당 메시지 5건 목표 (queueLength: 5, 채점 3-4 정확 일치).
 # - IRSA: keda-operator SA 의 역할 사용 (identityOwner: operator — KEDA 2.x 동작,
 #   3.0 에서 제거 예정이므로 KEDA 3 부터는 TriggerAuthentication 으로 전환 필요).
-# - scaleDown behavior 오버라이드: HPA 기본 안정화 300초로는 채점 3-7(purge 후
-#   150초 내 Pod 1·노드 1)을 통과할 수 없다. purge → HPA sync ~15초 감지
-#   → ~35초 Pod 1 → consolidateAfter 60s → ~140초 노드 1.
+# - scaleDown behavior 오버라이드: HPA 기본 안정화 300초로는 과제지가 요구하는
+#   "Pod/Node scale in/out 2분 내"(2026-08-01 정정)를 구조적으로 못 지킨다.
+#   안정화 0 → purge 후 HPA sync 1회(~15초)에 Pod 1 → consolidateAfter 60s
+#   → ~110초에 노드 1. 창이 120초라 안정화 15초는 여유가 없다.
 # - pollingInterval 없음: minReplicaCount≥1 이면 스케일링은 전부 HPA 폴링이라
 #   무효 필드 (KEDA webhook 경고). min=0 으로 바뀌면 재도입.
 #
@@ -28,7 +29,7 @@ spec:
     horizontalPodAutoscalerConfig:
       behavior:
         scaleDown:
-          stabilizationWindowSeconds: 15
+          stabilizationWindowSeconds: 0
           policies:
             - type: Percent
               value: 100
