@@ -72,7 +72,7 @@ $env:BUCKET     = $o.s3_bucket_name.value
 # 작업 호스트는 파일 업로드 UI 가 없고 레포가 비공개라 git clone 도 불가 → S3 를 릴레이로 쓴다.
 # _transfer/ 는 채점 전 step 10 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
 aws s3 cp ..\outputs.json "s3://$env:BUCKET/_transfer/outputs.json"
-tar czf "$env:TEMP\unicorn-cs.tgz" -C .. eksctl k8s mark.sh
+tar czf "$env:TEMP\unicorn-cs.tgz" -C .. eksctl k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
 aws s3 cp "$env:TEMP\unicorn-cs.tgz" "s3://$env:BUCKET/_transfer/unicorn-cs.tgz"
 
 # step 2(일반 CloudShell)의 이미지 빌드 재료 — 본 PC 엔 Docker 가 없다
@@ -152,11 +152,12 @@ aws ssm start-session --target "$BID"
 
 ### 4) [bastion] 도구 설치 · 자격증명 · 파일 수신 · 환경 변수
 
-> **`aws login --remote` 는 채점 때 콘솔에 로그인할 그 세션으로 로그인한다** — 채점은 root 로 하므로
-> 브라우저에서도 root 로 로그인한다. 그래야 **클러스터 생성자 = 채점 CloudShell 신원** 이 되어
-> (`bootstrapClusterCreatorAdminPermissions`) bastion 삭제 후에도 채점 셸 kubectl 권한이 유지된다.
+> **`aws login --remote` 는 채점 때 콘솔에 로그인할 그 세션으로 로그인한다** — 채점은 PowerUser~Administrator
+> 수준 **IAM 사용자**로 하므로(2026-08-04 답변) 브라우저에서도 그 IAM 사용자로 로그인한다. 그래야
+> **클러스터 생성자 = 채점 CloudShell 신원** 이 되어 (`bootstrapClusterCreatorAdminPermissions`)
+> bastion 삭제 후에도 채점 셸 kubectl 권한이 유지된다. 어긋나도 step 9 에서 access entry 로 보정된다.
 > `--remote` 는 브라우저 없는 호스트용이라 URL 과 authorization code 를 손으로 옮긴다 — SSM 세션에 맞는다.
-> 액세스 키를 만들지 않아 root 키 생성이 막힌 계정에서도 되고, bastion 디스크에 장기 키가 남지 않는다.
+> 액세스 키를 만들지 않아 키 생성이 막힌 계정에서도 되고, bastion 디스크에 장기 키가 남지 않는다.
 > 세션은 최대 12시간(15분마다 자동 갱신)이라 `ExpiredToken` 이 뜨면 `aws login --remote` 를 다시 실행한다.
 
 ```bash
@@ -170,12 +171,12 @@ curl -sL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli
 unzip -q -o /tmp/awscli.zip -d /tmp && sudo /tmp/aws/install --update
 hash -r && aws --version   # 2.32.0 이상 확인
 
-aws login --remote   # 출력 URL 을 본 PC 브라우저에서 열어 root 로 로그인 → 표시된 authorization code 를
+aws login --remote   # 출력 URL 을 본 PC 브라우저에서 열어 채점용 IAM 사용자로 로그인 → 표시된 authorization code 를
                      # 이 터미널에 붙여넣는다. region 프롬프트 = ap-northeast-2
 
 # 신원 확인 — 여기서 어긋나면 클러스터를 만들기 전에 잡는다
 aws configure list                                      # TYPE 열이 login (~/.aws/credentials 가 남아 있으면 그쪽이 이긴다)
-aws sts get-caller-identity --query Arn --output text    # 채점 셸과 같은 신원(root)
+aws sts get-caller-identity --query Arn --output text    # 채점 셸과 같은 신원(IAM 사용자)
 
 # 파일 (S3 릴레이) + NUM
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -345,21 +346,22 @@ for i in $(seq 1 20); do curl -s -o /dev/null "https://$CF/health"; done        
 2. 채점 준비:
    ```bash
    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-   aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/unicorn-cs.tgz" /tmp/ && tar xzf /tmp/unicorn-cs.tgz -C /tmp mark.sh && cp /tmp/mark.sh ~/   # /home/cloudshell-user (유의사항 13)
+   aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/unicorn-cs.tgz" /tmp/ && tar xzf /tmp/unicorn-cs.tgz -C /tmp mark-2026-08-10.sh && cp /tmp/mark-2026-08-10.sh ~/   # /home/cloudshell-user (유의사항 13)
    aws eks update-kubeconfig --name unicorn-eks-cluster --region ap-northeast-2
-   bash ~/mark.sh
+   bash ~/mark-2026-08-10.sh
    ```
+   > 컨텍스트 설정에서 오류가 나면 **1회에 한해** `rm -rf ~/.kube/` 로 초기화한 뒤 다시 실행할 수 있다(유의사항 19).
+   > kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인이다.
 3. **권한 게이트 — 여기가 통과해야 step 10 으로 넘어간다:**
    ```bash
    aws sts get-caller-identity --query Arn --output text   # step 4 의 aws login 신원과 같아야 함
    kubectl auth can-i '*' '*'                              # yes
    kubectl get nodes                                       # 노드가 보여야 함
    ```
-   > 실패하면 **bastion 을 지우지 말고** 여기서 잡는다. IAM 사용자/역할로 운영 중이면 access entry 를 추가한다:
+   > 실패하면 **bastion 을 지우지 말고** 여기서 잡는다. 채점 신원은 IAM 사용자이므로 access entry 를 추가하면 된다:
    > `aws eks create-access-entry --cluster-name unicorn-eks-cluster --principal-arn <ARN>` →
    > `aws eks associate-access-policy --cluster-name unicorn-eks-cluster --principal-arn <ARN> --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy --access-scope type=cluster`
-   > 계정 root 로 운영 중이라면 이 경로는 보장되지 않는다(root ARN 은 access entry 대상으로 문서화돼 있지 않다).
-   > 그때는 step 4 의 `aws login` 을 채점 셸과 같은 세션으로 다시 해 클러스터를 재생성하는 것이 확실하다.
+   > 이미 엔트리가 있으면 `ResourceInUseException` 이 나며 무해하다 — associate 만 다시 실행한다.
 
 ### 10) [본 PC·PowerShell] 채점 전 정리 (배포 검증 후)
 
@@ -443,7 +445,7 @@ aws s3api list-objects-v2 --bucket "$env:BUCKET" --prefix _transfer/ --query 'Co
 
 ## 검증 시드 / 채점 포인트
 
-- 채점은 `unicorn-mark` CloudShell 에서 `bash mark.sh` 로 일괄 실행.
+- 채점은 `unicorn-mark` CloudShell 에서 `bash mark-2026-08-10.sh` (2026-08-10 정정본) 로 일괄 실행.
 - 핵심 확인: `aws kms get-key-rotation-status`(app/data/platform = True 90), `aws ecr describe-repositories`(IMMUTABLE_WITH_EXCLUSION),
   `kubectl get nodes -l unicorn=app`(2 AZ 이상), `aws eks list-pod-identity-associations`(unicorn-book-app-sa),
   CloudWatch `/unicorn/eks/book-app` 로그 키 = `client_ip,method,path,status_code,timestamp`,
@@ -454,10 +456,11 @@ aws s3api list-objects-v2 --bucket "$env:BUCKET" --prefix _transfer/ --query 'Co
 - **작업용 bastion 은 임시**: `unicorn-mark-sg` 공유로 private API 에 접근하고, 자격증명은 `aws login --remote` 로 받아
   생성자=채점 신원을 맞춘다. 인스턴스 프로파일은 SSM 전용. **채점 전 step 10 으로 인스턴스+프로파일+role 까지 삭제** —
   mark.sh 가 검사하지 않아도 남기지 않는다. 삭제 전 상태를 본 PC 로 회수하므로 복구는 언제든 가능하다.
-- **자격증명 신원**: 채점은 root 로 하므로(`mark.md` 순번 0 이 `rm -rf ~/.aws` 후 콘솔 세션 자격증명을 그대로 쓴다)
-  bastion 도 root 여야 한다. `aws login --remote` 로 root 콘솔 세션의 임시 크레덴셜을 받는다 — 액세스 키와 신원이
-  같으면서 키 생성이 막힌 계정에서도 되고, 장기 키가 bastion 에 남지 않는다. 계정 root ARN 은 EKS access entry
-  대상으로 문서화돼 있지 않아 **사후 보정이 안 될 수 있으므로**, step 9 권한 게이트를 bastion 삭제 전에 반드시 통과시킨다.
+- **자격증명 신원**: 채점은 **PowerUser~Administrator 수준 IAM 사용자**의 CloudShell 에서 한다(2026-08-04 답변).
+  root 가 아니다 — root 는 Assume Role 을 못 해 9-2-A 자체가 성립하지 않는다. bastion 도 같은 신원으로 맞춘다:
+  `aws login --remote` 로 그 콘솔 세션의 임시 크레덴셜을 받는다(장기 키가 bastion 에 남지 않는다).
+  신원이 IAM 사용자이므로 어긋나도 **access entry 로 사후 보정이 된다** — step 9 권한 게이트는 bastion 삭제 전
+  조기 검출용이다.
 - **`aws login` 전제**: AWS CLI 2.32.0 이상(step 4 에서 최신 v2 로 갱신), signin 엔드포인트는 VPC Endpoint 가 없어
   NAT 경유(유의사항 6 의 443 outbound open 으로 통과), 세션 최대 12시간 후 재로그인.
 - **Platform KMS = MRK**: 프라이머리(ap-northeast-2)·레플리카(us-east-1) 동일 키 자료. EKS/EBS/Log(서울)=프라이머리,

@@ -36,7 +36,7 @@ EOF
 # 작업 호스트는 파일 업로드 UI 가 없고 레포가 비공개라 git clone 도 불가 → S3 를 릴레이로 쓴다.
 # _transfer/ 는 채점 전 step 10 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
 aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
-tar czf /tmp/unicorn-cs.tgz -C .. eksctl k8s mark.sh
+tar czf /tmp/unicorn-cs.tgz -C .. eksctl k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
 aws s3 cp /tmp/unicorn-cs.tgz "s3://$BUCKET/_transfer/unicorn-cs.tgz"
 
 # step 2(일반 CloudShell)의 이미지 빌드 재료
