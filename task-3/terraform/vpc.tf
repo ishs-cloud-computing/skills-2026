@@ -6,7 +6,7 @@ resource "aws_vpc" "this" {
   enable_dns_hostnames = true
 
   tags = {
-    Name = "skills-vpc"
+    Name = local.vpc_name
   }
 }
 
@@ -19,7 +19,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "public-subnet-${count.index + 1}"
+    Name                                          = "${local.public_subnet_name}-${count.index + 1}"
+    "kubernetes.io/role/elb"                      = "1"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
@@ -31,9 +33,9 @@ resource "aws_subnet" "private" {
   availability_zone = local.azs[count.index]
 
   tags = {
-    Name = "private-subnet-${count.index + 1}"
-    # NodeClass subnetSelectorTerms가 이 태그로 노드 서브넷을 선택한다
-    "kubernetes.io/role/internal-elb" = "1"
+    Name                                          = "${local.private_subnet_name}-${count.index + 1}"
+    "karpenter.sh/discovery"                      = local.cluster_name
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
@@ -41,7 +43,7 @@ resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
 
   tags = {
-    Name = "skills-igw"
+    Name = local.igw_name
   }
 }
 
@@ -50,7 +52,7 @@ resource "aws_nat_gateway" "this" {
   availability_mode = "regional"
 
   tags = {
-    Name = "skills-nat"
+    Name = local.nat_name
   }
 
   depends_on = [aws_internet_gateway.this]
@@ -63,7 +65,7 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids   = [aws_route_table.private.id]
 
   tags = {
-    Name = "s3-vpce"
+    Name = local.s3_endpoint_name
   }
 }
 
@@ -76,7 +78,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "public-rtb"
+    Name = local.public_rtb_name
   }
 }
 
@@ -89,7 +91,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "private-rtb"
+    Name = local.private_rtb_name
   }
 }
 

@@ -1,19 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-apiVersion: eks.amazonaws.com/v1
-kind: NodeClass
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  role: skills-eks-automode-node # = terraform output automode_node_role_name
+  role: KarpenterNodeRole-skills-eks
   subnetSelectorTerms:
     - tags:
-        kubernetes.io/role/internal-elb: "1"
-  # terms는 OR — 매칭된 SG가 모두 노드에 붙는다.
+        karpenter.sh/discovery: skills-eks
   securityGroupSelectorTerms:
     - tags:
-        aws:eks:cluster-name: skills-eks
-    # ALB→파드(8080) 개방용. Auto Mode TGB는 spec.networking 미지원이라 SG로 해결.
-    - tags:
-        skills:alb-backend: "1"
+        karpenter.sh/discovery: skills-eks
+  # eksctl/cluster.yaml 의 amiFamily 와 같은 계열이어야 노드 OS 가 갈리지 않는다.
+  amiSelectorTerms:
+    - alias: bottlerocket@latest

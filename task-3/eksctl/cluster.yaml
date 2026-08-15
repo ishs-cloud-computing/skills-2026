@@ -9,44 +9,45 @@ metadata:
   region: ap-northeast-2
   version: "1.36"
 
-# Terraform이 만든 private 서브넷 사용 (README 런북 STEP 2에서 치환)
+autoModeConfig:
+  enabled: false
+
 vpc:
   subnets:
     private:
-      ap-northeast-2a: { id: subnet-REPLACE_A }
-      ap-northeast-2b: { id: subnet-REPLACE_B }
+      ap-northeast-2a: { id: subnet-REPLACE_PRIVATE_A }
+      ap-northeast-2b: { id: subnet-REPLACE_PRIVATE_B }
+    public:
+      ap-northeast-2a: { id: subnet-REPLACE_PUBLIC_A }
+      ap-northeast-2b: { id: subnet-REPLACE_PUBLIC_B }
 
-autoModeConfig:
-  enabled: true
-  nodePools: [] # 내장 general-purpose/system 둘 다 비활성화 → default NodeClass도 생성 안 됨
+iam:
+  podIdentityAssociations:
+    - namespace: default
+      serviceAccountName: product
+      createServiceAccount: true
+      permissionPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
-# 커스텀 NodeClass가 쓸 노드 역할에 EC2 액세스 엔트리 부여.
-# (내장 NodePool을 껐으므로 EKS가 자동으로 만들어주지 않는다.)
-accessConfig:
-  accessEntries:
-    - principalARN: arn:aws:iam::ACCOUNT_ID:role/skills-eks-automode-node # = terraform output automode_node_role_arn
-      type: EC2
-      accessPolicies:
-        - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAutoNodePolicy
-          accessScope:
-            type: cluster
+managedNodeGroups:
+  - name: system
+    instanceType: t3.medium
+    # k8s/00-nodeclass.yaml 의 amiSelectorTerms alias 와 같은 계열이어야 노드 OS 가 갈리지 않는다.
+    amiFamily: Bottlerocket
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    privateNetworking: true
 
 addons:
-  # HPA 전제조건 (Auto Mode에 미포함) — EKS community addon
   - name: metrics-server
-  # 모니터링(Container Insights) + 로깅(앱 stdout/stderr → CloudWatch Logs)
+  - name: eks-pod-identity-agent
+  # 일반 버전: 전 네임스페이스 로그 + Application Signals 까지 기본값 그대로.
+  # 수집 범위를 줄이려면 클러스터 생성 후 eksctl/cloudwatch-tuned.yaml 을 적용한다.
   - name: amazon-cloudwatch-observability
     podIdentityAssociations:
       - namespace: amazon-cloudwatch
         serviceAccountName: cloudwatch-agent
         permissionPolicyARNs:
           - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-
-# Pod Identity — Auto Mode는 에이전트가 내장이라 addon 불필요.
-iam:
-  podIdentityAssociations:
-    - namespace: default
-      serviceAccountName: product-app-sa
-      createServiceAccount: true
-      permissionPolicyARNs:
-        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+          - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess

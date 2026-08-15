@@ -1,0 +1,20 @@
+{
+  "Name": "BlockDeniedUserAgent",
+  "Priority": 5,
+  "Statement": {
+    "RegexPatternSetReferenceStatement": {
+      "ARN": "arn:aws:wafv2:us-east-1:346151107821:global/regexpatternset/denied-user-agents/<id>",
+      "FieldToMatch": { "SingleHeader": { "Name": "user-agent" } },
+      "TextTransformations": [
+        { "Priority": 0, "Type": "COMPRESS_WHITE_SPACE" },
+        { "Priority": 1, "Type": "LOWERCASE" }
+      ]
+    }
+  },
+  "Action": { "Block": { "CustomResponse": { "ResponseCode": 403 } } },
+  "VisibilityConfig": {
+    "SampledRequestsEnabled": true,
+    "CloudWatchMetricsEnabled": true,
+    "MetricName": "BlockDeniedUserAgent"
+  }
+}

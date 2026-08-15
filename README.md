@@ -14,7 +14,6 @@
 ### 요구사항
 
 - [Git](https://git-scm.com/), [Git-LFS](https://git-lfs.com/)
-- [mise](https://github.com/jdx/mise)
 
 ### 설치
 
@@ -25,26 +24,11 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git
 cd skills-2026
 ```
 
-2. `mise`로 툴 설치
-
-```bash
-mise install
-```
-
-3. 로컬 문서 시작
-
-```bash
-cd docs/
-npm install
-cd ..
-mise docs
-```
-
 ## 학습 가이드
 
 치트시트, 트러블슈팅 관련 문서는 해당 학습 가이드를 참고해주세요!
 
-- 주소: https://skills-learn.zenru.net/ ( 임시 로그인: user / bruh1004pass )
+- 주소: https://skills-2026-learn-module.vercel.app/
 - 기여: 김우진 [@rladnwls122](https://github.com/rladnwls122)
 
 ## 진행 상황

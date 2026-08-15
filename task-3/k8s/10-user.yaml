@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 
-# user API: DB-IO 바운드. 당일 API가 바뀌면 이 파일을 복사해 이름·이미지·env만 수정.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,7 +8,7 @@ metadata:
   labels:
     app: user
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: user
@@ -21,22 +20,20 @@ spec:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app: user
       terminationGracePeriodSeconds: 45
       containers:
         - name: user
-          image: <IMAGE> # terraform output ecr_image_uris로 치환 (태그 포함, README STEP 8)
+          image: <IMAGE>
           ports:
             - containerPort: 8080
-          # 채점은 블랙박스(응답코드/시간/비용)라 Secret/ConfigMap을 검사하지 않는다.
-          # 계정도 대회용 1회성 → 앱별 env를 매니페스트에 직접 둬 자기완결적으로 유지.
-          # <>는 README STEP 8에서 치환. 키 이름은 과제지 환경변수 표와 정확히 일치.
+          # 키 이름은 과제지 환경변수 표와 정확히 일치해야 한다.
           env:
             - name: MYSQL_HOST
-              value: "<PROXY_ENDPOINT>" # RDS 직결이 아닌 프록시 (커넥션 풀링)
+              value: "<PROXY_ENDPOINT>"
             - name: MYSQL_PORT
               value: "<DB_PORT>"
             - name: MYSQL_DBNAME
@@ -47,13 +44,11 @@ spec:
               value: "<DB_PASSWORD>"
           resources:
             requests:
-              # demo 실측값 — t3.medium(allocatable ~1930m)에 2~3파드 패킹
-              cpu: 600m
-              memory: 768Mi
+              cpu: 250m
+              memory: 512Mi
+            # CPU limit 을 두지 않는다 — CFS 스로틀링이 p99 를 깎아 0.2s SLO 를 해친다.
             limits:
-              # CPU limit 없음: 스로틀링이 p99를 깎아 0.2s SLO를 해친다
-              # memory request=limit: OOM 없이 예측 가능한 패킹 (demo 실측)
-              memory: 768Mi
+              memory: 512Mi
           readinessProbe:
             httpGet:
               path: /healthcheck
@@ -67,7 +62,6 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 15
           lifecycle:
-            # TG deregistration_delay(15s) 동안 in-flight 요청 처리 후 종료
             preStop:
               exec:
                 command: ["sleep", "15"]
@@ -75,26 +69,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: user-svc
+  name: user
 spec:
   type: ClusterIP
   selector:
     app: user
   ports:
-    - port: 8080
+    - port: 80
       targetPort: 8080
----
-# Terraform이 만든 타깃그룹에 파드 연결 (Auto Mode 내장 컨트롤러)
-apiVersion: eks.amazonaws.com/v1
-kind: TargetGroupBinding
-metadata:
-  name: user
-spec:
-  serviceRef:
-    name: user-svc
-    port: 8080
-  targetGroupARN: "<TG_ARN>"
-  targetType: ip
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -105,17 +87,16 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: user
-  minReplicas: 2
-  maxReplicas: 9
+  minReplicas: 1
+  maxReplicas: 10
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 75
+          averageUtilization: 60
   behavior:
-    # T+60분에 트래픽이 스텝으로 들어오므로 스케일아웃은 즉시·공격적으로
     scaleUp:
       stabilizationWindowSeconds: 0
       policies:
@@ -126,20 +107,9 @@ spec:
           value: 4
           periodSeconds: 15
       selectPolicy: Max
-    # 스파이크 종료 후 빠른 회수로 비용 ratio를 낮춘다 (demo 검증값)
     scaleDown:
-      stabilizationWindowSeconds: 120
+      stabilizationWindowSeconds: 40
       policies:
         - type: Percent
           value: 50
-          periodSeconds: 30
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: user
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: user
+          periodSeconds: 40

@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: skills
+  annotations:
+    # terraform locals.tf 의 alb_name 과 반드시 같아야 한다 — cloudfront.tf 가 이 이름으로 조회한다.
+    alb.ingress.kubernetes.io/load-balancer-name: skills-alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /healthcheck
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "10"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=15
+    # port name 이 use-annotation 이면 response-404 Service 는 실재하지 않아도 된다.
+    alb.ingress.kubernetes.io/actions.response-404: >
+      {"type":"fixed-response","fixedResponseConfig":{"contentType":"application/json","statusCode":"404","messageBody":"{\"error\":\"Not Found\"}"}}
+spec:
+  ingressClassName: alb
+  defaultBackend:
+    service:
+      name: response-404
+      port:
+        name: use-annotation
+  rules:
+    - http:
+        paths:
+          - path: /v1/user
+            pathType: Prefix
+            backend:
+              service:
+                name: user
+                port:
+                  number: 80
+          - path: /v1/product
+            pathType: Prefix
+            backend:
+              service:
+                name: product
+                port:
+                  number: 80
+          - path: /v1/stress
+            pathType: Prefix
+            backend:
+              service:
+                name: stress
+                port:
+                  number: 80
