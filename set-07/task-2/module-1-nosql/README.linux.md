@@ -10,12 +10,9 @@ terraform init
 terraform apply -auto-approve
 ```
 
-### 2) [본 PC] 앱 기동 대기 (부팅 + pip 설치 ~2-3분)
+### 2) [CloudShell] 앱 기동 대기 (부팅 + pip 설치 ~2-3분)
 
-```bash
-until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-  "$(terraform output -raw healthcheck_url)" | grep -q 200; do sleep 10; done
-```
+[README.md](README.md) 2단계 수행.
 
 ### 3) [CloudShell] 셀프 채점
 

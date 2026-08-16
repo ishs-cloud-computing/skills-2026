@@ -1,7 +1,7 @@
 # Module 2 — CDN Function (us-east-1)
 
-S3(OAC) + CloudFront KeyValueStore + CloudFront Functions(js-2.0) 엣지 A/B 테스팅. 채점은 CloudShell에서 `mark/mark2.sh` 실행.
-본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
+S3(OAC) + CloudFront KeyValueStore + CloudFront Functions(js-2.0) 엣지 A/B 테스팅. 검증·채점은 CloudShell(us-east-1)에서 한다.
+본 PC 는 `terraform` 만 쓴다. 본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
 
 ## 디렉토리 구조
 
@@ -16,7 +16,7 @@ module-2-cdn-function/
 └── README.md
 
 # 정적 콘텐츠: task-2/provided/module-2/{index_a,index_b}.html (제공 원본, 수정 금지) — terraform 이 직접 참조
-# 채점: task-2/mark/mark2.sh (CloudShell, us-east-1)
+# 검증·채점: task-2/mark/mark2.sh (CloudShell, us-east-1)
 ```
 
 ## 배포 순서
@@ -29,21 +29,27 @@ terraform init
 terraform apply -auto-approve
 ```
 
-### 2) [본 PC·PowerShell] A/B 동작 검증
+### 2) [CloudShell] A/B 동작 검증
 
-```powershell
-$URL = terraform output -raw landing_url
+도메인은 terraform output 대신 distribution Comment 로 조회한다 — 채점 스크립트와 같은 경로다.
+
+```bash
+D=$(aws cloudfront list-distributions --region us-east-1 \
+  | jq -r '.DistributionList.Items[]|select(.Comment=="skillsphone-cdn-ab-distribution")|.DomainName')
+echo "$D"
 # 쿠키 강제: 해당 버전 본문 + Set-Cookie 없음이 기대 출력
-curl.exe -si -b "x-sp-ab=a" $URL | Select-String "version-badge|set-cookie"
-curl.exe -si -b "x-sp-ab=b" $URL | Select-String "version-badge|set-cookie"
+for v in a b; do curl -si -b "x-sp-ab=$v" "https://$D/" | grep -iE 'version-badge|set-cookie'; done
 # 첫 방문: Set-Cookie x-sp-ab=<a|b>; Path=/; Max-Age=86400 + 해당 버전 본문이 기대 출력
-curl.exe -si $URL | Select-String "version-badge|set-cookie"
+curl -si "https://$D/" | grep -iE 'version-badge|set-cookie'
 ```
 
 ### 3) [CloudShell] 셀프 채점 (2-6-A 는 KVS 전파 대기로 최대 ~2분)
 
+`mark/mark2.sh` 를 업로드(작업 → 파일 업로드)한다. 업로드 파일은 `$HOME` 에 평평하게 저장되므로 경로 없이 실행한다.
+
 ```bash
-bash mark/mark2.sh
+sed -i 's/\r$//' mark2.sh   # Windows 업로드 CRLF 가드 (멱등)
+bash mark2.sh
 ```
 
 ## Teardown
