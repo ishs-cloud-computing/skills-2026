@@ -58,7 +58,10 @@ aws ssm get-command-invocation --command-id $CMD_ID --instance-id $EC2_ID --quer
 
 ## Zeppelin 노트북 절차 (대회 중 수동 시연)
 
-1. 콘솔 → Managed Apache Flink → Studio → `wsc2026-analytics-flink` → **Run** (READY→RUNNING, 수 분 소요).
+1. 콘솔 → Managed Apache Flink → Studio → `wsc2026-analytics-flink` → **실행** (READY→RUNNING, 수 분 소요).
+
+   ![Studio 노트북 실행](images/studio-notebook-run.webp)
+
 2. 데이터 주입 — 본 PC(PowerShell):
    ```powershell
    1..30 | ForEach-Object { Invoke-RestMethod -Method Post -Uri "http://$ALB_DNS/orders/generate" | Out-Null }
@@ -67,7 +70,12 @@ aws ssm get-command-invocation --command-id $CMD_ID --instance-id $EC2_ID --quer
    ```bash
    for i in $(seq 1 30); do curl -s -X POST http://$ALB_DNS/orders/generate > /dev/null; done
    ```
-3. **Open in Apache Zeppelin** → 새 노트 → 순서대로 실행:
+3. **Apache Zeppelin에서 열기** → 새 노트 하나에 아래 문단들을 만들고, **문단마다 ▶ 버튼을 위에서 아래로 하나씩 실행한다.** 노트 전체 "Run all" 을 쓰지 않는다 — 3·4번 문단은 끝나지 않는 스트리밍 쿼리라 Run all 은 거기서 멈춘 채 뒤 문단이 대기한다. 앞 문단이 `FINISHED` 가 된 뒤 다음 문단을 누른다.
+
+   ![문단을 순차 실행](images/zeppelin-paragraph-order.webp)
+
+   노트를 여러 개로 쪼개지 않는다. Studio 는 **노트북 안 모든 노트가 인터프리터 프로세스를 공유**하므로([AWS 문서](https://docs.aws.amazon.com/managed-flink/latest/java/how-zeppelin-udf.html)) 노트를 나눠도 세션이 격리되지 않고, 아래 `%flink.conf` 는 인터프리터가 이미 떠 있으면 무시된다 — 즉 두 번째 노트에서 쓰면 조용히 안 먹는다.
+
 
    먼저 인터프리터 설정 — **반드시 첫 문단, Flink 시작 전에**:
 
@@ -124,7 +132,11 @@ aws ssm get-command-invocation --command-id $CMD_ID --instance-id $EC2_ID --quer
    GROUP BY product_name;
    ```
 
-4. **시연 후 반드시 노트북 Stop** → 상태가 READY로 복귀해야 mark 2-4 통과 (**RUNNING이면 오답**). CREATE TABLE/VIEW DDL은 Glue DB에 저장되므로 Stop해도 유지된다. 이전에 `order_stream`을 테이블로 만들었다면 뷰로 바꾸기 전에 `DROP TABLE order_stream;` 먼저 실행한다.
+   **`type=update` 문단이 `RUNNING 0%` 로 멈춰 보이는 건 정상이다.** Kinesis 소스는 무한 스트림이고 Flink SQL 의 연속 쿼리는 입력이 올 때마다 결과를 갱신할 뿐 끝나지 않는다([Dynamic Tables](https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/sql-table-concepts/dynamic_tables/), [Kinesis SQL Connector](https://nightlies.apache.org/flink/flink-docs-stable/docs/connectors/table/kinesis/)). Flink 대시보드에서 소스 수신 레코드 0 · 백프레셔 0% · `No Root Exception` 이면 교착이 아니라 **입력이 없는 유휴 상태**다 — 결과 행이 안 보이는 건 갱신할 입력이 없어서다. 이때 볼 곳은 쿼리가 아니라 2번 단계의 주문 생성이다. 헤더만 뜨고 행이 없으면 주문을 더 넣고 소스 `Records Received` 가 오르는지 본다. 1번 쿼리는 `event_time > CURRENT_TIMESTAMP - INTERVAL '1' MINUTE` 라 **새로 들어오는** 레코드만 통과하므로, 주입 후 1분이 지나면 카운트가 다시 0으로 내려간다.
+
+4. **시연 후 반드시 노트북 중지** → 상태가 READY로 복귀해야 mark 2-4 통과 (**RUNNING이면 오답**). CREATE TABLE/VIEW DDL은 Glue DB에 저장되므로 중지해도 유지된다. 이전에 `order_stream`을 테이블로 만들었다면 뷰로 바꾸기 전에 `DROP TABLE order_stream;` 먼저 실행한다.
+
+   ![시연 후 노트북 중지](images/studio-notebook-stop.webp)
 
 ---
 
