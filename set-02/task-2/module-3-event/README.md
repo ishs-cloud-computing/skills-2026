@@ -1,6 +1,9 @@
-# module-3-event — Cloud Event Handling (eu-west-1)
+# Module 3 — Cloud Event Handling (eu-west-1)
 
-EC2 정책 위반(SG 인바운드 추가·역할 변경·중지·종료·타입 변경)을 EventBridge로 감지해 Lambda가 자동 복구하거나 SNS로 알리고, AWS Config가 SSH 인바운드·필수 태그를 상시 감시한다.
+EC2 정책 위반(SG 인바운드 추가·역할 변경·중지·종료·타입 변경)을 EventBridge 로 감지해 Lambda 가 자동 복구하거나 SNS 로 알리고, AWS Config 가 SSH 인바운드·필수 태그를 상시 감시한다. 채점은 CloudShell 에서 `mark/mark2-3.sh` 실행.
+본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
+
+## 디렉토리 구조
 
 ```
 module-3-event/
@@ -10,18 +13,27 @@ module-3-event/
     ├── lambda.tf eventbridge.tf     # 함수 6개 + 룰 6개 (task ∪ mark 합집합)
     ├── config.tf                    # 레코더 + sg-ssh / required-tags 룰
     └── lambda/<function>/index.py   # provided 스켈레톤 TODO 완성본
+
+# 제공 원본: task-2/provided/module3/ (수정 금지)
+# 채점: task-2/mark/mark2-3.sh (CloudShell, eu-west-1)
 ```
 
-## 배포 (본 PC, PowerShell)
+## 배포 순서
+
+### 1) [본 PC·PowerShell] 배포
+
+`terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼 뒤:
 
 ```powershell
-cd module-3-event\terraform
+cd terraform
 terraform init
-terraform apply -var "player_number=$env:NUM"
+terraform apply
 terraform output -json > outputs.json
 ```
 
-apply 후 Config 첫 평가와 CloudTrail 이벤트 전달 활성화까지 **5~10분 대기** 후 채점한다.
+### 2) [본 PC·PowerShell] Config 첫 평가·CloudTrail 활성화 대기 (5~10분)
+
+apply 직후엔 트레일 전달이 아직 안 붙어 있다. **배포 직후 바로 3단계 복구 테스트를 하지 말 것.**
 
 ```powershell
 # Config 첫 평가 강제 트리거 (3-5 를 바로 확인하고 싶을 때)
@@ -29,7 +41,7 @@ $env:AWS_DEFAULT_REGION = "eu-west-1"
 aws configservice start-config-rules-evaluation --config-rule-names wsc2026-required-tags-rule wsc2026-sg-ssh-rule
 ```
 
-## 리소스 검증 (본 PC, PowerShell)
+### 3) [본 PC·PowerShell] 리소스 검증 + 복구 테스트
 
 ```powershell
 $env:AWS_DEFAULT_REGION = "eu-west-1"
@@ -54,50 +66,22 @@ Start-Sleep 90
 aws configservice get-compliance-details-by-config-rule --config-rule-name wsc2026-required-tags-rule --compliance-types NON_COMPLIANT --query "EvaluationResults[0].EvaluationResultIdentifier.EvaluationResultQualifier.ResourceId" --output text
 ```
 
-## Linux 런북 (개인 리눅스 환경용 — 대회에서는 PowerShell 런북 사용)
+SG 복구는 CloudTrail→EventBridge 경로라 수십 초~1분 지연이 있다. 첫 시도에서 Inbound 가 1이면 잠시 후 3-4 블록만 다시 돌린다.
 
-CloudShell에서도 동일 동작. 실제 채점은 `mark/mark2-3.sh` 를 그대로 실행하면 된다.
+### 4) [CloudShell] 셀프 채점
 
 ```bash
-aws configure set region eu-west-1
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=wsc2026-event-ec2" "Name=instance-state-name,Values=running,stopped" --query "Reservations[0].Instances[0].InstanceId" --output text)
-SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=wsc2026-event-sg" --query "SecurityGroups[0].GroupId" --output text)
-
-# 3-1 SNS + Lambda (runtime python3.12)
-aws sns get-topic-attributes --topic-arn arn:aws:sns:eu-west-1:${ACCOUNT_ID}:wsc2026-event-alert --query "Attributes.TopicArn" --output text
-for fn in wsc2026-ec2-stop-remediation wsc2026-ec2-terminate-alert wsc2026-sg-remediation wsc2026-tag-alert; do aws lambda get-function --function-name $fn --query "Configuration.[FunctionName,Runtime]" --output text; done
-# task.md 전용 함수 2개 (수동 채점 대비)
-for fn in wsc2026-role-remediation wsc2026-ec2-type-remediation; do aws lambda get-function --function-name $fn --query "Configuration.[FunctionName,Runtime]" --output text; done
-# 3-2 EventBridge 타깃
-for rule in wsc2026-ec2-stop-rule wsc2026-ec2-terminate-rule; do echo "$rule -> $(aws events list-targets-by-rule --rule $rule --query "Targets[0].Arn" --output text)"; done
-# 3-3 Config 룰 ACTIVE
-aws configservice describe-config-rules --config-rule-names wsc2026-sg-ssh-rule wsc2026-required-tags-rule --query "ConfigRules[*].[ConfigRuleName,ConfigRuleState]" --output text
-# 3-4 복구 테스트
-aws ec2 stop-instances --instance-ids $INSTANCE_ID &>/dev/null
-aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 &>/dev/null
-sleep 90
-echo "EC2 State (expect running): $(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[0].Instances[0].State.Name" --output text)"
-echo "SG Inbound Count (expect 0): $(aws ec2 describe-security-groups --group-ids $SG_ID --query "SecurityGroups[0].IpPermissions | length(@)" --output text)"
-# 3-5 태그 컴플라이언스 (expect None)
-aws configservice get-compliance-details-by-config-rule --config-rule-name wsc2026-required-tags-rule --compliance-types NON_COMPLIANT --query "EvaluationResults[0].EvaluationResultIdentifier.EvaluationResultQualifier.ResourceId" --output text
+sed -i 's/\r$//' mark2-3.sh
+bash mark2-3.sh
 ```
 
-task.md 전용 시나리오 수동 시연 (role/type 변경 복구):
+## Teardown
 
-```bash
-# 역할 변경 → 원복 확인 (다른 프로파일을 하나 만들어 교체해 본다)
-ASSOC_ID=$(aws ec2 describe-iam-instance-profile-associations --filters "Name=instance-id,Values=$INSTANCE_ID" --query "IamInstanceProfileAssociations[0].AssociationId" --output text)
-aws ec2 replace-iam-instance-profile-association --association-id $ASSOC_ID --iam-instance-profile Name=<다른-프로파일>
-sleep 90; aws ec2 describe-iam-instance-profile-associations --filters "Name=instance-id,Values=$INSTANCE_ID" --query "IamInstanceProfileAssociations[0].IamInstanceProfile.Arn" --output text   # ...instance-profile/wsc2026-event-ec2-role
+### [본 PC·PowerShell]
 
-# 타입 변경 → 원복 확인. 반드시 stop 룰을 먼저 비활성화 (아래 '함정' 참고)
-aws events disable-rule --name wsc2026-ec2-stop-rule
-aws ec2 stop-instances --instance-ids $INSTANCE_ID && aws ec2 wait instance-stopped --instance-ids $INSTANCE_ID
-aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID --instance-type t3.small
-aws ec2 start-instances --instance-ids $INSTANCE_ID
-sleep 180; aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[0].Instances[0].[InstanceType,State.Name]" --output text   # t3.micro running
-aws events enable-rule --name wsc2026-ec2-stop-rule
+```powershell
+cd terraform
+terraform destroy
 ```
 
 ## 요구사항 ↔ 구현 매핑
