@@ -61,6 +61,16 @@ output "cloudfront_prefix_list_id" {
   value       = data.aws_ec2_managed_prefix_list.cloudfront.id
 }
 
+output "waf_api_paths_arn" {
+  description = "waf/scanner-ua.json 의 첫 번째 ARN 자리에 넣을 값"
+  value       = aws_wafv2_regex_pattern_set.api_paths.arn
+}
+
+output "waf_scanner_uas_arn" {
+  description = "waf/scanner-ua.json 의 두 번째 ARN 자리에 넣을 값"
+  value       = aws_wafv2_regex_pattern_set.scanner_uas.arn
+}
+
 output "waf_log_group" {
   description = "WAF 로그 그룹 (us-east-1). Logs Insights 대상."
   value       = aws_cloudwatch_log_group.waf.name

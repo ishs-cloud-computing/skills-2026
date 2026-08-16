@@ -14,8 +14,12 @@ locals {
   cluster_name = "${var.prefix}-eks"
   alb_name     = "${var.prefix}-alb"
 
-  waf_name          = "${var.prefix}-waf"
-  waf_log_group     = "aws-waf-logs-${local.waf_name}"
+  waf_name             = "${var.prefix}-waf"
+  waf_log_group        = "aws-waf-logs-${local.waf_name}"
+  waf_api_paths_name   = "${var.prefix}-waf-api-paths"
+  waf_scanner_uas_name = "${var.prefix}-waf-scanner-uas"
+
+
   cdn_name          = "${var.prefix}-cdn"
   cdn_function_name = "${var.prefix}-strip-images"
   cdn_oac_name      = "${var.prefix}-s3-oac"

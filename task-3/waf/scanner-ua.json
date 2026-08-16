@@ -1,0 +1,36 @@
+{
+  "Name": "scanner-ua",
+  "Priority": 30,
+  "Action": { "Block": {} },
+  "Statement": {
+    "AndStatement": {
+      "Statements": [
+        {
+          "RegexPatternSetReferenceStatement": {
+            "ARN": "<terraform output waf_api_paths_arn>",
+            "FieldToMatch": { "UriPath": {} },
+            "TextTransformations": [
+              { "Priority": 0, "Type": "URL_DECODE" },
+              { "Priority": 1, "Type": "NORMALIZE_PATH" }
+            ]
+          }
+        },
+        {
+          "RegexPatternSetReferenceStatement": {
+            "ARN": "<terraform output waf_scanner_uas_arn>",
+            "FieldToMatch": { "SingleHeader": { "Name": "user-agent" } },
+            "TextTransformations": [
+              { "Priority": 0, "Type": "COMPRESS_WHITE_SPACE" },
+              { "Priority": 1, "Type": "LOWERCASE" }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "VisibilityConfig": {
+    "SampledRequestsEnabled": true,
+    "CloudWatchMetricsEnabled": true,
+    "MetricName": "scanner-ua"
+  }
+}

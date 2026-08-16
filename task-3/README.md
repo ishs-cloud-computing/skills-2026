@@ -274,7 +274,12 @@ curl -s -o /dev/null -w "%{http_code} POST stress\n" -X POST "$CF/v1/stress?$Q" 
 
 c "$CF/v1/none?$Q"                                                           # 404
 c "$CF/v1/user?email=%27%20OR%201=1--&$Q"                                    # 403
+c "$CF/v1/none?email=%27%20OR%201=1--&$Q"                                    # 404 (403 아님)
+c "$CF/v1/user/../../etc/passwd?$Q"                                          # 403 아님
+
 ```
+
+`scanner-ua` 룰은 이 시점엔 꺼져 있다(regex set 이 자리표시자뿐). 켜는 절차는 STEP 12.
 
 ## STEP 11 — 유휴 1대 확인 (리전 CloudShell)
 
@@ -302,6 +307,34 @@ kubectl logs -f deploy/user
 
 - CloudWatch(us-east-1) → Logs Insights → `aws-waf-logs-skills-waf`
 - WAF 콘솔(us-east-1) → sampled requests
+
+### 스캐너 UA 차단 켜기 (콘솔, apply 불필요)
+
+terraform 은 regex pattern set 두 개만 만든다. 룰은 콘솔에서 직접 넣는다.
+
+**1) UA 목록 채우기** — WAF & Shield 콘솔 → **Regex pattern sets** → 리전 선택기 **Global (CloudFront)**
+→ `skills-waf-scanner-uas` → Edit → **한 줄에 하나씩, 소문자로** (룰이 LOWERCASE 변환 후 매칭) → Save.
+자리표시자 `__disabled__scanner__ua__` 줄은 지운다.
+
+**2) 룰 추가** — 본 PC 에서 ARN 두 개를 뽑아 `waf/scanner-ua.json` 의 `<...>` 자리에 채운다.
+
+```powershell
+terraform output waf_api_paths_arn
+terraform output waf_scanner_uas_arn
+```
+
+WAF 콘솔 → Web ACLs → `skills-waf` → Rules → **Add rules → Add my own rules → Rule builder →
+JSON editor** → 채운 JSON 붙여넣기 → Add rule → Save.
+
+되돌리려면 Web ACL 에서 `scanner-ua` 룰을 지운다.
+
+검증 — 같은 UA 로 존재/비존재 경로를 각각 친다.
+
+```bash
+# ── 리전 CloudShell ──
+curl -s -o /dev/null -w "%{http_code}\n" -A "gobuster/3.6" "$CF/v1/user?$Q"   # 403
+curl -s -o /dev/null -w "%{http_code}\n" -A "gobuster/3.6" "$CF/dump.sql"     # 404
+```
 
 당일 변경 절차는 [ARCHITECTURE.md](ARCHITECTURE.md) "당일 변경 시나리오".
 
