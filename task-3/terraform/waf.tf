@@ -136,6 +136,104 @@ resource "aws_wafv2_web_acl" "this" {
     }
   }
 
+  # 관리형 SQLiRuleSet 은 base64 로 감싼 페이로드를 못 잡는다. 관리형 룰그룹의 text transformation 은
+  # 고정이고 BASE64_DECODE 가 없으며, 밖에서 주입할 수도 없다 — scope_down_statement 의 변환도
+  # 룰그룹으로 상속되지 않는다. 실측: 평문 SQLi 는 403, 같은 페이로드의 base64 는 GET 404 · POST 201.
+  # POST 는 차단은커녕 DB 에 행이 들어갔다.
+  #
+  # UA 축(scanner-ua)과 달리 이 룰은 당일 로그를 봐야 정해지는 값이 아니라 고정 룰이라 terraform 에 둔다.
+  # priority 30 은 당일 콘솔에서 붙일 scanner-ua 자리로 비워둔다.
+  rule {
+    name     = "base64-sqli"
+    priority = 40
+
+    action {
+      block {}
+    }
+
+    statement {
+      and_statement {
+        # 관리형 룰의 scope_down_statement 와 동등한 경로 조건. 이게 빠지면 미제공 경로가
+        # 404 대신 403 으로 나가 과제지 7절과 어긋난다.
+        statement {
+          regex_pattern_set_reference_statement {
+            arn = aws_wafv2_regex_pattern_set.api_paths.arn
+
+            field_to_match {
+              uri_path {}
+            }
+
+            text_transformation {
+              priority = 0
+              type     = "URL_DECODE"
+            }
+
+            text_transformation {
+              priority = 1
+              type     = "NORMALIZE_PATH"
+            }
+          }
+        }
+
+        statement {
+          or_statement {
+            # 파라미터 단위로 본다. QUERY_STRING 전체는 &·= 때문에 유효한 base64 가 아니라
+            # strict BASE64_DECODE 가 실패한다.
+            statement {
+              sqli_match_statement {
+                # HIGH 는 금지 — 연습 세션에서 정상 트래픽 24,220건을 차단한 설정이다.
+                sensitivity_level = "LOW"
+
+                field_to_match {
+                  all_query_arguments {}
+                }
+
+                text_transformation {
+                  priority = 0
+                  type     = "URL_DECODE"
+                }
+
+                text_transformation {
+                  priority = 1
+                  type     = "BASE64_DECODE"
+                }
+              }
+            }
+
+            # WAF 는 JSON 을 파싱해 값을 추출한 뒤에 text transformation 을 적용한다.
+            statement {
+              sqli_match_statement {
+                sensitivity_level = "LOW"
+
+                field_to_match {
+                  json_body {
+                    match_scope       = "VALUE"
+                    oversize_handling = "CONTINUE"
+
+                    match_pattern {
+                      all {}
+                    }
+                  }
+                }
+
+                text_transformation {
+                  priority = 0
+                  type     = "BASE64_DECODE"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "base64-sqli"
+      sampled_requests_enabled   = true
+    }
+  }
+
   # scanner-ua 룰은 여기 없다. 당일 필요할 때 콘솔에서 waf/scanner-ua.json 을 붙여넣는다
   # (README STEP 12). 위 두 세트의 ARN 을 output 으로 뽑아 그 JSON 에 채운다.
 

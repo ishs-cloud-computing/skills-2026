@@ -95,6 +95,55 @@ Count 매칭 중 오탐/실탐 판정:
 
 ## 결정 로그
 
+### 2026-08-16 — base64 로 감싼 SQLi 가 관리형 룰을 그대로 통과 → `base64-sqli` 룰 추가
+
+- **발단**: "managed SQLi 의 `uri_path` scope-down 이 쿼리스트링까지 적용되는 게 맞느냐" 검토.
+  결론은 **맞다, 변경 불필요** — `uri_path` 는 쿼리스트링·fragment 를 포함하지 않는다
+  ([Request components](https://docs.aws.amazon.com/waf/latest/developerguide/waf-rule-statement-fields-list.html)).
+  라이브 실측으로도 경로가 같고 쿼리만 다른 두 요청이 갈렸다:
+  `/v1/product?id=2` → 404(앱) vs `/v1/product?id=2'%20OR%20'1'='1` → 403(WAF, `server: CloudFront`).
+  화이트리스트 정규식의 `$` 앵커가 성립하는 이유가 이거다.
+  → **scope-down 에 `query_string` 을 추가하지 말 것. 앵커를 풀지 말 것.** 쿼리·바디의 SQLi 판정은
+  scope-down 이 아니라 관리형 룰그룹(`SQLi_QUERYARGUMENTS`/`SQLi_BODY`)이 따로 한다.
+
+- **거기서 드러난 진짜 구멍**: 같은 페이로드를 base64 로 감싸면 전부 통과한다.
+
+  | 요청 | 결과 |
+  |---|---|
+  | `GET /v1/product?id=%27%20OR%20sleep%285%29--` | 403 ✅ |
+  | `GET /v1/product?id=MScgT1IgJzEnPScx` (`1' OR '1'='1`) | **404** ❌ |
+  | `POST /v1/product {"id":"<b64 SQLi>","name":"<b64 4096 A>"}` | **201** ❌ — DB 에 행 생성 |
+
+- **원인**: 관리형 룰그룹은 자체 text transformation 이 **고정**이고 거기에 `BASE64_DECODE` 가 없다.
+  밖에서 주입할 방법도 없다 — `scope_down_statement` 에 준 변환은
+  *"not inherited by the containing managed rule group"* 이다. 관리형 룰그룹에서 조절 가능한 건
+  버전 · rule action override · scope-down 셋뿐이다.
+
+- **조치**: 커스텀 룰 `base64-sqli`(priority 40) 추가. `api_paths` 화이트리스트와 `and_statement`,
+  그 안에 `or_statement` 로 (a) `all_query_arguments` + `URL_DECODE`→`BASE64_DECODE`,
+  (b) `json_body`(VALUE, oversize CONTINUE) + `BASE64_DECODE`. 둘 다 **sensitivity LOW**.
+  priority 30 은 당일 콘솔에서 붙일 `scanner-ua` 자리로 비워뒀다.
+
+- **왜 이건 terraform 이고 UA 룰은 콘솔인가**: 값의 수명주기가 다르다. UA 목록은 당일 트래픽 로그를
+  보고 정하는 실시간 튜닝 축이라 apply 왕복이 생기면 안 된다(아래 08-16 UA 항목). base64 차단은
+  로그를 볼 필요가 없는 고정 룰이다 — `api_paths` 를 terraform 에 남긴 것과 같은 기준.
+
+- **기각**: "연습 세션 로그(720,319건)에 base64 가 없었으니 안 막아도 된다" — **로그에 없다는 건
+  그 세션에 안 나왔다는 뜻일 뿐 안 막을 근거가 아니다.** base64 로 감싼
+  `' UNION SELECT username,password FROM users--` 는 인코딩만 다른 SQLi 다.
+
+- **기각**: sensitivity HIGH — 정상 트래픽 24,220건 차단 사고(위 "오탐 실증")를 재현한다.
+  룰을 빼는 게 아니라 LOW 로 넣고 실측 검증하는 쪽이 맞다.
+
+- **오탐 감시**: `all_query_arguments` 범위가 유일한 리스크다. strict `BASE64_DECODE` 는 유효하지
+  않은 입력에서 실패하므로 `uuid`(하이픈)·`email`(`@`·`.`)은 안 걸리고, 4의 배수 길이 숫자 파라미터는
+  쓰레기 바이트로 디코드되나 SQL 토큰이 아니라 LOW 가 반응할 이유가 없다 — **추정이다**.
+  CloudWatch 에서 `base64-sqli` 메트릭과 각 API availability 를 같이 보고, availability 가
+  떨어지면 이 룰만 `count` 로 강등하거나 `single_query_argument { name = "id" }` 로 좁힌다.
+
+- **부수 효과**: 검토용 POST 로 `product` 테이블에 `id='MScgT1IgJzEnPScx'` 행이 1건 생겼다.
+  앱에 DELETE 엔드포인트가 없어 RDS 에서 직접 지워야 한다.
+
 ### 2026-08-16 — 없는 경로의 비정상 요청이 404 대신 403 으로 나가던 문제 → 전 룰 scope-down
 
 - **문제**: 과제지 7절 예시는 `/v1/none` 으로의 *비정상* 요청도 404 를 요구한다. 그런데 403 은 WAF,
