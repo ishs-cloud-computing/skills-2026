@@ -105,7 +105,7 @@
 - [x] 4-2-A ALB/TG — 실채점: ALB 2개 `active application internet-facing`, app-tg `healthy healthy`(pod 2) / grafana-tg `healthy`(pod 1)
 - [x] 4-3-A 워크로드 이름 — 실채점: log-generator 2 / o11y-otel 2 2 / o11y-loki ClusterIP 3100 / o11y-grafana 1
 - [x] 4-4-A App API — 실채점: `{"status":"ok"}` / `error` / `3` 정확 일치. `{"status":"ok"}` 뒤 빈 줄은 지급 app.py jsonify trailing newline + 스크립트 `; echo` 중복이라 전 선수 공통 (module-1 1-5-A 와 같은 현상)
-- [x] 4-5-A 로그 파이프라인 — 실채점: mark4.sh 주석 블록 쿼리(`{k8s_namespace_name="o11y"} | json | level="ERROR"`)로 ERROR 라인 조회 확인. Loki OTLP 기본 인덱스 라벨 의존이 실환경에서 성립 → `limits_config.otlp_config` 명시 승격 불필요(결정 로그 3번 비용 미발생)
+- [x] 4-5-A 로그 파이프라인 — 실채점: mark4 주석 블록 쿼리(`{k8s_namespace_name="o11y"} | json | level="ERROR"`, 정정본 `mark4-2026-08-04.sh`)로 ERROR 라인 조회 확인. Loki OTLP 기본 인덱스 라벨 의존이 실환경에서 성립 → `limits_config.otlp_config` 명시 승격 불필요(결정 로그 3번 비용 미발생)
 - [x] 4-6-A Grafana — 실채점: 3패널 표시·범례 plain text(ERROR/WARN/INFO)·Recent Logs 에 4-5 로그·Save&Test 성공 전부 확인. `| __error__=""` 가드 추가 후 재배포 기준(함정 절)
 
 #### module-4 함정 (구현 중 발견)
@@ -140,11 +140,21 @@
 ## 정정 로그
 <!-- 과제지·채점지의 오류로 구현을 바꿨으면 질의일·답변일·출처와 함께 적는다. task.pdf·mark.pdf·provided/ 원본은 고치지 않는다. -->
 
-### 2026-08-01 답변 (질의일 2026-07-31, 출처: `set-07/2026-08-01.txt` + `set-07/task-2/2과제.txt`)
-
-원본 파일(`task.md`·`mark.md`·`mark/mark3.sh`·`provided/module-4/Dockerfile`)은 전부 그대로 두고,
-내용이 바뀐 실행 파일만 **날짜 접미사 사본**으로 추가했다 (`mark/mark3-2026-08-01.sh`, `provided/module-4/Dockerfile-2026-08-01`).
+정정 정본은 `set-07/errata/2과제.txt` 하나뿐이고, 배경·"수정없음" 판정은 `set-07/changelog.txt` 에 있다.
+원본 파일(`task.md`·`mark.md`·`mark/mark3.sh`·`mark/mark4.sh`·`provided/module-4/Dockerfile`)은 전부 그대로 두고,
+내용이 바뀐 실행 파일만 **날짜 접미사 사본**으로 추가한다
+(`mark/mark3-2026-08-01.sh`, `mark/mark4-2026-08-04.sh`, `provided/module-4/Dockerfile-2026-08-01`).
 원본과 정정본을 나란히 두면 대회 당일 또 정정이 와도 어느 답변에서 온 사본인지 파일명으로 구분된다.
+task-1 도 같은 규칙이다(`set-07/task-1/NOTES.md` 정정 로그).
+
+### 2026-08-04 답변 (출처: `set-07/errata/2과제.txt` 공통 2 + Module 4 - 2 + `changelog.txt`)
+
+| # | 정정 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 공통 2 | 유의사항 18 추가 — `source kubectl-connect` 오류 시 **모듈당 1회**에 한해 `rm -rf .kube/` 로 초기화 허용 | **없음**(채점 절차) — kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인. EKS 모듈(3·4) 런북 채점 절에 한 줄만 반영. 우리 쪽 대응은 그대로 access entry fallback 이다 |
+| M4-2 | 4-5-A 채점 명령의 공백문자 issue(한컴오피스가 넣은 NBSP) 수정 | **있음**(채점 스크립트) — `mark/mark4.sh:45` 의 `query_range` 와 `--data-urlencode` 사이가 NBSP(U+00A0) 라 그대로 붙여넣으면 `query_range<NBSP>--data-urlencode` 한 토큰이 되어 4-5-A 확인이 실패한다. 정정본 사본 `mark/mark4-2026-08-04.sh` 추가(NBSP → 스페이스, 그 외 동일) + module-4 런북 채점 명령을 정정본으로 교체. 쿼리 문자열 자체는 안 바뀌었으므로 **구현(Loki·OTel·대시보드)은 영향 없음** |
+
+### 2026-08-01 답변 (질의일 2026-07-31, 출처: `set-07/errata/2과제.txt` + `changelog.txt`)
 
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|
@@ -158,6 +168,24 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-17 [공통] 런북 재배치: 본 PC 는 terraform·eksctl 만, 나머지는 전부 CloudShell
+- 맥락: 기존 런북은 helm·kubectl·검증·스모크를 전부 본 PC 에서 하고 CloudShell 은 docker push 와 셀프 채점만 맡았다. 그 결과 **채점과 동일한 경로(일반 CloudShell + `aws eks update-kubeconfig` 한 줄)를 맨 마지막 단계에서야 처음 밟는다** — 여기서 막히면 k8s 채점 항목이 통째로 날아가는데 그 사실을 가장 늦게 안다. 부수적으로 본 PC 단계가 많아 README.md ↔ README.linux.md 가 거의 전문 중복이었다(module-3 linux 런북에서 CloudShell 단계를 건너뛴 사고가 실제로 이 중복 때문)
+- 채택: 본 PC 는 `terraform`·`eksctl` 만. 이미지 빌드·helm·kubectl·검증·스모크·채점은 CloudShell. EKS 모듈은 접속 확인을 4단계(클러스터 생성 직후)로 앞당겼다. 부수 효과로 CloudShell 홈이 리전별로 갈려 module-3(ap-northeast-2)/module-4(ap-northeast-1) kubeconfig 격리가 자동으로 된다 — 본 PC 의 `KUBECONFIG` 고정은 이제 eksctl 전용
+- 기각: 검증만 옮기기 → helm·kubectl 이 본 PC 에 남으면 CloudShell 경로 검증 시점이 그대로 늦다. eksctl 까지 CloudShell 로 → CloudShell 미탑재라 매번 설치해야 하고 terraform output 을 넘겨야 해 이득이 없다
+- 대가: 모듈마다 파일 업로드 1회가 늘었다(module-3·4 는 zip 1개). CloudShell 세션 유휴 종료 시 `source ~/mN.env` 로 복구
+
+### 2026-08-17 [공통] CloudShell 은 값을 전송받지 않고 이름으로 조회한다
+- 맥락: CloudShell 단계가 늘면서 `sqs_queue_url`·`ecr_repository_url`·`alb_sg_id`·ALB DNS 같은 terraform output 이 CloudShell 에 있어야 했다
+- 채택: 전송하지 않고 `aws sqs get-queue-url` / `ecr describe-repositories` / `ec2 describe-security-groups` / `elbv2 describe-load-balancers --names` 로 **이름 조회**. 이름은 과제지·terraform 고정값이고 채점 스크립트도 같은 방식으로 찾으므로 재현된다
+- 기각: `.env` heredoc 붙여넣기(set-07/task-1 방식) → CRLF 가 값 끝에 붙어 ECR 태그·ARN 이 조용히 깨지는 사고 경로가 그대로 남는다. S3 릴레이 → 전송용 버킷이 없는 모듈이 있어 불필요 리소스를 만들어야 한다. 둘 다 apply 할 때마다 재전송이 필요
+- 대가: 이름이 바뀌면 스크립트 상단 변수도 같이 고쳐야 한다(각 스크립트 맨 위에 모아 뒀다)
+
+### 2026-08-17 [module-3][module-4] CloudShell 배포는 `cs-deploy.sh`, 치환은 sed, helm 은 `$HOME/bin`
+- 맥락: helm 3개·치환·apply 를 CloudShell 에 붙여넣기로 옮기면 붙여넣기 사고 위험이 커진다. CloudShell 기본 탑재에 helm 도 envsubst(gettext)도 없다(있는 것: aws·kubectl·docker·jq·git)
+- 채택: 모듈 루트 `cs-deploy.sh` 하나. `set -euo pipefail` + 조회값 빈값 검사(가드 ①) + 치환 후 `grep '\${'`(가드 ②) + `--apply` 없으면 치환까지만 하고 종료. "치환과 적용을 한 블록에 두지 않는다" 규칙을 붙여넣기 규율 대신 종료 코드로 강제한 것이다. 치환은 `sed`(envsubst 미탑재 + unset 을 조용히 빈 문자열로 삼킴). helm 은 `HELM_INSTALL_DIR=$HOME/bin USE_SUDO=false` — `$HOME` 밖은 세션 종료 시 삭제된다. Grafana 비밀번호의 `!` 는 비대화형 스크립트라 이스케이프가 필요 없다
+- 기각: 새 `cloudshell/` 디렉터리 → 디렉터리 타입이 늘어 `_template`·CLAUDE.md 까지 번진다. 두 모듈 공용 스크립트 1개 → helm 설치 3줄 공유하자고 zip·경로 의존이 생긴다
+- 함정: CloudShell 업로드 파일은 `$HOME` 에 **평평하게** 저장된다 — 기존 런북의 `bash mark/mark1.sh` 는 처음부터 틀린 경로였고 이번에 `bash mark1.sh` 로 고쳤다
 
 ### 2026-08-04 [module-3] scale-in 목표를 "채점 창 150초" → "2분"으로, scaleDown 안정화 15초 → 0
 - 맥락: 2026-08-01 정정으로 과제지가 "Pod/Node scale in/out 모두 2분 내"를 명시. 기존 설계는 안정화 15초 + consolidateAfter 60초로 노드 반환 ~140초 — 채점 스크립트 창(150초)엔 들어가도 과제지 기준은 초과, 여유도 10초뿐

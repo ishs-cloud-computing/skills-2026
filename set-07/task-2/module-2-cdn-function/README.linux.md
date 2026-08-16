@@ -10,16 +10,9 @@ terraform init
 terraform apply -auto-approve
 ```
 
-### 2) [본 PC] A/B 동작 검증
+### 2) [CloudShell] A/B 동작 검증
 
-```bash
-URL=$(terraform output -raw landing_url)
-# 쿠키 강제: 해당 버전 본문 + Set-Cookie 없음이 기대 출력
-curl -si -b "x-sp-ab=a" "$URL" | grep -iE "version-badge|set-cookie"
-curl -si -b "x-sp-ab=b" "$URL" | grep -iE "version-badge|set-cookie"
-# 첫 방문: Set-Cookie x-sp-ab=<a|b>; Path=/; Max-Age=86400 + 해당 버전 본문이 기대 출력
-curl -si "$URL" | grep -iE "version-badge|set-cookie"
-```
+[README.md](README.md) 2단계 수행.
 
 ### 3) [CloudShell] 셀프 채점
 
