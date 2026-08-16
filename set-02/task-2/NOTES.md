@@ -12,7 +12,21 @@
 | 1 | workflow | ap-southeast-1 | 없음 |
 | 2 | analytics | ap-northeast-2 | 없음 |
 | 3 | event | eu-west-1 | 없음 |
-| 4 | msk | ap-northeast-1 | 기본 iam 모드 실배포 미검증 (아래 결정 로그) |
+| 4 | msk | ap-northeast-1 | 없음 (iam 모드 실배포 검증 2026-08-16) |
+
+## 실측 소요시간
+<!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
+
+### module-4 (2026-08-16 실 apply, `producer_auth_mode=iam`)
+
+- apply 전체: 50 리소스 / **35분 17초** (22:15:42 → 22:50:59)
+- `aws_msk_cluster`: **31분 40초** — 전체의 90%. 나머지는 NAT GW 1분 55초,
+  sensor_consumer(VPC 배치라 ENI) 2분 7초, ESM sensor 55초 / alert 2분 37초
+- producer systemd `app` active: 22:49:11 — apply 종료 **1분 48초 전**. user_data 의
+  kafka 다운로드·토픽 생성·S3 바이너리 수신이 MSK ACTIVE 직후 다 끝난다
+- 첫 DynamoDB 레코드 22:50:56 / 첫 S3 `alert/` 객체 22:51:03 — **apply 종료 시점에 이미 흐른다**.
+  기존 런북의 "3~5분 대기" 는 근거 없는 과대 대기였고, 폴링 루프는 1회에 통과한다
+- 가동 20분 시점: DynamoDB 327건, `alert/` 객체 32개 (발행 간격 약 8초, 이상치 비율 ~10%)
 
 ---
 ## 결정 로그
@@ -33,9 +47,11 @@
 - 기각: 기본 tls 유지 + 문서에 경고만 → 런북을 그대로 따르는 경로가 요구 위반이면 경고로는
   안 막힌다. 채점 스크립트(mark 4-3)가 `Sasl.Iam.Enabled` 만 보므로 tls 로도 4-3 은 통과하지만,
   과제지 문구가 채점 항목보다 넓다.
-- 대가: 기본 경로가 자체 바이너리에 의존한다. iam 모드 실배포 검증은 아직 없다 —
-  9098 발행 실패 시 `producer_auth_mode=tls` 로 즉시 되돌릴 수 있게 두 경로를 모두 유지한다.
-  이미 뜬 클러스터의 모드 전환은 리스너 in-place 업데이트(~15-30분)다.
+- 검증(2026-08-16 실배포): 클러스터 `Sasl.Iam.Enabled=True` / `Unauthenticated.Enabled=False`,
+  `get-bootstrap-brokers` 에 TLS 문자열 자체가 없다. 그 상태로 `app/producer` 가 9098 로 발행해
+  DynamoDB 적재와 alert 분기까지 정상 동작 — **IAM 전용으로 과제가 성립한다**
+- 대가: 기본 경로가 자체 바이너리에 의존한다. 되돌릴 `tls` 경로는 코드에 남겨 두되 런북에서는
+  뺐다(절차는 `BINARY-ANALYSIS.md` 호환성 참고 절). 모드 전환은 리스너 in-place 업데이트(~15-30분)다.
 
 ### 2026-08-16 [module-4] 첫 배포 확인을 고정 대기 → 폴링으로
 - 맥락: 런북이 "3~5분 대기 후 DynamoDB 확인" 이었다. producer user_data 는 kafka 다운로드,
@@ -44,6 +60,9 @@
 - 채택: ESM 2개가 `Enabled` 될 때까지, 그리고 DynamoDB item 수가 1 이상이 될 때까지 폴링하는
   루프를 PowerShell·bash 양쪽 런북에 넣었다(각 최대 10분). 실패 시 진입점은 SSM
   `send-command` 로 `systemctl is-active app` + 부팅 로그를 뽑는 비대화형 경로.
+- 실측 확인(2026-08-16): 두 루프 모두 **1회에 통과**했다. producer 는 apply 종료 1분 48초 전에
+  이미 active 였고 첫 레코드·첫 alert 객체가 apply 종료 직후에 찍혔다 — "3~5분 대기" 는
+  근거 없는 과대 대기였다. 루프는 실패를 빨리 드러내는 용도로 남긴다.
 - 기각: 대기 시간만 늘리기(예: 10분 고정) → 빠르게 뜬 경우에도 그만큼 서게 된다.
 - 함께: 정상 데이터만 보던 검증 절에 이상치 분기(S3 `alert/` 객체 + alert consumer 의
   `alert forwarded` 로그, 비면 sensor consumer 의 `ALERT -` 로그)를 PowerShell 런북에도 추가.

@@ -23,7 +23,7 @@ cd module-4-msk\terraform
 # 1) sensor_consumer 의존성 번들 (없으면 apply 가 precondition 으로 실패한다)
 py -m pip install -r lambda\sensor_consumer\requirements.txt -t lambda\sensor_consumer\
 
-# 2) 배포 — MSK 클러스터 생성에 약 30분 소요
+# 2) 배포 — 50 리소스 / 실측 35분 (MSK 클러스터 하나가 31분 40초)
 terraform init
 terraform apply
 terraform output -json > outputs.json
@@ -47,6 +47,8 @@ scp .env ec2-user@$($o.bastion_public_ip.value):~/.env         # 비번: Skill53
 ### 4) 파이프라인 기동 확인 (고정 대기 대신 폴링)
 
 producer EC2 부팅(kafka 다운로드 → IAM jar → 토픽 생성 재시도 최대 5분 → S3 바이너리 수신 → systemd 기동)과 ESM 활성화가 겹쳐 소요가 들쭉날쭉하다. 아래 두 루프가 끝나면 파이프라인이 살아 있는 것이다.
+
+**실측(2026-08-16)에서는 apply 가 끝난 시점에 이미 돌고 있었다** — producer `app` 은 apply 종료 1분 48초 **전**에 active 였고, 첫 DynamoDB 레코드·첫 S3 alert 객체가 apply 종료 직후에 찍혔다. 두 루프 모두 1회 만에 통과하는 게 정상이다. 여러 바퀴 도는 건 이상 신호다.
 
 ```powershell
 # 4-1) ESM 2개가 Enabled 될 때까지 (최대 10분)
@@ -132,7 +134,7 @@ aws s3 ls "s3://wsc2026-sensor-alert-bucket-$NUM/alert/" --recursive
 aws logs tail /aws/lambda/wsc2026-sensor-alert-consumer --since 15m --format short | Select-String "alert forwarded"
 ```
 
-정상 데이터만 흐르는 구간이라 `alert/` 가 비어 있을 수 있다. 이상치는 producer 가 임계치를 넘는 값을 낼 때만 생기므로, 위 두 줄이 비면 몇 분 뒤 다시 본다 — 그래도 계속 비면 `wsc2026-sensor-consumer` 로그에서 alert 토픽 발행이 되는지부터 확인한다.
+실측(2026-08-16, 가동 20분): DynamoDB 327건 / `alert/` 객체 32개 — producer 가 약 8초 간격으로 발행하고 그중 10% 정도가 이상치다. `alert/` 가 몇 분째 비어 있으면 `wsc2026-sensor-consumer` 로그에서 alert 토픽 발행부터 확인한다.
 
 ```powershell
 aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | Select-String "ALERT -"
@@ -193,7 +195,7 @@ cat /var/log/cloud-init-output.log
 
 ## 설계 근거 · 함정
 
-- **MSK 클러스터 생성 ~30분.** producer EC2 의 user_data 가 `bootstrap_brokers_sasl_iam` 을 참조해 클러스터 ACTIVE 후에만 부팅된다 — `-target` 으로 EC2 를 먼저 만들지 말 것. 토픽 생성이 첫 부팅에 자동 수행된다(실패 시 bastion 의 kafka CLI 로 수동 생성 가능).
+- **MSK 클러스터 생성 31분 40초(실측).** apply 전체 35분 중 이것 하나가 90% 다 — 나머지 49개 리소스는 NAT GW 1분 55초, VPC 배치 sensor_consumer 2분 7초, ESM 55초/2분 37초가 전부다. producer EC2 의 user_data 가 `bootstrap_brokers_sasl_iam` 을 참조해 클러스터 ACTIVE 후에만 부팅된다 — `-target` 으로 EC2 를 먼저 만들지 말 것. 토픽 생성이 첫 부팅에 자동 수행된다(실패 시 bastion 의 kafka CLI 로 수동 생성 가능).
 - **제공 producer 바이너리는 SASL/IAM 을 못 한다** — IAM signer·SigV4 문자열이 통째로 없고 포트가 9094 일 때만 TLS 를 켠다(`BINARY-ANALYSIS.md` / https://github.com/ishs-cloud-computing/skills-2026/issues/49). 그래서 발행은 저장소의 `app/producer`(IAM 전용)가 맡고 클러스터는 `unauthenticated=false` 다. 9094 TLS 는 전송 구간 암호화일 뿐 **인증이 없는 접속**이고, 9098 IAM 이 TLS 위에 SASL/IAM 신원 인증까지 얹은 경로 — 과제지 요구는 후자다. 비인증 9094 경로(`producer_auth_mode=tls`)는 호환 우회라 런북에서 뺐고, 절차는 `BINARY-ANALYSIS.md` 의 "호환성 참고" 절에 있다.
 - **mark 4-5-A 가 `temperature.S`/`status.S` 를 조회 — DynamoDB 에 Number 로 저장하면 0점.** sensor_consumer 는 전 속성을 String 으로 저장한다.
 - **`pip install -t` 를 건너뛰면 zip 에 kafka-python 이 빠져 import 실패로 조용히 죽는다** → `lambda.tf` 의 precondition 이 apply 단계에서 잡아준다. kafka-python 3.0.8 / aws-msk-iam-sasl-signer-python 1.0.2 는 pure-python 이라 Windows/리눅스 동일하게 동작 (Docker 불필요).
