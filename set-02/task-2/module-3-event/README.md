@@ -1,6 +1,9 @@
-# module-3-event — Cloud Event Handling (eu-west-1)
+# Module 3 — Cloud Event Handling (eu-west-1)
 
-EC2 정책 위반(SG 인바운드 추가·역할 변경·중지·종료·타입 변경)을 EventBridge로 감지해 Lambda가 자동 복구하거나 SNS로 알리고, AWS Config가 SSH 인바운드·필수 태그를 상시 감시한다.
+EC2 정책 위반(SG 인바운드 추가·역할 변경·중지·종료·타입 변경)을 EventBridge 로 감지해 Lambda 가 자동 복구하거나 SNS 로 알리고, AWS Config 가 SSH 인바운드·필수 태그를 상시 감시한다. 채점은 CloudShell 에서 `mark/mark2-3.sh` 실행.
+본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
+
+## 디렉토리 구조
 
 ```
 module-3-event/
@@ -10,20 +13,27 @@ module-3-event/
     ├── lambda.tf eventbridge.tf     # 함수 6개 + 룰 6개 (task ∪ mark 합집합)
     ├── config.tf                    # 레코더 + sg-ssh / required-tags 룰
     └── lambda/<function>/index.py   # provided 스켈레톤 TODO 완성본
+
+# 제공 원본: task-2/provided/module3/ (수정 금지)
+# 채점: task-2/mark/mark2-3.sh (CloudShell, eu-west-1)
 ```
 
-## 배포 (본 PC, PowerShell)
+## 배포 순서
 
-**먼저 `terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다.** apply 는 tfvars 를 자동으로 읽으므로 `-var` 를 붙이지 않는다.
+### 1) [본 PC·PowerShell] 배포
+
+`terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼 뒤:
 
 ```powershell
-cd module-3-event\terraform
+cd terraform
 terraform init
 terraform apply
 terraform output -json > outputs.json
 ```
 
-apply 후 Config 첫 평가와 CloudTrail 이벤트 전달 활성화까지 **5~10분 대기** 후 채점한다.
+### 2) [본 PC·PowerShell] Config 첫 평가·CloudTrail 활성화 대기 (5~10분)
+
+apply 직후엔 트레일 전달이 아직 안 붙어 있다. **배포 직후 바로 3단계 복구 테스트를 하지 말 것.**
 
 ```powershell
 # Config 첫 평가 강제 트리거 (3-5 를 바로 확인하고 싶을 때)
@@ -31,7 +41,7 @@ $env:AWS_DEFAULT_REGION = "eu-west-1"
 aws configservice start-config-rules-evaluation --config-rule-names wsc2026-required-tags-rule wsc2026-sg-ssh-rule
 ```
 
-## 리소스 검증 (본 PC, PowerShell)
+### 3) [본 PC·PowerShell] 리소스 검증 + 복구 테스트
 
 ```powershell
 $env:AWS_DEFAULT_REGION = "eu-west-1"
@@ -55,9 +65,24 @@ Start-Sleep 90
 # 3-5 태그 컴플라이언스 (expect None)
 aws configservice get-compliance-details-by-config-rule --config-rule-name wsc2026-required-tags-rule --compliance-types NON_COMPLIANT --query "EvaluationResults[0].EvaluationResultIdentifier.EvaluationResultQualifier.ResourceId" --output text
 ```
-## Linux 런북
 
-개인 리눅스 로컬 전용 절차는 [README.linux.md](README.linux.md) 로 분리했다. 대회 본 PC 에서는 위 PowerShell 런북을 쓴다.
+SG 복구는 CloudTrail→EventBridge 경로라 수십 초~1분 지연이 있다. 첫 시도에서 Inbound 가 1이면 잠시 후 3-4 블록만 다시 돌린다.
+
+### 4) [CloudShell] 셀프 채점
+
+```bash
+sed -i 's/\r$//' mark2-3.sh
+bash mark2-3.sh
+```
+
+## Teardown
+
+### [본 PC·PowerShell]
+
+```powershell
+cd terraform
+terraform destroy
+```
 
 ## 요구사항 ↔ 구현 매핑
 
