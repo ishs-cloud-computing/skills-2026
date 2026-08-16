@@ -48,10 +48,9 @@
     클러스터·테이블·ECR·Lambda 이름도 `variables.tf` 기본값이지 tfvars 항목이 아니다
     (tfvars 에는 `player_number`·`bucket_suffix` 둘뿐, 버킷 이름은 `data.tf` 에서 조합).
 - 미해결:
-  - **11-4 HighLatency 는 실발화가 불가능하다.** 제공 book 바이너리에 `/delay` 엔드포인트가 없다
-    (로컬 실측 — 404, µs 응답). 채점 스크립트의 latency-gen 으로 평균 3초 초과를 만들 수 없다.
-    채점 11-4 가 요구하는 6종(채점지 사진 기준, PodCrashLooping 포함) 중 나머지 5종은
-    부하 파드로 발화된다.
+  - ~~11-4 HighLatency 실발화 불가~~ → **2026-08-07 정정으로 채점 항목이 삭제됐다**(정정 로그).
+    11-4 는 5종만 확인한다. 과제지 Alert 표의 HighLatency 규칙 자체는 그대로 요구되므로
+    `prometheus-rules.yaml` 의 룰은 유지한다.
   - **mark 5-5 오타 대응이 임시 상태다.** 채점지 5-5 가 클러스터를 `wsi2026-xxxxx` 형식으로 조회하는
     오류가 있어 저장소 `mark.sh` 를 `wsc2026-eks-cluster` 로 고쳤다. 마이스터넷 질의 답변 대기 중.
   - **메트릭 실명을 배포 후 다시 확인해야 한다.** README step 8 에서 `:2021/metrics` 를 grep 해
@@ -89,10 +88,10 @@
 - [x] 9-2 기본 behavior CachingOptimized, 추가 behavior CachingDisabled
 - [x] 9-3 E2E POST `/booking` → GET `/v1/book`
 - [x] 10-1 WAF 이름, SQLi/XSS 차단, rate limit ≤ 200
-- [x] 11-1 부하/장애 파드 생성 후 observability 파드 Running 수
+- [x] 11-1 observability 파드 Running 수 (파드 생성 단계는 정정으로 채점 제외)
 - [x] 11-2 Grafana datasource 목록 + `wsc2026` 대시보드 검색
-- [x] 11-3 (수동) 대시보드 Row 구성 + 로그 패널 형식
-- [~] 11-4 (수동) 알람 6종 Firing — **5종만 가능**. HighLatency 는 `/delay` 부재로 실발화 불가
+- [x] 11-3 (수동) 부하/장애 파드 수동 생성 + 대시보드 Row 구성 + 로그 패널 형식
+- [x] 11-4 (수동) 알람 5종 Firing (HighLatency 는 정정으로 채점 항목 삭제)
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거가 된다. -->
@@ -100,6 +99,68 @@
 - terraform apply(1차):
 - EKS 노드 준비:
 - 기타 병목:
+
+---
+## 정정 로그
+<!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
+
+### 2026-08-16 [출처 정정] `errata/수정사항(1).txt` 는 set-02 가 아니라 이 세트의 정정본이다
+- 경위: 이 파일이 처음에 `set-02/errata/수정사항.txt` 로 놓여 set-02 판정 근거로 쓰였다.
+  담긴 항목이 **11-2 DataSource·HighLatency Alert·Reference02 로그 level·`booking_id`** 인데,
+  11절과 Alert 채점 항목은 set-02 채점지에 없고 이 세트에만 있다(`mark.md` 11-1~11-4).
+  `set-02/errata/` 에서 삭제하고 이 세트로 옮겼다 — set-02 쪽 판정은 그 NOTES 에서 정정했다
+- 같은 이유로 `errata/질의답변-취합-20260816.txt` 는 **두 세트가 섞인 취합본**이다.
+  `11-x`·`6-1`(S3 KMS)·`9-3`(created_at)·`5-4`·App Logs 항목이 이 세트 몫이고,
+  `1-1-A`·`2-1-A`·`7-2`·`[7] GSI`·`10-1~4` 는 set-02 몫이다. 양쪽 `errata/` 에 같은 파일을 둔다
+
+### 2026-08-16 [11-3] Pod CPU/Memory 는 All Pod, 패널 이름·기타 로그는 채점 대상 아님
+- 답변일: 2026-08-16 이전(취합 시점). 출처: `errata/수정사항.txt:1-2`,
+  `errata/질의답변-취합-20260816.txt` 01·02·06
+- 판정: **영향없음** — `k8s/monitoring/dashboard.json:30-46` 의 `namespace` 템플릿 변수가
+  `includeAll: true` + 기본값 `All` 이라 Pod 로우(`:274`,`:315`,`:365`,`:419`)가 이미 전 네임스페이스
+  전 파드를 잡는다. Application Logs 에 `/v1/book` 외 로그가 섞여도 판정 기준은 형식이고,
+  `k8s/logging/fluent-bit.yaml:157-171` 이 status 로 `level` 을 유도해 채점지와 같은
+  `INFO {"level":"INFO",...}` 형식을 만든다. 패널 이름 채점 제외는 요구 완화라 손댈 게 없다
+- 채점지 전사본에만 반영: `mark.md` 11-3 · `mark.sh` 11-3 주석
+
+### 2026-08-16 [9-3] `created_at` 은 curl 요청 직전 `date` 기준 1분 이내
+- 답변일: 2026-08-16 이전(취합 시점). 출처: `errata/수정사항.txt:6-7`,
+  `errata/질의답변-취합-20260816.txt` 03
+- 내용: 기존 "스크립트 실행 시간 기준 1분 이내"가 모호하다는 질의에, curl 요청 시점의 시스템
+  시간(`date`)을 기준으로 정밀 검증하겠다는 답변. `booking_id` 는 예시값이라 고정 일치를 안 본다
+  (`errata/수정사항(1).txt` 4번 질의)
+- 판정: **수정완료(채점지·채점 스크립트 전사본만)** — `mark.md` 9-3 과 `mark.sh:130` 에
+  `TZ=Asia/Seoul date '+REQUEST TIME: ...'` 를 curl 직전에 추가하고 판정 문구를 바꿨다.
+  구현은 `created_at` 을 앱이 요청 시점에 생성하므로 변경 없음
+
+### 2026-08-16 [6-1] `static/ PASS` 객체는 채점 제외
+- 출처: `errata/질의답변-취합-20260816.txt` 05
+- 판정: **수정완료(채점지 전사본만)** — `aws s3api list-objects --prefix "static/"` 로 조회되지
+  않는 객체라 예상 출력에서 ` static/: PASS` 줄을 뺐다. 구현은 `terraform` 이 `static/index.html`·
+  `static/main.jpeg` 두 객체만 올리므로 영향 없음
+
+### 2026-08-16 [11-1 / 11-3] 테스트 파드 생성 단계를 11-1 에서 11-3 수동 실행으로 이동
+- 출처: `errata/질의답변-취합-20260816.txt` 04
+- 내용: 11-1-A 는 파드 생성을 채점 대상에서 빼고, Alert 검증용 파드 생성과 `sleep` 은 11-3 에서
+  수동으로 실행한다. 테스트 리소스 때문에 파드 조회 결과나 Alert 상태가 변해도 재채점하지 않는다
+- 판정: **수정완료(채점지·채점 스크립트 전사본만)** — `mark.md`·`mark.sh` 의 파드 6종 생성 +
+  `sleep 180` 블록을 11-1 에서 11-3 으로 옮겼다. `latency-gen`(`/delay?ms=5000`)은 아래
+  HighLatency 삭제와 함께 뺐다. 구현 변경 없음 — 이 파드들은 채점자가 만드는 임시 리소스다
+
+### 2026-08-07 [11-4] HighLatency Alert 채점 항목 삭제
+- 답변일: 2026-08-07. 출처: `errata/수정사항(1).txt:1-3`
+- 내용: 지급 book 바이너리에 `/delay` 엔드포인트가 없어(로컬 실측 404) 과제지 범위 안에서는
+  평균 응답시간 3초 초과를 만들 수 없다는 질의에, 채점 항목 자체를 삭제하는 답변
+- 판정: **수정완료(채점지·채점 스크립트 전사본만)** — 11-4 확인 대상을 6종에서 5종으로 줄였다.
+  **`k8s/monitoring/prometheus-rules.yaml:68` 의 HighLatency 룰은 유지한다** — 과제지
+  `task.md:175` Prometheus Alert 표가 여전히 이 룰을 요구하고, 삭제된 건 Firing 확인 항목뿐이다
+- 해소: 위 "미해결"에 있던 11-4 5종 한계가 이 정정으로 감점 사유가 아니게 됐다
+
+### 2026-08-07 [11-2] DataSource 이름은 기존 채점기준표 기준 유지
+- 답변일: 2026-08-07. 출처: `errata/수정사항(1).txt:9-10`
+- 판정: **영향없음** — 과제지에 이름이 없으니 명시해 달라는 질의에 "기존 채점기준표 기준으로
+  채점"이라는 답변이라 요구가 그대로다. `k8s/monitoring/kube-prometheus-stack-values.yaml:98-113`
+  의 datasource 이름이 `prometheus`·`alertmanager`·`cloudwatch` 로 `mark.md` 11-2 예상 출력과 일치
 
 ---
 ## 결정 로그
