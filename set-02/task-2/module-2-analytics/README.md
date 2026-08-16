@@ -18,8 +18,7 @@ module-2-analytics/
 ```powershell
 cd module-2-analytics\terraform
 terraform init
-terraform apply
-terraform output -json > outputs.json
+terraform apply; terraform output -json > outputs.json
 ```
 
 apply 후 EC2 user_data(pip 설치)와 TG 헬스체크까지 2~3분 대기.

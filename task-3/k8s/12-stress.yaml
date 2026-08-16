@@ -27,7 +27,7 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: stress
-          image: <IMAGE>
+          image: "600440344359.dkr.ecr.ap-northeast-2.amazonaws.com/stress:v1"
           ports:
             - containerPort: 8080
           resources:
