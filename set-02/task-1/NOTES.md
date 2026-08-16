@@ -11,8 +11,10 @@
   (envsubst 스타일)로 통일 — k8s 는 `rendered/` 로 렌더 후 `kubectl apply -R -f rendered/` 일괄 적용.
 - 미해결:
   - 9-2-A 예상 출력이 `created_at`·`booking_id` 까지 포함한 고정 문자열에 "정확히 일치" 판정이다
-    (`mark.md:425-431`). 답변은 "동적 요청에 정상 수집되는지 검증"이라 실제로는 값 일치를 안 볼
-    가능성이 높으나 채점지 문구는 그대로다. 실행 불가 조건이라 마감 전 질의 대상.
+    (`mark.md:425-431`). 요청마다 앱이 새로 만드는 값이라 어떤 구현으로도 재현할 수 없다.
+    **이 세트에는 이 항목에 대한 정정 답변이 없다** — `booking_id` 는 예시값이라는 답변도,
+    `created_at` 을 `date` 기준 1분 이내로 본다는 답변도 전부 set-03 정정본의 내용이다
+    (2026-08-16 [출처 정정] 항목). 대회 당일 심사장 확인 사항.
   - Monitoring 배점이 대분류 3.5(`mark.md:39`)와 세부 합 5(10-1~4)로 어긋난다. **원본
     `mark.pdf` 자체의 불일치**로 확인됐다(아래 2026-08-16 항목). 전사본은 양쪽 다 원본과
     일치하므로 손대지 않았다. 구현에는 영향이 없다(패널 4개 모두 구현).
@@ -30,18 +32,15 @@
 | 2-1-A | 버킷명 `<비번호>` 채점 제외 | 수정완료 | 구현은 `terraform/data.tf:5`(`var.player_number`)로 이미 변수화. 채점지 전사본 `mark.md`의 리터럴 `-103` 제거 |
 | 4-1-A / 9-2-A | DynamoDB GSI 과제지 명시 | 수정완료 | 구현은 `terraform/dynamodb.tf:28-41`에 이미 존재. 과제지 전사본 `task.md` §7 에 GSI 줄 추가 |
 | 7-2-A | ALB 예상출력 `wskorea26-cf`×2 + `403` | 영향없음 | `terraform/alb.tf:84-120` 헤더 조건 규칙 2개 + listener default 403(`:72-79`), `mark.md`도 이미 최신본 |
-| 9-1-A | `booking_id` 는 예시값, 고정 일치 아님 | 영향없음 | 구현·런북 어디에도 `booking_id` 하드코딩 없음 |
 | 10-0 | Grafana 접속 게이트 신설 | 수정완료 | 채점지 `mark.md`·`mark.sh` 10절 교체. 접속 경로·계정은 `README.md:262-263`, `terraform/outputs.tf:76-78`과 이미 일치 |
 | 10-1-A | book app CPU/Memory | 영향없음 | `dashboard.json:21,36` `sum by (namespace, pod)` — 범례에 book app 파드가 그대로 나온다 |
 | 10-2-A | 실행중인 **book app** Pod 개수 | 수정완료 | `dashboard.json:52`가 클러스터 전역 합계라 book app 개수를 읽을 수 없었다. `namespace="wskorea26", pod=~"wskorea26-book-deploy-.*"` 로 한정 |
 | 10-3-A | book app 재시작 횟수 | 영향없음 | `dashboard.json:67` 범례에 book app 파드 포함 |
 | 10-4-A | book app 네트워크 수신량 | 영향없음 | `dashboard.json:82` 범례에 book app 파드 포함 |
-| — | HighLatency Alert 채점 항목 **삭제** | 영향없음 | 저장소에 alert 룰이 애초에 없다 — `PrometheusRule` 파일 없음, `kube-prometheus-stack-values.yaml:17-18` `alertmanager.enabled: false` |
-| — | 로그 `level` 필드 / 예외 로그 기준 | 미반영 | 이 세트 채점지에 로그 형식 채점 항목이 없다(`mark.md`·`mark.sh` 전문 확인). `task.md`에도 Reference02 로그 규격이 없다 |
-| — | DataSource 이름 채점 | 미반영 | 이 세트 채점지에 DataSource 항목이 없다 |
-| — | `static/ PASS` 객체 채점 제외 | 미반영 | 이 세트 2-2-A(`mark.md:159`)는 `web/main/` 2개 객체만 보고 `--prefix "static/"` 명령 자체가 없다 |
-| — | `created_at` 을 `date` 기준 1분 이내 검증 | 미반영 | 이 세트 9-3-A 는 400 코드 확인이고, `created_at` 은 9-2-A 인데 판정이 "정확히 일치"라 기준이 다르다 (아래 미해결 참조) |
-| — | 부하 Pod 생성 단계 이동 | 부분반영 | 이 세트엔 부하/crash 파드 manifest 자체가 없다. 유효한 부분은 5-4-A 각주 하나뿐이라 별도 파일 변경 없음 |
+| — | HighLatency Alert 채점 항목 삭제 / 로그 `level` 필드 / DataSource 이름 / `booking_id` 예시값 | **대상 아님(set-03)** | 근거 파일 `수정사항.txt` 가 set-03 정정본이었다. 이 세트엔 Alert·로그 형식·DataSource 채점 항목 자체가 없다 → `set-03/errata/수정사항(1).txt` 로 이관, 판정은 `set-03/task-1/NOTES.md` |
+| — | `static/ PASS` 객체 채점 제외 (`6-1`) | **대상 아님(set-03)** | 이 세트 2-2-A(`mark.md:159`)는 `web/main/` 2개 객체만 보고 `--prefix "static/"` 명령 자체가 없다. set-03 6-1 항목이다 |
+| — | `created_at` 을 `date` 기준 1분 이내 검증 (`9-3`) | **대상 아님(set-03)** | 이 세트 9-3-A 는 400 코드 확인이다. set-03 9-3 항목이라 이 세트 9-2-A 의 "정확히 일치" 문구는 그대로 남는다 (위 미해결) |
+| — | 부하 Pod 생성 단계 이동 (`11-1`/`11-3`) | **대상 아님(set-03)** | 이 세트엔 부하/crash 파드 manifest 도 11절도 없다. set-03 11-1/11-3 항목이다 |
 
 ## 실측 소요시간
 
@@ -52,6 +51,18 @@
 ---
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
+
+### 2026-08-16 [출처 정정] `errata/수정사항.txt` 는 set-03 정정본이었다 — 삭제하고 이관
+- 경위: 이 파일의 4개 문답(HighLatency Alert 삭제, Reference02 로그 `level`, 11-2 DataSource 이름,
+  `booking_id` 예시값)은 전부 **11절·Alert 채점 항목이 있는 세트**의 것이다. 이 세트 채점지는
+  대분류 1~10 이고 Alert·로그 형식·DataSource 항목이 아예 없다. set-03 `mark.md` 의
+  11-1~11-4·6-1·9-3 과 정확히 대응한다
+- 조치: `set-02/errata/수정사항.txt` 삭제, `set-03/errata/수정사항(1).txt` 로 이관.
+  이 파일을 근거로 삼았던 판정 2건(HighLatency 삭제 / `booking_id` 예시값)을 이 로그에서 지우고
+  커버리지 표를 **대상 아님(set-03)** 으로 바꿨다. set-02 파일 변경은 애초에 없었다
+  (두 판정 모두 "영향없음"이었다) — 되돌릴 구현 변경 없음
+- 파급: 9-2-A 의 "정확히 일치" 를 완화해 줄 답변이 이 세트엔 **없다**. 위 미해결 참조
+- 이 세트의 정정 정본은 `errata/질의 답변.txt`·`errata/질의 답변(1).txt` 둘뿐이다
 
 ### 2026-08-16 [10] Monitoring 배점 3.5 ↔ 5 불일치는 원본 mark.pdf 자체의 오류
 - 출처: `mark.pdf` 원문. 표 레이아웃 때문에 기본 추출이 열 단위로 깨지므로
@@ -66,15 +77,18 @@
   있어 구현 변경은 없다
 - 2026-08-07 정정으로 신설된 10-0 접속 게이트에는 배점 배정이 없다(`errata/질의 답변(1).txt:3-9`)
 
-### 2026-08-16 [취합본] 번호 체계가 이 세트와 다름 — 취합본 단독 항목은 미반영
+### 2026-08-16 [취합본] set-02 와 set-03 이 섞인 취합본이다 — 이 세트 몫만 반영
 - 출처: `errata/질의답변-취합-20260816.txt` (심사장 공유 자료 기반 선수 취합본)
 - 내용: 취합본은 Grafana 를 `11-1`·`11-3`, S3 KMS 를 `6-1`, 로그·Alert 항목을 별도 번호로 부른다.
   이 세트 채점지는 대분류 1~10 이고 Monitoring 이 10, 6-1-A 는 Lambda, S3 KMS 는 2-2-A 다
-  (`mark.pdf` 원문 대조 — 배점열 `1,2,1.5,1,5,1,2.5,6.5,6,3.5` 합 30 이 `mark.md:39` 표와 일치).
-  `1-1-A`·`2-1-A`·`5-4`·`7-2`·`[7] GSI`·`[10-1~4 (12)]` 만 이 세트 번호와 대응한다
-- 판정: 취합본에만 있는 항목(`static/ PASS`, `9-3` date 기준, App Logs, DataSource, Alert Pod/sleep)은
-  **미반영**. 대응 채점 항목이 이 세트에 존재하지 않아 반영할 대상 자체가 없다. 다른 판본 채점지가
-  돌고 있다는 정황이므로, 대회 당일 배부본 번호가 11 까지 가면 이 판정을 다시 봐야 한다
+  (`mark.pdf` 원문 대조 — 배점열 `1,2,1.5,1,5,1,2.5,6.5,6,3.5` 합 30 이 `mark.md:39` 표와 일치)
+- 판정: `1-1-A`·`2-1-A`·`7-2`·`[7] GSI`·`[10-1~4 (12)]` 가 이 세트 몫이고 전부 반영했다.
+  나머지(`11-x`, `6-1` S3 KMS, `9-3` created_at, `5-4`, App Logs, DataSource)는 **set-03 몫**이다 —
+  set-03 채점지에 `11-1 Observability Deploy`·`11-2 Grafana Datasource`·`11-3 Grafana Dashboard`·
+  `11-4 Alert Firing`·`6-1 S3 Bucket`·`9-3 POST & GET E2E` 가 그대로 있고 문항 내용까지 일치한다
+  (`set-03/task-1/mark.md`). 반영은 `set-03/task-1/NOTES.md` 정정 로그에 있다
+- **"다른 판본 채점지" 가설은 폐기**한다. 두 세트가 한 문서에 섞였을 뿐이고, 이 세트 채점지가
+  11 절까지 갈 근거는 없다. 배부본 번호 체계 확인은 여전히 하되 재판정 대상은 없다
 - 충돌 처리: 10-1~4 스코프가 정본은 "book app 파드", 취합본은 "모든 파드(All Pod)"로 어긋난다.
   정본 우선 원칙에 따라 book app 기준으로 가되, CPU/Memory/재시작/네트워크 4패널은
   `sum by (namespace, pod)` 를 유지해 양쪽 다 통과시킨다 (아래 결정 참조)
@@ -110,23 +124,10 @@
   구현은 `terraform/dynamodb.tf:28-41` + `terraform/lambda/index.py:51-55`(`ScanIndexForward=False`)
   로 이미 반영돼 있었다
 
-### 2026-08-07 [Alert] HighLatency 채점 항목 삭제
-- 답변일: 2026-08-07. 출처: `errata/수정사항.txt:1-3`
-- 내용: 지급 book 바이너리에 `/delay` 엔드포인트가 없어 정상 경로로는 HighLatency 를 fire 할 수
-  없다는 질의에, 채점 항목 자체를 삭제하는 답변
-- 판정: **영향없음** — 이 저장소는 alert 룰을 만들지 않는다. `alertmanager.enabled: false`
-  (`k8s/monitoring/kube-prometheus-stack-values.yaml:17-18`) 는 요구 패널이 메트릭 시각화뿐이라는
-  기존 결정의 결과이고, 이번 삭제로 그 결정이 그대로 유지된다
-
 ### 2026-08-07 [7-2-A] ALB 예상 출력은 최신 채점지 기준
 - 답변일: 2026-08-07. 출처: `errata/질의 답변.txt:7-14`
 - 판정: **영향없음** — 최신 기준 `wskorea26-cf` 2회 + `403` 이고, `mark.md:316-322` 전사본이 이미
   그 형태다. 구현도 헤더 조건 규칙 2개(`terraform/alb.tf:84-120`) + default 403(`:72-79`)
-
-### 2026-08-07 [9-1-A] `booking_id` 는 예시값
-- 답변일: 2026-08-07. 출처: `errata/수정사항.txt:12-13`
-- 판정: **영향없음** — 고정값 일치가 아니라 동적 요청 처리 여부만 본다. 구현·런북에 `booking_id`
-  하드코딩이 없다
 
 ---
 ## 결정 로그
