@@ -105,7 +105,7 @@
 - [x] 4-2-A ALB/TG — 실채점: ALB 2개 `active application internet-facing`, app-tg `healthy healthy`(pod 2) / grafana-tg `healthy`(pod 1)
 - [x] 4-3-A 워크로드 이름 — 실채점: log-generator 2 / o11y-otel 2 2 / o11y-loki ClusterIP 3100 / o11y-grafana 1
 - [x] 4-4-A App API — 실채점: `{"status":"ok"}` / `error` / `3` 정확 일치. `{"status":"ok"}` 뒤 빈 줄은 지급 app.py jsonify trailing newline + 스크립트 `; echo` 중복이라 전 선수 공통 (module-1 1-5-A 와 같은 현상)
-- [x] 4-5-A 로그 파이프라인 — 실채점: mark4.sh 주석 블록 쿼리(`{k8s_namespace_name="o11y"} | json | level="ERROR"`)로 ERROR 라인 조회 확인. Loki OTLP 기본 인덱스 라벨 의존이 실환경에서 성립 → `limits_config.otlp_config` 명시 승격 불필요(결정 로그 3번 비용 미발생)
+- [x] 4-5-A 로그 파이프라인 — 실채점: mark4 주석 블록 쿼리(`{k8s_namespace_name="o11y"} | json | level="ERROR"`, 정정본 `mark4-2026-08-04.sh`)로 ERROR 라인 조회 확인. Loki OTLP 기본 인덱스 라벨 의존이 실환경에서 성립 → `limits_config.otlp_config` 명시 승격 불필요(결정 로그 3번 비용 미발생)
 - [x] 4-6-A Grafana — 실채점: 3패널 표시·범례 plain text(ERROR/WARN/INFO)·Recent Logs 에 4-5 로그·Save&Test 성공 전부 확인. `| __error__=""` 가드 추가 후 재배포 기준(함정 절)
 
 #### module-4 함정 (구현 중 발견)
@@ -140,11 +140,21 @@
 ## 정정 로그
 <!-- 과제지·채점지의 오류로 구현을 바꿨으면 질의일·답변일·출처와 함께 적는다. task.pdf·mark.pdf·provided/ 원본은 고치지 않는다. -->
 
-### 2026-08-01 답변 (질의일 2026-07-31, 출처: `set-07/2026-08-01.txt` + `set-07/task-2/2과제.txt`)
-
-원본 파일(`task.md`·`mark.md`·`mark/mark3.sh`·`provided/module-4/Dockerfile`)은 전부 그대로 두고,
-내용이 바뀐 실행 파일만 **날짜 접미사 사본**으로 추가했다 (`mark/mark3-2026-08-01.sh`, `provided/module-4/Dockerfile-2026-08-01`).
+정정 정본은 `set-07/errata/2과제.txt` 하나뿐이고, 배경·"수정없음" 판정은 `set-07/changelog.txt` 에 있다.
+원본 파일(`task.md`·`mark.md`·`mark/mark3.sh`·`mark/mark4.sh`·`provided/module-4/Dockerfile`)은 전부 그대로 두고,
+내용이 바뀐 실행 파일만 **날짜 접미사 사본**으로 추가한다
+(`mark/mark3-2026-08-01.sh`, `mark/mark4-2026-08-04.sh`, `provided/module-4/Dockerfile-2026-08-01`).
 원본과 정정본을 나란히 두면 대회 당일 또 정정이 와도 어느 답변에서 온 사본인지 파일명으로 구분된다.
+task-1 도 같은 규칙이다(`set-07/task-1/NOTES.md` 정정 로그).
+
+### 2026-08-04 답변 (출처: `set-07/errata/2과제.txt` 공통 2 + Module 4 - 2 + `changelog.txt`)
+
+| # | 정정 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 공통 2 | 유의사항 18 추가 — `source kubectl-connect` 오류 시 **모듈당 1회**에 한해 `rm -rf .kube/` 로 초기화 허용 | **없음**(채점 절차) — kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인. EKS 모듈(3·4) 런북 채점 절에 한 줄만 반영. 우리 쪽 대응은 그대로 access entry fallback 이다 |
+| M4-2 | 4-5-A 채점 명령의 공백문자 issue(한컴오피스가 넣은 NBSP) 수정 | **있음**(채점 스크립트) — `mark/mark4.sh:45` 의 `query_range` 와 `--data-urlencode` 사이가 NBSP(U+00A0) 라 그대로 붙여넣으면 `query_range<NBSP>--data-urlencode` 한 토큰이 되어 4-5-A 확인이 실패한다. 정정본 사본 `mark/mark4-2026-08-04.sh` 추가(NBSP → 스페이스, 그 외 동일) + module-4 런북 채점 명령을 정정본으로 교체. 쿼리 문자열 자체는 안 바뀌었으므로 **구현(Loki·OTel·대시보드)은 영향 없음** |
+
+### 2026-08-01 답변 (질의일 2026-07-31, 출처: `set-07/errata/2과제.txt` + `changelog.txt`)
 
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|

@@ -132,6 +132,8 @@ aws eks update-kubeconfig --name skm-eks-cluster --region ap-northeast-2
 kubectl get nodes
 ```
 
+컨텍스트 설정에서 오류가 나면 **모듈당 1회에 한해** `rm -rf ~/.kube/` 로 초기화한 뒤 다시 실행할 수 있다(유의사항 18) — kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인이다.
+
 `Unauthorized` 가 나오면(채점 주체 ≠ 클러스터 생성자) CloudShell 의 IAM ARN 을 확인 후 본 PC 에서 access entry 를 추가한다:
 
 ```bash

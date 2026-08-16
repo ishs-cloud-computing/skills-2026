@@ -1,6 +1,6 @@
 # Module 4 — Container Logging (ap-northeast-1)
 
-EKS 1.35(Multi-AZ·KST 노드) + ECR 이미지 앱 + OTel Collector(DaemonSet) + Loki(Single Binary·PV) + Grafana, ALB 2대(고정 이름 TG) 노출. 채점은 CloudShell에서 `mark/mark4.sh` 실행.
+EKS 1.35(Multi-AZ·KST 노드) + ECR 이미지 앱 + OTel Collector(DaemonSet) + Loki(Single Binary·PV) + Grafana, ALB 2대(고정 이름 TG) 노출. 채점은 CloudShell에서 `mark/mark4-2026-08-04.sh`(정정본) 실행.
 본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
 
 ## 디렉토리 구조
@@ -31,7 +31,7 @@ module-4-container-logging/
 └── README.md
 
 # 앱 소스: task-2/provided/module-4/app.py (제공 원본, 수정 금지 — Dockerfile 은 app/ 수정본 사용)
-# 채점: task-2/mark/mark4.sh (CloudShell, ap-northeast-1)
+# 채점: task-2/mark/mark4-2026-08-04.sh (CloudShell, ap-northeast-1)
 ```
 
 ## 배포 순서
@@ -238,6 +238,8 @@ aws eks update-kubeconfig --name o11y-cluster --region ap-northeast-1
 kubectl get nodes
 ```
 
+컨텍스트 설정에서 오류가 나면 **모듈당 1회에 한해** `rm -rf ~/.kube/` 로 초기화한 뒤 다시 실행할 수 있다(유의사항 18) — kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인이다.
+
 `Unauthorized` 가 나오면(채점 주체 ≠ 클러스터 생성자) CloudShell 의 IAM ARN 을 확인 후 본 PC 에서 access entry 를 추가한다:
 
 ```bash
@@ -252,7 +254,7 @@ aws eks associate-access-policy --cluster-name o11y-cluster --principal-arn <CLO
 ```
 
 ```bash
-bash mark/mark4.sh
+bash mark/mark4-2026-08-04.sh   # 2026-08-04 정정본 (4-5-A 명령의 NBSP 제거). 원본은 mark4.sh
 ```
 
 ## Teardown
