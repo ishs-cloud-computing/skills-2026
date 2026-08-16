@@ -197,6 +197,13 @@ resource "aws_wafv2_web_acl" "this" {
                   priority = 1
                   type     = "BASE64_DECODE"
                 }
+
+                # base64 를 푼 결과가 또 URL 인코딩인 경우(`%27%20OR%201=1--`)를 위해 한 번 더 푼다.
+                # 이게 없으면 이중 인코딩 계열이 통째로 샌다 — 실측에서 이 페이로드만 200 이었다.
+                text_transformation {
+                  priority = 2
+                  type     = "URL_DECODE"
+                }
               }
             }
 
@@ -219,6 +226,12 @@ resource "aws_wafv2_web_acl" "this" {
                 text_transformation {
                   priority = 0
                   type     = "BASE64_DECODE"
+                }
+
+                # 쿼리 쪽과 같은 이유 — 디코드 결과가 또 URL 인코딩일 수 있다.
+                text_transformation {
+                  priority = 1
+                  type     = "URL_DECODE"
                 }
               }
             }
