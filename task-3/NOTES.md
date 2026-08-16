@@ -95,6 +95,126 @@ Count 매칭 중 오탐/실탐 판정:
 
 ## 결정 로그
 
+### 2026-08-16 — base64 로 감싼 SQLi 가 관리형 룰을 그대로 통과 → `base64-sqli` 룰 추가
+
+- **발단**: "managed SQLi 의 `uri_path` scope-down 이 쿼리스트링까지 적용되는 게 맞느냐" 검토.
+  결론은 **맞다, 변경 불필요** — `uri_path` 는 쿼리스트링·fragment 를 포함하지 않는다
+  ([Request components](https://docs.aws.amazon.com/waf/latest/developerguide/waf-rule-statement-fields-list.html)).
+  라이브 실측으로도 경로가 같고 쿼리만 다른 두 요청이 갈렸다:
+  `/v1/product?id=2` → 404(앱) vs `/v1/product?id=2'%20OR%20'1'='1` → 403(WAF, `server: CloudFront`).
+  화이트리스트 정규식의 `$` 앵커가 성립하는 이유가 이거다.
+  → **scope-down 에 `query_string` 을 추가하지 말 것. 앵커를 풀지 말 것.** 쿼리·바디의 SQLi 판정은
+  scope-down 이 아니라 관리형 룰그룹(`SQLi_QUERYARGUMENTS`/`SQLi_BODY`)이 따로 한다.
+
+- **거기서 드러난 진짜 구멍**: 같은 페이로드를 base64 로 감싸면 전부 통과한다.
+
+  | 요청 | 결과 |
+  |---|---|
+  | `GET /v1/product?id=%27%20OR%20sleep%285%29--` | 403 ✅ |
+  | `GET /v1/product?id=MScgT1IgJzEnPScx` (`1' OR '1'='1`) | **404** ❌ |
+  | `POST /v1/product {"id":"<b64 SQLi>","name":"<b64 4096 A>"}` | **201** ❌ — DB 에 행 생성 |
+
+- **원인**: 관리형 룰그룹은 자체 text transformation 이 **고정**이고 거기에 `BASE64_DECODE` 가 없다.
+  밖에서 주입할 방법도 없다 — `scope_down_statement` 에 준 변환은
+  *"not inherited by the containing managed rule group"* 이다. 관리형 룰그룹에서 조절 가능한 건
+  버전 · rule action override · scope-down 셋뿐이다.
+
+- **조치**: 커스텀 룰 `base64-sqli`(priority 40) 추가. `api_paths` 화이트리스트와 `and_statement`,
+  그 안에 `or_statement` 로 (a) `all_query_arguments` + `URL_DECODE`→`BASE64_DECODE`,
+  (b) `json_body`(VALUE, oversize CONTINUE) + `BASE64_DECODE`. 둘 다 **sensitivity LOW**.
+  priority 30 은 당일 콘솔에서 붙일 `scanner-ua` 자리로 비워뒀다.
+
+- **왜 이건 terraform 이고 UA 룰은 콘솔인가**: 값의 수명주기가 다르다. UA 목록은 당일 트래픽 로그를
+  보고 정하는 실시간 튜닝 축이라 apply 왕복이 생기면 안 된다(아래 08-16 UA 항목). base64 차단은
+  로그를 볼 필요가 없는 고정 룰이다 — `api_paths` 를 terraform 에 남긴 것과 같은 기준.
+
+- **기각**: "연습 세션 로그(720,319건)에 base64 가 없었으니 안 막아도 된다" — **로그에 없다는 건
+  그 세션에 안 나왔다는 뜻일 뿐 안 막을 근거가 아니다.** base64 로 감싼
+  `' UNION SELECT username,password FROM users--` 는 인코딩만 다른 SQLi 다.
+
+- **기각**: sensitivity HIGH — 정상 트래픽 24,220건 차단 사고(위 "오탐 실증")를 재현한다.
+  룰을 빼는 게 아니라 LOW 로 넣고 실측 검증하는 쪽이 맞다.
+
+- **오탐 감시**: `all_query_arguments` 범위가 유일한 리스크다. strict `BASE64_DECODE` 는 유효하지
+  않은 입력에서 실패하므로 `uuid`(하이픈)·`email`(`@`·`.`)은 안 걸리고, 4의 배수 길이 숫자 파라미터는
+  쓰레기 바이트로 디코드되나 SQL 토큰이 아니라 LOW 가 반응할 이유가 없다 — **추정이다**.
+  CloudWatch 에서 `base64-sqli` 메트릭과 각 API availability 를 같이 보고, availability 가
+  떨어지면 이 룰만 `count` 로 강등하거나 `single_query_argument { name = "id" }` 로 좁힌다.
+
+- **부수 효과**: 검토용 POST 로 `product` 테이블에 `id='MScgT1IgJzEnPScx'` 행이 1건 생겼다.
+  앱에 DELETE 엔드포인트가 없어 RDS 에서 직접 지워야 한다.
+
+### 2026-08-16 — 없는 경로의 비정상 요청이 404 대신 403 으로 나가던 문제 → 전 룰 scope-down
+
+- **문제**: 과제지 7절 예시는 `/v1/none` 으로의 *비정상* 요청도 404 를 요구한다. 그런데 403 은 WAF,
+  404 는 ALB 리스너 기본액션이 내는 구조인데 **WAF 가 CloudFront 에 붙어 ALB 보다 앞**이다.
+  `/v1/none?email='%20OR%201=1--` 는 WAF SQLi 룰이 먼저 물어 403 이 나갔다. 정확히 예시 케이스가 틀렸다.
+- **원인**: 판정 순서가 "비정상 여부 먼저, 경로 존재 여부 나중" 이었다. 404 계층이 WAF 뒤에 있는 한
+  WAF 가 무언가 차단하면 404 계층은 영영 실행되지 않는다.
+- **조치**: `aws_wafv2_regex_pattern_set.api_paths`(존재하는 엔드포인트 화이트리스트)를 만들고
+  두 관리형 룰의 `scope_down_statement` 로 걸었다. 화이트리스트 밖 경로는 WAF 가 판정 자체를 안 해
+  오리진까지 가고 ALB 가 404 를 낸다. 순서가 "경로 존재 먼저" 로 뒤집힌다.
+- **기각**: `and_statement` 로 managed rule group 을 감싸는 안 — WAF 가 managed rule group 의
+  논리 statement 중첩을 허용하지 않는다. `scope_down_statement` 가 유일한 수단.
+- **기각**: 없는 경로 전용 Block 룰에 `CustomResponse 404` 를 다는 안 — 룰이 늘 때마다 화이트리스트를
+  두 벌 유지해야 하고, 404 의 출처가 ALB/WAF 두 곳으로 갈라진다.
+- **부수 효과**: 위 룰 설계안의 `Block-Malicious-URI-Paths` 는 불필요해졌다. 스캔 경로(`/.svn/entries`
+  ·`/dump.sql`)는 정의상 화이트리스트 밖이라 이제 전부 404 다. 당일 추가하는 커스텀 룰은 같은
+  regex set 을 `and_statement` 한쪽 항으로 넣어야 이 성질이 유지된다.
+- **경로 목록 근거**: 앱 바이너리 3종에 `/v1/…` 문자열이 각 1개뿐이고 path parameter 가 없다
+  (`/v1/product/{id}` 형태 없음, 전부 쿼리스트링 선택). 화이트리스트는 Ingress 라우팅 3개 +
+  `/images/*` 로 닫힌다. `/healthcheck` 는 제외 — Ingress 규칙이 없어 정상 요청도 CloudFront 경유
+  404 라, 넣으면 "정상 404 / 비정상 403" 불일치가 생긴다.
+- **text transformation**: `URL_DECODE` + `NORMALIZE_PATH`. `LOWERCASE` 는 뺐다 — ALB path-pattern 과
+  CloudFront path pattern 이 둘 다 대소문자 구분이라 `/V1/USER` 는 어차피 404 다. 소문자화하면
+  정상 `/V1/USER` 는 404 인데 비정상만 403 이 되어 두 계층이 어긋난다.
+  ALB 문서: "A path pattern is case-sensitive" / "The rule evaluation is performed only after URI
+  normalization occurs" — 후자가 `NORMALIZE_PATH` 를 넣은 근거다. ALB 도 정규화 후 평가하므로
+  `/v1/user/../../etc/passwd` 를 양쪽이 똑같이 `/etc/passwd` 로 보고 404 로 수렴한다.
+  https://docs.aws.amazon.com/elasticloadbalancing/latest/application/rule-condition-types.html
+  (같은 문서에서 `http-header`·`query-string` 은 대소문자 무시, `http-request-method` 는 구분)
+- **당일 바꿀 것**: 앱·경로가 바뀌면 `terraform.tfvars` 의 `waf_api_path_regexes` 만 교체한다.
+
+### 2026-08-16 — `waf/` 콘솔용 조각 6개 삭제, UA 룰만 terraform 으로 이관
+
+- **상태**: `waf/{denied-paths,denied-querystring,denied-ua}.regx` 와 `block-*.json` 은 저장소 어디서도
+  참조되지 않는 연습 세션 잔여물이었다. 패턴이 플레이스홀더(`^/(block|할|목록)(/|$)`, `(block|할|ua)`)고
+  JSON 의 regex set ARN 에 연습 계정 ID(`346151107821`)와 `<id>` 자리표시자가 박혀 있어 그대로는 못 쓴다.
+- **경로 차단(`denied-paths`) 폐기**: scope-down 도입으로 **자기모순**이 됐다. 화이트리스트 밖 경로는
+  애초에 룰에 닿지 않고, 굳이 닿게 만들면 404 여야 할 응답이 403 으로 나간다. 스캔 경로
+  (`/.svn/entries`·`/dump.sql`)는 이제 전부 404 로 떨어지는 게 정답이다.
+- **쿼리스트링 차단(`denied-querystring`) 폐기**: 관리형 SQLiRuleSet·KnownBadInputsRuleSet 과 중복이고,
+  위 오탐 사고(커스텀 SQLi 룰이 정상 24,220건 차단)가 정확히 이 계열이다. 관리형으로 갈음한다.
+- **UA 차단만 존치**: UA 는 판별력이 '강' 이고 부하 생성기(브라우저형 Chrome UA)와 교집합이 0 이라
+  유일하게 값이 있다. `waf.tf` 의 `scanner-ua` 룰로 이관하면서 **`and_statement` 로 경로 화이트리스트를
+  같이 걸었다** — 관리형 룰의 `scope_down_statement` 와 동등한 조건이다. 이게 빠지면 스캐너가 없는 경로를
+  긁을 때 404 대신 403 이 나가 과제지 요구와 어긋난다.
+- **UA 패턴은 소문자로 두고 `LOWERCASE` 변환으로 맞춘다** — WAF 정규식에 `(?i)` 인라인 플래그를
+  쓰지 않기 위해서다. `COMPRESS_WHITE_SPACE` 는 기존 콘솔 조각의 설정을 그대로 가져왔다.
+- **UA 목록을 terraform 변수로 두는 안 기각**: 처음엔 `waf_scanner_ua_regexes` tfvars 변수로 넣고
+  `count` 로 룰을 껐다 켰다 하게 짰다가 되물렸다. UA 는 **트래픽 로그를 보고 실시간으로 정하는 값**인데
+  apply 는 본 PC 전용이라(CLAUDE.md), 로그 분석(CloudShell) → 본 PC → tfvars → apply 왕복이 생긴다.
+  트래픽이 이미 들어오는 중에 이 왕복을 도는 건 설계가 잘못된 것이다.
+- **채택**: terraform 은 **regex pattern set 두 개만** 만든다. `scanner-ua` 룰 자체는 `waf/scanner-ua.json`
+  으로 빼서 당일 콘솔 JSON editor 로 넣는다. 룰을 terraform 에 두면 (a) 켜고 끌 때 apply 왕복이 생기고
+  (b) 검증 못 한 `and_statement`+ARN 참조 HCL 이 apply 를 통째로 막을 수 있다 — 배포 경로에
+  미검증 코드를 두지 않는다. 세트는 단순 리소스라 그 위험이 없다.
+- **`__disabled__scanner__ua__` 자리표시자**: `regular_expression` 0개를 terraform 스키마는 허용하나
+  WAFv2 API 가 빈 목록을 받는지 문서에 없다. 룰이 빠진 지금은 세트가 참조되지도 않지만,
+  세트 생성 자체가 실패하면 당일 손댈 게 늘어나므로 그대로 둔다.
+- **콘솔 편집 시 리전 선택기를 Global (CloudFront)** 로 — us-east-1 리전 스코프와 목록이 다르다.
+  `lifecycle { ignore_changes = [regular_expression] }` 이 없으면 다음 apply 가 이걸 되돌린다 —
+  이 한 줄이 설계의 핵심이다.
+- **자리표시자를 남기는 이유**: `regular_expression` 블록 0개를 terraform 스키마는 허용하지만
+  (provider schema 확인: nesting_mode set, min_items 없음) WAFv2 API 가 빈 `RegularExpressionList` 를
+  받는지는 문서에 없다. 대회 중에 확인할 일이 아니라 `__disabled__scanner__ua__`(어떤 UA 와도 불일치)
+  하나를 남긴다. 콘솔에서 봐도 꺼진 상태임이 드러난다.
+- **`api_paths` 는 terraform 에 그대로 둔다**: 경로 화이트리스트는 Ingress 라우팅과 한 몸이라
+  바뀔 때 매니페스트도 같이 바뀌는 **배포 시점 값**이고, 403/404 를 가르는 정확성 핵심이라 코드에
+  남겨 리뷰 대상으로 둔다. 실시간 튜닝 축이 아니다 — 두 세트의 수명주기가 다르다.
+- **당일 절차**: README STEP 12 "스캐너 UA 차단 켜기". 부하 생성기 UA 가 브라우저형인지 먼저 확인하고
+  도구형이면 켜지 않는다 — 채점 트래픽을 직접 죽인다. 되돌리기는 자리표시자 하나로 다시 덮어쓰기.
+
 ### 2026-08-10 — teardown 이 스크립트 잔여물을 안 지워 `Karpenter-skills-eks` 가 DELETE_FAILED
 
 - **문제**: STEP 99(Ingress → 클러스터 → terraform)가 `scripts/karpenter.sh`·`scripts/lbc.sh` 가 만든 걸

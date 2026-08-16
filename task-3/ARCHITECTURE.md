@@ -94,8 +94,8 @@ terraform apply는 언제나 한 번에 하나만 도므로 state 락 충돌도 
 |---|---|
 | 단일 엔드포인트 | CloudFront (`terraform/cloudfront.tf`) |
 | `/images/<key>` 이미지 제공 | `/images/*` behavior + strip Function + OAC (`cloudfront.tf`, `s3.tf`) |
-| 비정상 요청 403 | WAF SQLi·KnownBadInputs block (`waf.tf`) |
-| API 외 경로 404 | Ingress `actions.response-404` fixed-response (`k8s/20-ingress.yaml`) |
+| 비정상 요청 403 | WAF SQLi·KnownBadInputs block. 단 `waf_api_path_regexes` 경로에서만 판정 (`waf.tf`) |
+| API 외 경로 404 | WAF scope-down 통과 → Ingress `actions.response-404` fixed-response (`k8s/20-ingress.yaml`) |
 | EKS + EC2 t3.medium만 | MNG `instanceType` + NodePool instance-type 고정 |
 | 최소 리소스(비용 ratio) | 유휴 1대 (아래 전용 절) |
 | DB 최소 운영 | db.t3.micro Multi-AZ 인스턴스 1대 + RDS Proxy (`rds.tf`, `rds-proxy.tf`) |
@@ -317,6 +317,14 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 |---|---|---|
 | SQLiRuleSet | **block** | 비정상 요청에 SQLi 포함 확인됨. FP 낮음. block 기본 응답 = 403 |
 | KnownBadInputsRuleSet | **block** | 헤더/프로토콜 변조·log4j 등. FP 극히 낮음 |
+| scanner-ua (커스텀) | **미배포** | terraform은 regex pattern set 두 개만 만든다. 룰은 `waf/scanner-ua.json`으로 빼뒀고 당일 필요할 때 콘솔 JSON editor로 넣는다 (README STEP 12) |
+
+**모든 룰은 `scope_down_statement`로 `waf_api_path_regexes`(존재하는 엔드포인트 정규식 세트)에
+걸리는 경로에서만 동작한다.** WAF가 CloudFront에 붙어 ALB보다 앞서므로, 이게 없으면 없는 경로의
+비정상 요청도 WAF가 먼저 403을 내려 과제지의 "`/v1/none` 비정상 요청 → 404" 요구를 못 맞춘다.
+화이트리스트 밖은 WAF를 통과해 ALB 기본액션 404로 간다. 관리형 룰은 `scope_down_statement`,
+커스텀 룰은 `and_statement`로 건다 — managed rule group은 논리 statement에 중첩할 수 없어서다.
+`waf/scanner-ua.json`이 그 예시이며, 새 커스텀 룰도 반드시 같은 형태를 따라야 한다.
 
 두 관리형 룰만 block으로 둔다. CommonRuleSet은 NoUserAgent·SizeRestrictions 등이 정상 채점
 트래픽을 오차단할 수 있어(availability 12점 손실이 Exception Handling 2점 이득보다 크다) 기본

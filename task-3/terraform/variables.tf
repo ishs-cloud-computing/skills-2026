@@ -30,6 +30,15 @@ variable "image_tag" {
   default     = "v1"
 }
 
+variable "waf_api_path_regexes" {
+  description = "존재하는 엔드포인트 경로 정규식. 모든 WAF 룰의 scope-down 조건이며, 여기 안 걸리는 경로는 WAF를 통과해 ALB 기본액션 404로 간다."
+  type        = list(string)
+  default = [
+    "^/v1/(user|product|stress)(/.*)?$",
+    "^/images/.+$",
+  ]
+}
+
 variable "alb_exists" {
   description = "ALB(Ingress 생성분) 조회 여부. destroy 시 ALB가 이미 없으면 false로 꺼야 plan이 통과한다."
   type        = bool
