@@ -11,10 +11,12 @@
 
 ## 공통 워크플로
 
+**먼저 `terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다.** apply 는 tfvars 를 자동으로 읽으므로 `-var` 를 붙이지 않는다.
+
 ```powershell
 cd <module-N-...>/terraform
 terraform init
-terraform apply -var "player_number=$env:NUM"
+terraform apply
 ```
 
 - 각 모듈은 독립 terraform 루트 — 모듈 순서 무관, 병렬 배포 가능.
