@@ -1,6 +1,6 @@
 # Module 3 — EKS Scaling (ap-northeast-2)
 
-SQS 주문 큐 + EKS 1.35(tainted Addon NG) + ECR 이미지 앱 + KEDA(Pod 스케일링) + Karpenter(노드 스케일링). 채점은 CloudShell에서 `mark/mark3.sh` 실행.
+SQS 주문 큐 + EKS 1.35(tainted Addon NG) + ECR 이미지 앱 + KEDA(Pod 스케일링) + Karpenter(노드 스케일링). 채점은 CloudShell에서 `mark/mark3-2026-08-01.sh`(정정본) 실행.
 본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(CloudShell 단계는 공통).
 
 ## 디렉토리 구조
@@ -23,7 +23,7 @@ module-3-eks-scaling/
 └── README.md
 
 # 앱 소스: task-2/provided/module-3/{app.py,Dockerfile,requirements.txt} (제공 원본, 수정 금지)
-# 채점: task-2/mark/mark3.sh (CloudShell, ap-northeast-2)
+# 채점: task-2/mark/mark3-2026-08-01.sh (CloudShell, ap-northeast-2)
 ```
 
 ## 배포 순서
@@ -152,7 +152,7 @@ aws eks associate-access-policy --cluster-name skm-eks-cluster --principal-arn <
 ```bash
 kubectl get deploy order-processor -n skillsmkt
 kubectl get nodes -l karpenter.sh/nodepool=skm-app-nodepool
-bash mark/mark3.sh
+bash mark/mark3-2026-08-01.sh   # 2026-08-01 정정본 (3-6 대기 150초). 원본은 mark3.sh
 ```
 
 ## Teardown

@@ -28,24 +28,24 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: product
-          image: <IMAGE>
+          image: "600440344359.dkr.ecr.ap-northeast-2.amazonaws.com/product:v1"
           ports:
             - containerPort: 8080
           # 키 이름은 과제지 환경변수 표와 정확히 일치해야 한다.
           env:
             - name: MYSQL_HOST
-              value: "<PROXY_ENDPOINT>"
+              value: "skills-db-proxy.proxy-creegaqoksh3.ap-northeast-2.rds.amazonaws.com"
             - name: MYSQL_PORT
-              value: "<DB_PORT>"
+              value: "3306"
             - name: MYSQL_DBNAME
               value: "dev"
             - name: MYSQL_USER
               value: "admin"
             - name: MYSQL_PASSWORD
-              value: "<DB_PASSWORD>"
+              value: "password"
             # S3 버킷·리전의 env 키 이름은 과제지에 없다 — 당일 바이너리로 확인해야 한다.
             - name: S3_BUCKET
-              value: "<BUCKET_NAME>"
+              value: "wsc2026-task3-images-103"
             - name: AWS_REGION
               value: "ap-northeast-2"
           resources:

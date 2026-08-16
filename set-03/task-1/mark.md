@@ -391,10 +391,11 @@ True aws:kms
 static/index.html  static/main.jpeg
 KMS wsc2026-bucket-kms: PASS
 S3 Object KMS Check:
- static/: PASS
  static/index.html: PASS
  static/main.jpeg: PASS
 ```
+
+> 정정 2026-08-16: 원본 예상 출력에는 ` static/: PASS` 줄이 있었으나, `aws s3api list-objects --prefix "static/"` 로는 조회되지 않는 객체다. 해당 줄은 채점 대상에서 제외한다.
 
 ### 7-1. Lambda Functions
 
@@ -514,18 +515,22 @@ ALB/Lambda: CachingDisabled
 **1) 명령어 입력**
 
 ```bash
+TZ=Asia/Seoul date '+REQUEST TIME: %Y-%m-%d %H:%M:%S KST'
 BOOKING_ID=$(curl -s -X POST "https://${CF_DOMAIN}/booking" -H "Content-Type: application/json" -d '{"client_id":"MARK001","username":"Marker","email":"mark@test.com","concert_name":"TestConcert"}' 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin).get('booking_id',''))" 2>/dev/null); echo "POST booking_id: $BOOKING_ID"
 curl -s "https://${CF_DOMAIN}/v1/book?booking_id=${BOOKING_ID}" 2>/dev/null; echo
 ```
 
-**2)** 필드 순서(client_id, username, email, concert_name, created_at)가 차례대로 일치하는지, 그리고 created_at 시간이 스크립트 실행 시간 기준 1분 이내인지 확인합니다.
+**2)** 필드 순서(client_id, username, email, concert_name, created_at)가 차례대로 일치하는지, 그리고 created_at 시간이 curl 요청 직전에 출력한 `REQUEST TIME` 기준 1분 이내인지 확인합니다.
 
 **(예상 출력)**
 
 ```
+REQUEST TIME: 2026-05-15 00:13:05 KST
 POST booking_id: NWOEMIU2
 {"client_id": "MARK001", "username": "Marker", "email": "mark@test.com", "concert_name": "TestConcert", "created_at": "2026-05-15 00:13:05 KST"}
 ```
+
+> 정정 2026-08-16: `booking_id` 값은 예시이며 고정값 일치를 보지 않는다. `created_at` 은 "스크립트 실행 시간" 이 아니라 **curl 요청 직전의 시스템 시간(`date`)** 을 기준으로 1분 이내인지 정밀 검증한다.
 
 ### 10-1. WAF Protection
 
@@ -558,17 +563,11 @@ Rate: PASS (403)
 **1) 명령어 입력**
 
 ```bash
-SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null)
-kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null
-kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/nonexist; sleep 0.1; done" &>/dev/null
-kubectl run latency-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/delay?ms=5000; sleep 0.2; done" &>/dev/null
-kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null
-kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null
-kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
-sleep 180
 GRAFANA_LB=$(kubectl get svc -n observability -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{end}' 2>/dev/null)
 for p in fluent-bit prometheus grafana; do kubectl get pods -n observability --no-headers --request-timeout=10s 2>/dev/null | grep -c "$p.*Running" | xargs -I{} echo "$p: {}"; done
 ```
+
+> 정정 2026-08-16: 원본 11-1 은 테스트 파드 6종 생성과 `sleep 180` 을 포함했으나, **파드 생성 단계는 11-1 채점 대상에서 제외**되고 Alert 검증용 파드 생성·`sleep` 은 11-3 에서 수동으로 진행한다. 테스트 리소스 생성으로 파드 조회 결과나 Alert 상태가 변동되어도 재채점 기준으로 쓰지 않는다.
 
 **2)** 실행 결과가 1 이상인지 확인합니다.
 
@@ -604,7 +603,23 @@ Dashboards:
 
 ### 11-3. Grafana Dashboard
 
+**0) 수동 실행 — Alert 검증용 테스트 파드 생성 (정정 2026-08-16)**
+
+```bash
+SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null)
+kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null
+kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/nonexist; sleep 0.1; done" &>/dev/null
+kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null
+kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null
+kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
+sleep 180
+```
+
+> 원본 11-1 에 있던 파드 생성·`sleep` 블록이다. `latency-gen`(`/delay?ms=5000`)은 HighLatency 채점 항목 삭제와 함께 제외했다.
+
 **1)** 출력된 Grafana URL을 통해 admin/`Skills$#$@!`에 로그인 후 wsc2026-grafana-dashboard에서 메트릭과 로그 형식이 채점지 사진과 일치하는지 확인하며, 모든 메트릭은 빈값이 없어야합니다.
+
+> 정정 2026-08-16: **패널 이름(Panel Name)은 채점 대상이 아니다.** 과제지 Description 의 메트릭·로그 데이터가 정확히 추출·표현되는지를 본다. Pod CPU/Memory 패널은 특정 파드 한정이 아니라 **모든 파드(All Pod)** 대상이다. Application Logs 패널에 `/v1/book` 외 로그가 섞여 있어도, 과제지·채점기준표에 명시된 로그 형식 기준으로 채점한다.
 
 Application Logs 패널 로그 형식 예시:
 
@@ -619,3 +634,5 @@ INFO {"level":"INFO","path":"/v1/book","status":"200","duration":"112.663323ms",
 **1)** Active Alerts 패널에 Edit을 선택해 나온 결과와 채점지 사진과 일치하는지 확인합니다.
 
 *(채점지 사진과 대조하여 확인)*
+
+> 정정 2026-08-07: **HighLatency Alert 채점 항목은 삭제됐다.** 지급 book 바이너리에 `/delay` 엔드포인트가 없어 과제지 범위 안에서는 발화가 불가능하다는 질의에 대한 답변이다. 나머지 5종(PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / PodCrashLooping)만 확인한다. 과제지 Prometheus Alert 표의 HighLatency 규칙 자체는 그대로 요구되므로 룰은 유지한다.

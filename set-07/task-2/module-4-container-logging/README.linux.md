@@ -79,7 +79,7 @@ eksctl create cluster -f cluster.rendered.yaml   # kubeconfig 는 $KUBECONFIG(�
 
 ### 3) [CloudShell] 이미지 빌드 & ECR push
 
-[README.md](README.md) 3단계를 수행한다. (app.py 는 provided 원본, Dockerfile 은 app/ 수정본)
+[README.md](README.md) 3단계를 수행한다. (app.py 는 provided 원본, Dockerfile 은 app/ 정정 반영본)
 
 ### 4) [본 PC] 노드 검증
 

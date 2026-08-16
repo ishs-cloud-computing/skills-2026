@@ -127,6 +127,8 @@ for B in $(aws cloudfront get-distribution --id "$CF_ID" --region us-east-1 --qu
 echo
 
 echo =====9-3=====
+# 정정 2026-08-16: created_at 은 curl 요청 직전 시스템 시간(date) 기준 1분 이내로 판정한다
+TZ=Asia/Seoul date '+REQUEST TIME: %Y-%m-%d %H:%M:%S KST'
 BOOKING_ID=$(curl -s -X POST "https://${CF_DOMAIN}/booking" -H "Content-Type: application/json" -d '{"client_id":"MARK001","username":"Marker","email":"mark@test.com","concert_name":"TestConcert"}' 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin).get('booking_id',''))" 2>/dev/null); echo "POST booking_id: $BOOKING_ID"
 curl -s "https://${CF_DOMAIN}/v1/book?booking_id=${BOOKING_ID}" 2>/dev/null; echo
 echo
@@ -140,9 +142,7 @@ XSS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "https://${CF_DOMAIN}/
 echo
 
 echo =====11-1=====
-SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null); kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null; kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/nonexist; sleep 0.1; done" &>/dev/null; kubectl run latency-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/delay?ms=5000; sleep 0.2; done" &>/dev/null
-kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null; kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null; kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
-sleep 180
+# 정정 2026-08-16: 파드 생성 단계는 11-1 채점 대상에서 제외 (11-3 에서 수동 실행)
 GRAFANA_LB=$(kubectl get svc -n observability -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{end}' 2>/dev/null)
 for p in fluent-bit prometheus grafana; do kubectl get pods -n observability --no-headers --request-timeout=10s 2>/dev/null | grep -c "$p.*Running" | xargs -I{} echo "$p: {}"; done
 echo
@@ -154,6 +154,11 @@ echo
 
 echo =====11-3=====
 echo "수동 채점: 대시보드 구성 확인"
+# 정정 2026-08-16: 원본 11-1 의 테스트 파드 생성·sleep 블록. 11-1 채점 대상에서 제외되고
+# 11-3 에서 수동 실행한다. latency-gen(/delay) 은 HighLatency 항목 삭제로 함께 제외.
+SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null); kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null; kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/nonexist; sleep 0.1; done" &>/dev/null
+kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null; kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null; kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
+sleep 180
 echo "접속: http://${GRAFANA_LB} (admin / Skills\$#\$@!)"
 echo "대시보드: wsc2026-grafana-dashboard"
 echo ""
@@ -163,6 +168,8 @@ echo "Application Pod 로우: CPU/Memory 시계열, Running/Restarts/Pending 숫
 echo "Application Traffic 로우: RequestCount/ResponseTime/StatusCodes 시계열, Application Logs 패널"
 echo "색상: CPU 80%↑ 빨강, 60~80% 노랑, 60%↓ 초록 / Restart 1↑ 경고"
 echo ""
+# 정정 2026-08-16: 패널 이름은 채점 대상 아님. Pod CPU/Memory 는 All Pod 기준.
+# Application Logs 에 /v1/book 외 로그가 섞여도 채점기준표 형식 기준으로 판정.
 echo "Application Logs 패널 로그 형식 예시:"
 echo 'info'
 echo '{"level":"INFO","path":"/v1/book","status":"200","duration":"112.663323ms","method":"POST"}'
@@ -170,7 +177,8 @@ echo
 
 echo =====11-4=====
 echo "수동 채점: Alert 확인"
-echo "Alerts 로우에서 아래 6개가 빨간색(Firing)으로 표시되는지 확인"
-echo "  PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / HighLatency / PodCrashLooping"
+# 정정 2026-08-07: HighLatency Alert 채점 항목 삭제 (지급 바이너리에 /delay 부재)
+echo "Alerts 로우에서 아래 5개가 빨간색(Firing)으로 표시되는지 확인"
+echo "  PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / PodCrashLooping"
 echo
 echo

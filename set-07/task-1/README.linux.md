@@ -1,18 +1,21 @@
 # 본 PC 가 Linux 일 때의 런북 (set-07 / task-1)
 
-[README.md](README.md) 의 **본 PC 단계(0·1·3·10)** 를 bash 로 옮긴 것.
-step 2(일반 CloudShell)와 bastion/CloudShell 단계(4~9)는 리눅스라 README.md 와 동일하다.
+[README.md](README.md) 의 **본 PC 단계(0·1·3·6·8)** 를 bash 로 옮긴 것.
+CloudShell 단계(2·4·5·7)는 실제 호스트가 리눅스라 README.md 와 동일하다.
 리소스·순서·검증은 전부 같고 명령 문법만 다르다.
 
-### 0) [본 PC] 사전 변수
+### 0) [본 PC] 사전 변수 · 신원 확인
 
 ```bash
 export AWS_DEFAULT_REGION=ap-northeast-2
 export NUM=<선수등번호>     # ExternalId / Grafana 계정에 사용
+
+# 본 PC 신원 = 채점 CloudShell 신원(지급 IAM 사용자)이어야 한다
+aws sts get-caller-identity --query Arn --output text
 ```
 
-> 본 PC 는 terraform 전용이라 계정만 맞으면 신원은 무관하다. 채점 신원과의 일치는 클러스터를 만드는
-> bastion 에서만 문제가 된다 (README.md step 4 의 인용문 참고).
+> 본 PC 가 클러스터를 만들므로(step 3) `bootstrapClusterCreatorAdminPermissions: true` 에 따라
+> 본 PC 신원이 그대로 클러스터 admin 이 된다. 어긋나도 README.md step 4 각주의 access entry 로 보정된다.
 
 ### 1) [본 PC] Terraform (네트워크 + AWS 리소스)
 
@@ -20,7 +23,7 @@ export NUM=<선수등번호>     # ExternalId / Grafana 계정에 사용
 cd terraform
 terraform init
 terraform apply -var="player_number=$NUM"
-terraform output -json > ../outputs.json   # 작업 호스트로 넘길 값 (tfstate 는 넘기지 않는다)
+terraform output -json > ../outputs.json   # 본 PC 안에서만 쓴다 (step 3 eksctl · 아래 .env 블록)
 
 export ACCOUNT_ID=$(jq -r '.account_id.value' ../outputs.json)
 export BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
@@ -33,83 +36,132 @@ export ACCOUNT_ID=$ACCOUNT_ID
 export BUCKET=$BUCKET
 EOF
 
-# 작업 호스트는 파일 업로드 UI 가 없고 레포가 비공개라 git clone 도 불가 → S3 를 릴레이로 쓴다.
-# _transfer/ 는 채점 전 step 10 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
-aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
-tar czf /tmp/unicorn-cs.tgz -C .. eksctl k8s mark.sh
+# CloudShell 은 파일 업로드 UI 가 없고(VPC environment 는 Actions 업로드 자체가 막혀 있다)
+# 레포가 비공개라 git clone 도 불가 → 붙여넣을 수 없는 것만 S3 릴레이로 넘긴다.
+# _transfer/ 는 채점 직전 step 8 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
+tar czf /tmp/unicorn-cs.tgz -C .. k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
 aws s3 cp /tmp/unicorn-cs.tgz "s3://$BUCKET/_transfer/unicorn-cs.tgz"
-
-# step 2(일반 CloudShell)의 이미지 빌드 재료
-aws s3 cp ../app/Dockerfile "s3://$BUCKET/_transfer/Dockerfile"
-aws s3 cp ../../../shared/provided/task-1/book "s3://$BUCKET/_transfer/book"
+aws s3 cp ../../../shared/provided/task-1/book "s3://$BUCKET/_transfer/book"   # 8.7MB 바이너리
 ```
+
+**step 4 에 붙여넣을 `.env` 블록 출력** — 텍스트는 S3 를 태우지 않는다.
+
+```bash
+# 따옴표 없는 heredoc → $(...) 가 지금 평가되어 값이 정적으로 박힌다.
+# 그래서 CloudShell 에 outputs.json 도 jq 도 필요 없다.
+cat <<EOF
+cat > ~/.env <<'ENVEOF'
+export AWS_DEFAULT_REGION=ap-northeast-2
+export NUM=$NUM
+export ACCOUNT_ID=$(jq -r '.account_id.value' ../outputs.json)
+export VPC_ID=$(jq -r '.vpc_id.value' ../outputs.json)
+export PLATFORM_KMS_ARN=$(jq -r '.platform_kms_arn.value' ../outputs.json)
+export ECR=$(jq -r '.ecr_repository_url.value' ../outputs.json)
+export APP_TG=$(jq -r '.app_target_group_arn.value' ../outputs.json)
+export GRAFANA_TG=$(jq -r '.grafana_target_group_arn.value' ../outputs.json)
+export GRAFANA_USER=skills$NUM
+export GRAFANA_PW='HelloKrSkills!'$NUM'@'
+ENVEOF
+sed -i 's/\\r\$//' ~/.env
+EOF
+```
+
+> 출력된 블록을 그대로 step 4 에 붙여넣는다. 우변이 빈 줄(`export VPC_ID=`)이 있으면 outputs.json 이
+> 덜 만들어진 것이니 `terraform apply` 부터 다시 본다.
+> 마지막 `sed` 는 CRLF 가드다 — Linux 본 PC 에선 안 생기지만 README.md 와 블록을 같게 유지한다. 멱등하다.
+> 세션이 끊겨 블록을 잃으면 이 블록만 다시 실행하면 된다(작업 규칙 6).
+
+> `eksctl/` 은 릴레이에 넣지 않는다 — 본 PC 에서만 쓴다.
 
 ### 2) → README.md step 2 (일반 CloudShell — 이미지 빌드/푸시)
 
 로컬에 Docker 가 있어도 CloudShell 에서 하는 편이 낫다 — ECR 로그인·푸시 경로가 채점 계정과 같고,
-`--platform` 을 신경 쓸 필요가 없다.
+`--platform` 을 신경 쓸 필요가 없다. `book` 만 S3 에서 받고 `Dockerfile` 은 heredoc 으로 붙여넣는다.
 
-### 3) [본 PC] 작업용 SSM bastion 생성 (수동 · 임시)
+### 3) [본 PC] EKS 클러스터 (eksctl)
 
 ```bash
-cd terraform   # outputs.json 은 ../outputs.json
-source ../.env # 새 셸이면
+cd ../eksctl     # cwd = terraform 이었을 때
+source ../.env   # 새 셸이면
 
-SUBNET=$(jq -r '.private_subnet_ids.value["unicorn-subnet-priv-a"]' ../outputs.json)
-MARK_SG=$(jq -r '.mark_sg_id.value' ../outputs.json)
-AMI=$(aws ssm get-parameter --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 --query Parameter.Value --output text)
+export VPC_ID=$(jq -r '.vpc_id.value' ../outputs.json)
+export CP_EXTRA_SG_ID=$(jq -r '.eks_cp_extra_sg_id.value' ../outputs.json)
+export NODE_SHARED_SG_ID=$(jq -r '.eks_shared_node_sg_id.value' ../outputs.json)
+export PRIV_SUBNET_A=$(jq -r '.private_subnet_ids.value["unicorn-subnet-priv-a"]' ../outputs.json)
+export PRIV_SUBNET_B=$(jq -r '.private_subnet_ids.value["unicorn-subnet-priv-b"]' ../outputs.json)
+export PRIV_SUBNET_C=$(jq -r '.private_subnet_ids.value["unicorn-subnet-priv-c"]' ../outputs.json)
+export PLATFORM_KMS_ARN=$(jq -r '.platform_kms_arn.value' ../outputs.json)
+export BOOK_APP_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.book_app' ../outputs.json)
+export LBC_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.lbc' ../outputs.json)
+export FLUENTBIT_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.fluentbit' ../outputs.json)
+export CWEXPORTER_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.cwexporter' ../outputs.json)
+export EBS_CSI_ROLE_ARN=$(jq -r '.pod_identity_role_arns.value.ebs_csi' ../outputs.json)
+export CF=$(jq -r '.cloudfront_domain.value' ../outputs.json)   # step 6 시드용
 
-# IAM: SSM 접속용만 (작업 권한은 4) 의 aws login --remote 로 주입)
-aws iam create-role --role-name unicorn-bastion-role \
-  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-aws iam attach-role-policy --role-name unicorn-bastion-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-aws iam create-instance-profile --instance-profile-name unicorn-bastion-profile
-aws iam add-role-to-instance-profile --instance-profile-name unicorn-bastion-profile --role-name unicorn-bastion-role
-sleep 10   # instance profile 전파 대기
+rm -f cluster.rendered.yaml   # 이전 실행 잔재로 검사를 통과하는 일이 없게
 
-# EC2 (인바운드 없음, IMDSv2 강제)
-BID=$(aws ec2 run-instances --image-id "$AMI" --instance-type t3.small \
-  --iam-instance-profile Name=unicorn-bastion-profile \
-  --subnet-id "$SUBNET" --security-group-ids "$MARK_SG" \
-  --metadata-options HttpTokens=required,HttpEndpoint=enabled \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=unicorn-bastion}]' \
-  --query 'Instances[0].InstanceId' --output text)
-echo "bastion=$BID"   # step 10 삭제에 사용
+# 치환 전: cluster.yaml 이 요구하는 env 가 다 있는지 검사
+missing=$(for v in $(grep -oh '[$]{[A-Za-z_][A-Za-z_0-9]*}' cluster.yaml | tr -d '${}' | sort -u); do
+  [ -z "${!v}" ] && echo "$v"; done)
 
-aws ssm start-session --target "$BID"
+if [ -n "$missing" ]; then
+  echo "env 누락: $missing — 위 export 블록을 다시 실행"
+else
+  # envsubst(gettext) 미설치 대비 python3 — 미선언 변수를 빈 값으로 지우지 않고 ${VAR} 그대로 남긴다
+  python3 -c 'import os,sys;sys.stdout.write(os.path.expandvars(sys.stdin.read()))' \
+    < cluster.yaml > cluster.rendered.yaml
+  grep -n '\${' cluster.rendered.yaml && echo '치환 누락!' || echo OK
+fi
+
+# 셸 재시작 대비 — .env 재작성 (작업 규칙 6)
+cat > ../.env <<EOF
+export AWS_DEFAULT_REGION=ap-northeast-2
+export NUM=$NUM
+export ACCOUNT_ID=$ACCOUNT_ID
+export BUCKET=$BUCKET
+export CF=$CF
+EOF
+
+# 위에서 OK 가 나왔을 때만 진행
+eksctl create cluster -f cluster.rendered.yaml     # 약 20분. 완료 시 자동 private 전환
+
+# 엔드포인트 확인 — 건너뛰지 않는다 (채점 6-1-A)
+aws eks describe-cluster --name unicorn-eks-cluster \
+  --query 'cluster.resourcesVpcConfig.[endpointPublicAccess,endpointPrivateAccess]'   # false, true
+
+# true 로 남았으면 (eksctl 이 중간에 끊긴 경우):
+# aws eks update-cluster-config --name unicorn-eks-cluster --resources-vpc-config endpointPublicAccess=false
 ```
 
-### 4~9) → README.md step 4~9 (bastion / CloudShell)
+### 4~5) → README.md step 4~5 (`unicorn-mark` CloudShell — 부트스트랩 · helm · kubectl)
 
-step 9 의 **권한 게이트**(`kubectl auth can-i '*' '*'`)를 통과하기 전에는 step 10 으로 넘어가지 않는다.
+`unicorn-mark` VPC environment 를 만들고 helm 설치 → S3 에서 `unicorn-cs.tgz` 수신 →
+**step 1 이 출력한 `.env` 블록 붙여넣기** → `source ~/.env` → `kubectl get nodes`,
+이어서 helm 애드온 3개 + `kubectl apply -R -f rendered/`. README.md 와 동일한 bash 다.
 
-### 10) [본 PC] 채점 전 정리 (배포 검증 후)
-
-10-1(bastion 상태 백업)은 README.md 와 동일한 bash 다. 아래는 본 PC 쪽 10-2.
-회수를 S3 정리보다 먼저 해야 복구 수단이 남는다.
+### 6) [본 PC] 데이터/트래픽 시드
 
 ```bash
 source ../.env   # 새 셸이면 (task-1 에서 source .env)
 
-# 백업 회수 — 레포 밖에 둔다
-aws s3 cp "s3://$BUCKET/_transfer/unicorn-bastion-state.tgz" /tmp/
+curl -s -X POST "https://$CF/v1/book" -H 'Content-Type: application/json' \
+  -d '{"client_id":"C001","username":"Alice","email":"kim@example.com","concert_name":"Seoul2025"}'   # booking_id 반환
+for i in $(seq 1 20); do curl -s -o /dev/null "https://$CF/health"; done                              # ALB 메트릭 생성
+```
 
-# bastion 삭제
-BID=$(aws ec2 describe-instances --filters Name=tag:Name,Values=unicorn-bastion Name=instance-state-name,Values=running \
-  --query "Reservations[].Instances[].InstanceId" --output text)   # 3) 의 $BID 를 모를 때
-aws ec2 terminate-instances --instance-ids "$BID"
-aws ec2 wait instance-terminated --instance-ids "$BID"
-aws iam remove-role-from-instance-profile --instance-profile-name unicorn-bastion-profile --role-name unicorn-bastion-role
-aws iam delete-instance-profile --instance-profile-name unicorn-bastion-profile
-aws iam detach-role-policy --role-name unicorn-bastion-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-aws iam delete-role --role-name unicorn-bastion-role
+### 7) → README.md step 7 (`unicorn-mark` CloudShell — 자가 채점)
+
+`bash ~/mark-2026-08-10.sh`. 홈이 초기화된 뒤라면 step 4 부트스트랩 블록을 먼저 다시 실행한다.
+
+### 8) [본 PC] 채점 전 정리
+
+자가 채점을 통과한 뒤 **채점 직전**에 실행한다. `_transfer/` 를 지우면 step 4 부트스트랩 재료가
+사라지므로 순서를 앞당기지 않는다.
+
+```bash
+source ../.env   # 새 셸이면 (task-1 에서 source .env)
 
 # S3 릴레이 제거 (web 버킷은 채점 대상 — mark.sh 3-1-A)
 aws s3 rm "s3://$BUCKET/_transfer/" --recursive
 aws s3api list-objects-v2 --bucket "$BUCKET" --prefix _transfer/ --query 'Contents[].Key'  # null 확인
 ```
-
-> **bastion 복구** — step 3 재실행 → README.md step 4 의 도구 설치 + `aws login --remote` 재실행 →
-> `/tmp/unicorn-bastion-state.tgz` 를 `_transfer/` 로 재업로드 → bastion 에서 받아
-> `tar xzf ~/unicorn-bastion-state.tgz -C ~` → `source ~/.env` + `aws eks update-kubeconfig`.
-> 채점이 아직이면 복구 후 `_transfer/` 를 다시 비운다.

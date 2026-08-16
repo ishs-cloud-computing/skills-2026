@@ -23,13 +23,13 @@ output "public_subnet_ids" {
 }
 
 output "platform_kms_arn" {
-  description = "Platform CMK replica(ap-northeast-2) — EKS secrets/EBS, k8s storageclass 에 사용"
-  value       = aws_kms_replica_key.platform.arn
+  description = "Platform CMK primary(ap-northeast-2) — EKS secrets/EBS, k8s storageclass 에 사용"
+  value       = aws_kms_key.platform.arn
 }
 
-output "platform_kms_primary_arn" {
-  description = "Platform CMK primary(us-east-1)"
-  value       = aws_kms_key.platform_primary.arn
+output "platform_kms_use1_arn" {
+  description = "Platform CMK replica(us-east-1) — WAF 로그"
+  value       = aws_kms_replica_key.platform_use1.arn
 }
 
 output "app_kms_arn" {

@@ -12,10 +12,12 @@ module-1-workflow/
 
 ## 배포 (본 PC, PowerShell)
 
+**먼저 `terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다.** apply 는 tfvars 를 자동으로 읽으므로 `-var` 를 붙이지 않는다.
+
 ```powershell
 cd module-1-workflow\terraform
 terraform init
-terraform apply -var "player_number=$env:NUM"
+terraform apply
 terraform output -json > outputs.json
 ```
 
@@ -68,42 +70,9 @@ aws s3 ls s3://$B/error/       # error_*_STU2001/STU2002/STU2004/unknown.json 4�
 ```
 
 test.csv를 두 번 업로드하면 error/에 timestamp가 다른 JSON이 8개가 되어 1-5-B 오답 — 재실행하려면 반드시 1)~2)부터 다시.
+## Linux 런북
 
-## Linux 런북 (개인 리눅스 환경용 — 대회에서는 PowerShell 런북 사용)
-
-bastion/CloudShell도 리눅스라 그대로 동작하지만, 이 섹션의 목적은 로컬 리눅스에서의 연습·검증이다.
-
-```bash
-NUM=<비번호>
-B=wsc2026-student-score-bucket-$NUM
-aws configure set region ap-southeast-1
-SM_ARN=$(aws stepfunctions list-state-machines --query "stateMachines[?name=='wsc2026-student-score-workflow'].stateMachineArn" --output text)
-
-# 검증 1-1 ~ 1-4
-aws s3 ls s3://$B/
-aws dynamodb describe-table --table-name wsc2026-student-score --query "Table.[TableName,KeySchema]" --output json
-aws lambda get-function-configuration --function-name wsc2026-student-score-function --query "[FunctionName,Runtime,Environment.Variables]" --output json
-aws stepfunctions describe-state-machine --state-machine-arn $SM_ARN --query "[name,type]" --output text
-
-# 최종 실행 절차 (동일 순서)
-aws s3 rm s3://$B/processed/ --recursive
-aws s3 rm s3://$B/error/ --recursive
-aws dynamodb scan --table-name wsc2026-student-score \
-  --query "Items[].{studentId:studentId,examDate:examDate}" --output json \
-  | jq -c '.[]' | while read k; do
-    aws dynamodb delete-item --table-name wsc2026-student-score --key "$k"
-  done
-# CloudShell 이면 Actions > Upload file 로 test.csv 를 올린 뒤:
-aws s3 cp test.csv s3://$B/input/test.csv
-aws stepfunctions list-executions --state-machine-arn $SM_ARN --query "executions[].[status,startDate]" --output text
-aws dynamodb get-item --table-name wsc2026-student-score \
-  --key '{"studentId":{"S":"STU1020"},"examDate":{"S":"2026-05-30"}}' \
-  --query "Item.[studentId.S,average.N,grade.S]" --output text   # STU1020 96.6 A
-aws s3 ls s3://$B/processed/   # test.csv 만
-aws s3 ls s3://$B/error/       # 4개만
-```
-
----
+개인 리눅스 로컬 전용 절차는 [README.linux.md](README.linux.md) 로 분리했다. 대회 본 PC 에서는 위 PowerShell 런북을 쓴다.
 
 ## 요구사항 ↔ 구현 매핑
 

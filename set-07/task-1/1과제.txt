@@ -1,0 +1,14 @@
+수정 내역
+
+2026-07-31
+
+0) (과제지) 직종협의회 회의 결과(aws-auth ConfigMap, access entry 등 강제 X)에 따라 8번 EKS - Security 파트의 아래 지문을 삭제합니다.
+"클러스터의 Authentication mode는 EKS Access Entry를 사용하도록 하며, aws-auth ConfigMap 방식은 사용하지 않습니다."
+
+1) (과제지) 과제지 11의 "와일드카드 액션 및 리소스는 사용해서는 안 됩니다." -> "와일드카드 액션은 사용해서는 안 됩니다."로 변경합니다. (리소스 와일드카드 제한 해제)
+
+2) (채점지) 채점기준표의 채점 상의 유의 사항 18번으로 "채점기준표에는 Timestamp의 TZ가 UTC 기준이나, 채점 시 KST 기준으로 확인하도록 합니다"를 추가합니다.
+
+3) (과제지) 10-3 WAF; "두 Rule Group의 Override action은 모두 None으로 두며, 별도의 rule-level override 없이 그대로 적용합니다."을 삭제 후, "필요할 경우 하기 Custom Response 지정을 위해 override를 진행할 수 있으며, 채점 시 XSS 공격을 진행함에 유의합니다."로 대체.
+
+4) (과제지) 6번 Database 파트에서 "Lambda를 통한 예약 조회를 지원하기 위해" 부분 삭제.

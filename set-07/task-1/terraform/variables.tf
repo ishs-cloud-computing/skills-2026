@@ -76,3 +76,15 @@ variable "grafana_admin_password" {
   default     = ""
   sensitive   = true
 }
+
+# 채점 시 XSS 공격이 들어온다(2026-07-31 정정 3). 당일 벡터가 바뀌어도 목록만 늘리면 된다.
+variable "waf_xss_rules" {
+  description = "Custom Response 를 적용할 AWSManagedRulesCommonRuleSet 내 XSS 룰 (요구사항 10-3)"
+  type        = list(string)
+  default = [
+    "CrossSiteScripting_QUERYARGUMENTS",
+    "CrossSiteScripting_URIPATH",
+    "CrossSiteScripting_BODY",
+    "CrossSiteScripting_COOKIE",
+  ]
+}

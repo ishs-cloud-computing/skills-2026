@@ -5,8 +5,9 @@
 # - min 0 / max 6, queueLength 2 → 12건 발송 시 6 pod (채점 4-6).
 # - pollingInterval 15: min=0 이라 0→1 활성화는 KEDA operator 직접 폴링 —
 #   과제지 상한(15초 이하) 그대로. (set-07 은 min=1 이라 삭제했던 필드)
-# - podIdentity aws: keda-operator SA 의 IRSA 역할로 SQS 조회
-#   (identityOwner 방식은 KEDA 3.0 제거 예정 — TriggerAuthentication 전환)
+# - podIdentity aws-eks: keda-operator SA 의 IRSA 역할로 SQS 조회.
+#   채점 4-4 가 provider 문자열을 aws-eks 로 검사한다(2026-08-07 정정). KEDA 는
+#   aws-eks 를 deprecated 로 두고 v3 에서 제거 예정이나 2.20 까지는 유효하다.
 # ${QUEUE_URL} ${REGION} 은 README 5단계에서 치환.
 # ---------------------------------------------------------------------------
 apiVersion: keda.sh/v1alpha1
@@ -16,7 +17,7 @@ metadata:
   namespace: skills-sqs
 spec:
   podIdentity:
-    provider: aws
+    provider: aws-eks
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject

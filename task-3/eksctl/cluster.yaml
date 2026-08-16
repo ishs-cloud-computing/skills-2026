@@ -15,11 +15,11 @@ autoModeConfig:
 vpc:
   subnets:
     private:
-      ap-northeast-2a: { id: subnet-REPLACE_PRIVATE_A }
-      ap-northeast-2b: { id: subnet-REPLACE_PRIVATE_B }
+      ap-northeast-2a: { id: subnet-032c0373040c9ea4a }
+      ap-northeast-2b: { id: subnet-098b3256508bc9fe6 }
     public:
-      ap-northeast-2a: { id: subnet-REPLACE_PUBLIC_A }
-      ap-northeast-2b: { id: subnet-REPLACE_PUBLIC_B }
+      ap-northeast-2a: { id: subnet-09c93ea73bc0129d1 }
+      ap-northeast-2b: { id: subnet-0f9b48ceb9c475983 }
 
 iam:
   podIdentityAssociations:
@@ -31,7 +31,7 @@ iam:
 
 managedNodeGroups:
   - name: system
-    instanceType: t3.medium
+    instanceType: t3.large
     # k8s/00-nodeclass.yaml 의 amiSelectorTerms alias 와 같은 계열이어야 노드 OS 가 갈리지 않는다.
     amiFamily: Bottlerocket
     desiredCapacity: 1

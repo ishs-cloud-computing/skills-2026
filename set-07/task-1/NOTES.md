@@ -7,16 +7,36 @@
 <!-- 덮어쓴다. 코드와 어긋난 줄은 지우고 다시 쓴다. append 금지. -->
 
 - 구성: terraform(단일 리전 종합 인프라) + eksctl(private cluster, Pod Identity) + k8s(app/logging/monitoring).
-  머신 4분할 — 본 PC(PS7, terraform) / 일반 CloudShell(이미지 빌드) / SSM bastion(eksctl·helm·kubectl) /
-  `unicorn-mark` CloudShell(채점).
-- 미해결: 배포 실측 미수행 — apply·mark.sh 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
-- 미해결: 계정 root 로 운영할 때 EKS access entry 로 사후 보정이 되는지 미확인. 현재는 step 9 권한 게이트로
-  bastion 삭제 전에 걸러내는 방식으로 회피한다.
+  머신 3분할 — 본 PC(PS7: terraform·eksctl·시드·정리) / 일반 CloudShell(이미지 빌드) /
+  `unicorn-mark` CloudShell VPC environment(helm·kubectl·채점). **작업용 bastion 없음.**
+- 미해결: 배포 실측 미수행 — apply·`mark-2026-08-10.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
+- 채점 신원은 PowerUser~Administrator 수준 **IAM 사용자**의 CloudShell 이다(2026-08-04 답변). 본 PC 가
+  클러스터를 만들므로 본 PC 신원이 그 IAM 사용자와 같아야 하고, 어긋나면 access entry 로 사후 보정한다.
+- 새 필수 절차: eksctl 이 fully-private 클러스터를 public+private 로 만든 뒤 public 을 끄므로,
+  생성 후 `endpointPublicAccess=false` 확인이 채점 6-1-A 방어선이다(런북 step 3 말미).
 
 ## 채점 커버리지
 <!-- mark.sh / mark/markN.sh 항목 대비 현재 구현이 어디까지 왔는지. -->
 
-- [ ] 미실행 — `bash mark.sh` 결과 수신 후 항목별로 채운다.
+정정(errata) 대비 — `set-07/errata/1과제.txt` 12건 전부 판정 완료. 근거는 정정 로그 표.
+
+| 정정 # | 채점항목 | 판정 | 근거 |
+|--------|---------|------|------|
+| 0 | 6-1-A | 영향없음 | `eksctl/cluster.yaml:22-25` |
+| 1 | 9-1-A | 영향없음 | `terraform/iam.tf:195,205,213` (액션 와일드카드 0) |
+| 2 | 12-1-A | 수정완료(07-31) | `k8s/logging/fluent-bit.yaml:82`, `eksctl/cluster.yaml:104-107` |
+| 3 | 8-6-A, 12-2-A | 수정완료(07-31) | `terraform/waf.tf:41-54` |
+| 4 | 4-1-A, 8-3/8-4-A | 영향없음 | `terraform/dynamodb.tf:32-37`, `terraform/lambda/index.py:46` |
+| 5 | 8-2/8-3/10-1/12-1/12-2-A | 영향없음 | `terraform/cloudfront.tf:47` |
+| 6 | 9-1-A | 영향없음 | `terraform/iam.tf:218-222` (인라인) |
+| 7 | 12-1-A | 영향없음 | 문구 변경만 |
+| 8 | 6-3-A | 영향없음 | `k8s/app/service.yaml:11` |
+| 9 | 절차 | 영향없음 | `README.md` step 9 주석 |
+| 10 | 9-2-A | 수정완료 | `mark-2026-08-10.sh` (정정본 사본) |
+| 11 | 12-1-A | 영향없음 | 채점 측 지침 |
+| 12 | 12-1-A | 수정완료 | `k8s/logging/fluent-bit.yaml:106`, `mark-2026-08-10.sh:123` |
+
+배포 실측 대비 — [ ] 미실행. `bash mark-2026-08-10.sh` 결과 수신 후 항목별로 채운다.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거가 된다. -->
@@ -26,8 +46,169 @@
 - 기타 병목:
 
 ---
+## 정정 로그
+<!-- 과제지·채점지의 오류/정정. task.pdf·mark.pdf 와 전사본 task.md·mark.md 는 원본 대조용으로 고치지 않는다. -->
+
+정정 정본은 `set-07/errata/1과제.txt` 하나뿐이고, 배경·"수정없음" 판정·답변과 정본이 어긋난 지점은
+`set-07/changelog.txt` 에 있다. 내용이 바뀐 실행 파일은 원본을 두고 **날짜 접미사 사본**으로 추가한다
+(`mark-2026-08-10.sh`) — task-2 와 같은 규칙이다(`set-07/task-2/NOTES.md` 정정 로그).
+
+### 2026-08-10 답변 (출처: `set-07/errata/1과제.txt` 10~12 + `changelog.txt`)
+
+| # | 정정 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:210-215`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
+| 11 | 12-1-A 예상 출력에 "`None` 등의 값이 출력될 경우 무시" 추가 | **없음** — `filter-log-events` 페이지네이션이 만드는 값이라 구현이 손댈 수 없다 |
+| 12 | 12-1-A 기준선 명령을 `date -u "+…Z"` → `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` | **있음** — `k8s/logging/fluent-bit.yaml` 의 `reshape.lua` 가 KST 값을 계산하면서 접미사만 `Z` 였다. `+09:00` 으로 변경(결정 로그 2026-08-15 참조). `mark-2026-08-10.sh` 의 기준선 명령도 정정본으로 교체 |
+
+`changelog.txt` 2026-08-10 의 `주의:` 3건은 위 표에 흡수했다. 다만 **08-04 의 "과제지 예시 형식(`Z`)에 맞출 것"과
+08-10 의 "로그 timestamp 도 `+09:00` 으로 기록할 것"이 정면 충돌**한다 — 후행·구체적인 08-10 을 채택했다(결정 로그).
+
+### 2026-08-04 답변 (출처: `set-07/errata/1과제.txt` 5~9 + `changelog.txt`)
+
+| # | 정정 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 5 | CloudFront 를 "`unicorn-svc-cf` 이름으로" → "`unicorn-svc-cf` **Comment** 를 가지도록" 생성 | **없음** — Distribution 에는 Name 필드가 없고 처음부터 `terraform/cloudfront.tf:47` `comment = "unicorn-svc-cf"` 다. 채점도 전부 `DistributionList.Items[?Comment=='unicorn-svc-cf']` 로 찾는다(`mark.sh:79,111,130`). `cloudfront.tf:110` 의 `Name` 태그는 무해한 여분이라 남긴다 |
+| 6 | 과제지 11 "와일드카드 액션은…" 앞에 "**Inline Policy 를 사용하며,**" 추가 | **없음** — `terraform/iam.tf:218-222` 가 이미 `aws_iam_role_policy`(인라인)다. 채점 9-1-A 가 `aws iam list-role-policies`(인라인 전용)만 쓰므로 고객 관리형으로 붙였으면 0점이었다 |
+| 7 | 12-1-A "출력값 **형식**이 위와 같고" → "**출력된 로그**가 위와 같고" | **없음**(문구) — 다만 형식 엄격성이 완화됐다는 근거로 정정 12 판단에 쓰인다. 유의사항 16 에 따라 IP 등 변동값은 무시 |
+| 8 | 6-3-A 예상 출력 `unicorn-book-app-svc` → `unicorn-book-app-svc ClusterIP` | **없음** — `k8s/app/service.yaml:11` 이 이미 `type: ClusterIP`. `mark.sh:60` 이 `TYPE:.spec.type` 을 출력하고 있어 출력값도 이미 일치 |
+| 9 | 유의사항 19 추가 — `source kubectl-connect` 오류 시 1회에 한해 `rm -rf .kube/` 로 초기화 허용 | **없음**(채점 절차) — 런북 step 9 에 한 줄만 반영. kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인 |
+
+`changelog.txt` 2026-08-04 의 나머지 `주의:` 판정 —
+**12-2-A 재채점**(수정없음): `terraform/waf.tf:83-106` 의 limit 50 / evaluation window 60초가 과제지와 일치하고
+채점 스크립트도 60초 대기하므로 영향없음.
+**9-2-A 채점 주체**(수정없음): errata 정본에는 없으나 저장소 설계와 어긋나 문서만 고쳤다 — 아래 결정 로그 참조.
+
+### 2026-08-01 답변 (질의 ~2026-07-30 / 출처: `set-07/2026-08-01.txt`)
+
+- **Platform MRK 리전**: 과제지 4번은 "us-east-1 다중 리전 키"라고 쓰여 있으나, 선수 유의사항 7(모든 리소스
+  서울)이 우선이며 "Primary 를 서울에 두고 MRK 로 us-east-1 에서 쓸 수 있게 하라"는 뜻이라는 답변.
+  → 구현 변경: 프라이머리를 ap-northeast-2 로, 레플리카를 us-east-1 로 뒤집었다(`terraform/kms.tf`).
+- **Timezone**: 채점기준표 표기는 UTC 이나 **채점은 KST 기준**으로 확인한다(정정 2 재확인). 과제지는 KST 기준 풀이 지시.
+  → 구현 변경: 아래 정정 2 항목 참조.
+- 나머지(WAF override, GSI 문구)는 아래 2026-07-31 정정과 동일 내용.
+
+### 2026-07-31 정정 4건 (출처: `set-07/task-1/1과제.txt`)
+
+- **0) EKS Authentication mode 강제 삭제** — 직종협의회 결과로 "Access Entry 사용, aws-auth 미사용" 지문 삭제.
+  → **구현 변경 없음.** 강제가 풀렸을 뿐 금지가 아니고, 채점 CloudShell 접근 경로는 그대로 필요하다.
+  `eksctl/cluster.yaml` 의 `authenticationMode: API` + 생성자=채점 신원 전제를 유지한다.
+- **1) 리소스 와일드카드 제한 해제** — 과제지 11 "와일드카드 액션 및 리소스" → "와일드카드 액션".
+  → **구현 변경 없음.** `unicorn-audit-role` 은 이미 리소스 ARN 을 명시하고, 리소스 레벨 ARN 을 지원하지 않는
+  `ec2:DescribeVpcs`/`eks:DescribeCluster` 와 KMS 키 정책에서만 `Resource:"*"` 를 쓴다. 이제 명시적으로 적법.
+- **2) 채점 유의사항 18 추가** — "채점기준표에는 Timestamp 의 TZ 가 UTC 기준이나, 채점 시 KST 기준으로 확인".
+  → **구현 변경 있음.** fluent-bit 이 UTC 를 강제하고 있었다. 아래 결정 로그 참조.
+- **3) WAF rule-level override 허용** — "override action 은 모두 None, rule-level override 없이 적용" 삭제 →
+  "필요할 경우 Custom Response 지정을 위해 override 가능, **채점 시 XSS 공격을 진행**함에 유의".
+  → **구현 변경 있음.** 아래 결정 로그 참조.
+- **4) GSI 문구에서 "Lambda를 통한 예약 조회를 지원하기 위해" 삭제** — 과제지의 논리 오류. 8-3/8-4 채점은
+  side effect 우려로 `booking_id` 추출 방식을 유지한다는 답변.
+  → **구현 변경 없음.** Lambda 는 PK `get_item` 이고 GSI 는 요구사항대로 존재만 하면 된다(채점 4-1-A).
+
+---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-15 S3 릴레이에서 텍스트 제거 — `outputs.json`·`Dockerfile` 은 붙여넣기로
+- 맥락: 릴레이가 4개를 나르는데 그중 둘이 텍스트였다. 릴레이가 존재하는 이유는 CloudShell 에 파일을 넣을
+  방법이 없어서인데(VPC environment 는 Actions 업로드 자체가 막혀 있고 레포가 비공개라 clone 불가),
+  **터미널 붙여넣기는 된다**. `CLAUDE.md:30` 이 "README 는 그대로 복붙 가능한 형태를 유지한다"고 규정하고
+  `set-02/task-1/README.md:269-281`(heredoc)·`task-3/README.md:14-15`(`vim` + `:set paste`) 가 선례다.
+- 채택: `outputs.json` → 본 PC 가 값을 박아 만든 `.env` heredoc 을 콘솔에 출력해 붙여넣는다.
+  CloudShell 쪽 `jq` 블록 10줄이 통째로 사라지고, `outputs.json` 자체가 릴레이에서 빠진다.
+  `Dockerfile` → 일반 CloudShell 에서 heredoc 붙여넣기. README 에 내용을 복제하지 않고 자리표시자만 둔다
+  (drift 방지) — `wc -l` = 22 대조를 붙여 붙여넣기 무결성을 확인한다.
+  릴레이에 남는 건 `unicorn-cs.tgz`(k8s 13파일 + mark 스크립트)와 `book`(8.7 MB) 둘뿐이다.
+- 기각: k8s 도 붙여넣기 → 13파일 732줄이라 실패 지점이 많고, README 에 manifest 를 복제하면 drift 가 생긴다.
+  본 PC 에서 heredoc 을 생성해 출력하면 drift 는 없지만, `book` 때문에 릴레이는 어차피 남으므로
+  **없애는 S3 객체가 0**이다. 붙여넣기 단계만 는다.
+- 기각: `book` 을 일반 CloudShell Actions → Upload 로 → 릴레이가 어차피 남으므로 수동 단계만 늘어난다
+  (2026-07-27 "이미지 빌드를 일반 CloudShell 로" 항목과 같은 판단).
+- 기각: mark 스크립트만 tgz 에서 빼서 붙여넣기(`set-03/task-1/NOTES.md:108-112` 선례) → tgz 는 그대로
+  남으므로 S3 객체가 안 줄고 137줄 붙여넣기만 는다. tgz 에 얹혀 가는 한계비용이 0이다.
+- 대가: 붙여넣기 경로에 **Windows 클립보드 CRLF** 위험이 새로 생긴다. `sed -i 's/\r$//' ~/.env` 가드를
+  블록 끝에 넣고 CloudShell 쪽에 `grep -c $'\r' ~/.env` 확인을 뒀다
+  (`set-08/task-2/NOTES.md:58` 이 실측한 함정 — 값 끝 `\r` 로 push 가 조용히 깨진다).
+- 덤: CloudFront s3-origin 이 버킷 루트를 서빙하므로 `https://<CF>/_transfer/outputs.json` 이 공개로
+  열려 있었다. 그 노출이 사라진다. 채점에는 원래 무관했다 — mark 3-1-A·8-2-A 는 전부 버킷 레벨 API 라
+  객체 목록을 보지 않는다(`mark-2026-08-10.sh:27-33,76`). step 8 정리는 위생 목적으로 그대로 남긴다.
+
+### 2026-08-15 작업용 bastion 제거 — eksctl 을 본 PC 로, helm·kubectl 을 `unicorn-mark` CloudShell 로
+- 맥락: 런북이 머신을 4분할하며 SSM bastion 을 수동 생성/삭제하고 있었다. 그런데 (a) `task.md:57` 유의사항
+  14 가 `unicorn-mark` CloudShell VPC Environment 를 이미 강제하고 "그 쉘 안에서 kubectl 을 조작"하라고
+  못박고, (b) `changelog.txt:96-99` 2026-08-04 답변이 "직종설명서 개정본상 스크립트는 **Bastion 대신**
+  Admin 수준 IAM 으로 접속한 CloudShell 에서 실행"이라고 명시했다. `task.md`·`mark.md`·`errata/1과제.txt`
+  어디에도 bastion 이 없다 — `CLAUDE.md` 기준으로 불필요 리소스 감점 대상이고, 게다가 `t3.small` 이라
+  유의사항 12(모든 EC2 t3.medium)와도 어긋났다.
+- **"private cluster 라 eksctl 은 VPC 내부에서만 가능하다"가 틀렸다**: eksctl 은 fully-private 클러스터를
+  public+private 엔드포인트로 만든 뒤 **모든 작업이 끝나면 public 을 끈다**(eksctl 공식 문서 Limitations).
+  같은 `privateCluster.enabled: true` 구성인 `set-03/task-1` 이 본 PC PowerShell 에서 이미 그렇게 돌린다
+  (`set-03/task-1/README.md:119-175`). bastion 의 존재 이유였던 전제가 사실이 아니었다.
+- 채택: 3분할. 본 PC(terraform·eksctl·시드·정리) / 일반 CloudShell(이미지 빌드) / `unicorn-mark`
+  CloudShell(helm·kubectl·채점). 20분짜리 `eksctl create` 가 본 PC 로 빠지면서 CloudShell 이 맡는 건
+  helm 3개 + `kubectl apply` 뿐이라, VPC environment 의 비영구 홈·유휴 타임아웃이 더 이상 병목이 아니다.
+  VPC 내부 접근이 필요한 리소스는 EKS private API 하나뿐이고(RDS 없음, 내부 ALB 는 CloudFront VPC Origin
+  경유, Grafana ALB 는 public, 시드는 공개 CloudFront), 그 경로는 `security.tf:108-143` 의
+  `unicorn-mark-sg` → cp-extra-sg 443 이 이미 깔아뒀다 — bastion 은 그 SG 를 빌려 쓰던 것뿐이었다.
+  **terraform·eksctl·k8s 코드는 한 줄도 바뀌지 않는다.** 런북 3개 파일만 바뀐다.
+- 기각: bastion 유지 → 감점 대상인 데다 `aws login --remote` 자격증명 이관, 상태 백업/복구, 삭제 전
+  권한 게이트라는 절차 3개를 계속 지고 간다. 그 3개는 전부 "bastion 신원 ≠ 채점 신원" 을 메우려는
+  장치였는데, 생성을 본 PC 로 옮기면 신원 하나로 정리된다.
+- 기각: 클러스터를 public+private 로 유지(set-07 task-2 module-3 방식) → `task.md:113` 위반이고
+  채점 6-1-A 가 `endpointPublicAccess` 를 직접 읽는다. 0점.
+- 대가: eksctl 이 생성 중 public 엔드포인트를 잠깐 연다. **중단되면 켜진 채 남으므로**
+  `describe-cluster` 로 `false true` 확인하는 절차가 런북 step 3 말미에 새로 필수가 됐다.
+- 대가: 본 PC 신원이 이제 채점 신원과 같아야 한다(기존엔 "계정만 맞으면 무관"이었다).
+  신원이 IAM 사용자라 어긋나도 access entry 로 보정된다.
+- 대가: CloudShell VPC environment 는 홈이 비영구(20~30분 유휴 시 `$HOME` 삭제)라 세션이 끊기면
+  런북 step 4 부트스트랩을 다시 돌려야 한다. 그래서 step 4 를 "통째로 재실행 가능한 한 블록"으로 묶었다.
+
+### 2026-08-15 로그 timestamp 접미사를 `Z` → `+09:00`, 채점 신원 전제를 root → IAM 사용자
+- 맥락: 2026-08-04·2026-08-10 정정 8건(errata 5~12)을 구현과 대조했다. 실제로 어긋난 곳은 두 군데뿐이다.
+- **timestamp 접미사 `+09:00`**: 채택 — `reshape.lua` 를 `os.date("!…%H:%M:%S", sec+KST_OFFSET) .. "+09:00"` 으로.
+  정정 12 가 12-1-A 기준선을 `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` 로 바꿨다. 값은 이미 KST 였으므로
+  접미사만 틀린 상태였는데, 기준선이 `+09:00` 인데 로그가 `Z` 면 **채점자가 로그를 UTC 로 읽어 9시간 차로 판정**할
+  여지가 남는다. 오프셋을 맞추면 두 줄의 차가 문자 그대로 몇 초다.
+  기각: `Z` 유지 → `task.md:194` 예시·`mark.md:737` 전사본과는 리터럴이 맞지만, 그 둘은 정정 **전** 문서다.
+  정정 7 이 "출력값 **형식**" → "출력된 **로그**" 로 완화한 것이 형식 일치를 요구하지 않는다는 근거다.
+  기각: 컨테이너 TZ 로 해결 → 2026-08-04 항목과 같은 이유(tzdata 없으면 조용히 UTC).
+  대가: 전사본 `mark.md`·`task.md` 의 예시와 리터럴이 다르다. 두 문서는 원본 대조용이라 고치지 않는다.
+- **채점 신원 root → IAM 사용자**: 채택 — 런북의 "채점은 root 로 한다" 전제를 걷어냈다. `changelog.txt` 2026-08-04
+  `9-2-A 채점 주체` 답변이 "PowerUser 이상 Administrator 이하 IAM 계정, 직종설명서 개정본상 스크립트는 Bastion 이
+  아니라 Admin 수준 IAM 으로 접속한 CloudShell 에서 실행"이라고 못박았다. root 는 애초에 Assume Role 을 못 해
+  9-2-A 자체가 성립하지 않는다.
+  **이 변경으로 위험이 하나 사라진다** — 그동안 step 9 권한 게이트를 반드시 통과시켜야 했던 이유가 "root ARN 은
+  access entry 대상으로 문서화돼 있지 않아 사후 보정이 안 될 수 있다"였는데, 신원이 IAM 사용자면
+  `create-access-entry` + `associate-access-policy` 가 정상 복구 경로가 된다.
+  기각: `eksctl/cluster.yaml` 에 `accessEntries` 를 추가해 채점 principal 을 못박기 →
+  `bootstrapClusterCreatorAdminPermissions: true` 와 principal 이 같으면 create 단계에서 중복 엔트리로 실패한다.
+  게이트 실패 시 두 줄로 복구되는 지금이 더 안전하다. 환경변수 오타 하나로 클러스터 생성이 깨지는 쪽으로 가지 않는다.
+  대가: 정정 정본(errata)에 없는 변경이라 문서만 고쳤다. 구현은 그대로다.
+
+### 2026-08-04 Platform MRK 프라이머리를 서울로, 타임스탬프를 KST 로, WAF XSS 룰에 Custom Response
+- 맥락: 2026-07-31 정정 4건과 2026-08-01 답변을 현재 구현과 대조한 결과 세 곳이 어긋났다(위 정정 로그).
+- **MRK 프라이머리 swap**: 채택 — 프라이머리 ap-northeast-2 + 레플리카 us-east-1. 유의사항 7 해석이 그렇고,
+  채점 2-1-A 가 **서울에서** `alias/unicorn-kms-platform` 의 회전 상태를 읽는다. 회전은 프라이머리에만 설정
+  가능하고 AWS 가 레플리카로 복사하는 구조라, 서울이 프라이머리면 `True 90` 이 값 그 자체가 된다.
+  기각: 현행 유지(레플리카가 서울) → 복사된 `RotationPeriodInDays` 에 의존하고 유의사항 7 과도 어긋난다.
+  대가: `platform_kms_primary_arn` output 을 `platform_kms_use1_arn` 으로 개명(미사용 output 이라 영향 없음).
+  `platform_kms_arn`(eksctl·storageclass 치환용)은 이름 그대로라 런북은 안 바뀐다.
+- **타임스탬프 KST**: 채택 — `reshape.lua` 를 `os.date("!...", sec + KST_OFFSET)` 로. 포맷(`...Z`)은 과제지
+  그대로 두고 값만 KST. 과제지 예시가 근거다 — 앱 access 라인 `2026/06/09 06:16:16`(노드 KST 로컬시각)과
+  기대 출력 `2026-06-09T06:16:16Z` 가 같은 값이다. 즉 기대값 자체가 KST 다.
+  기각: 컨테이너에 `TZ=Asia/Seoul` 만 주고 `!` 제거 → tzdata 가 없으면 **조용히 UTC 로 돌아간다**.
+  산술 오프셋은 실패할 여지가 없다. (한국은 서머타임이 없어 고정 +9 로 충분)
+- **앱 컨테이너 시간대**: 채택 — 노드의 `/usr/share/zoneinfo/Asia/Seoul` 을 `/etc/localtime` 으로 hostPath 마운트.
+  노드는 KST 지만 **컨테이너는 상속하지 않는다**. `created_at` 은 제공 바이너리가 만들어 확인이 불가능하므로,
+  로컬 시각을 쓰는 구현이면 KST 가 되도록 걸어두는 보험이다(UTC 를 명시적으로 쓰면 손쓸 방법이 없다).
+  기각: Dockerfile 에 `apk add tzdata` + `TZ` env → 요구사항 7(공개 취약점 0)에 패키지 하나를 새로 얹는다.
+- **WAF XSS override**: 채택 — `AWSManagedRulesCommonRuleSet` 의 `CrossSiteScripting_*` 4종에
+  `rule_action_override` 로 block + custom response(`unicorn-blocked`). 액션은 그대로 block/403 이라
+  8-6-A(상태코드)는 영향이 없고, 차단 본문이 과제지 "차단 시 응답은 403, `Request blocked by Unicorn WAF`" 와
+  일치하게 된다. 룰 이름은 변수 `waf_xss_rules` 로 빼 당일 벡터가 늘어도 목록만 고치면 된다.
+  기각: 룰 전체를 Count 로 낮추고 별도 커스텀 룰로 차단 → 관리형 룰의 차단 능력을 우리 룰로 재구현해야 한다.
+  CloudFront custom error response → 출제자가 "과제 의도에서 벗어난다"고 명시했다.
+  대가: `KnownBadInputsRuleSet` 과 CommonRuleSet 의 나머지 룰은 여전히 기본 403 페이지를 반환한다.
 
 ### 2026-07-28 bastion 자격증명을 root 액세스 키에서 `aws login --remote` 로 전환
 - 맥락: 채점은 root 로 하고(`mark.md` 순번 0 이 `rm -rf ~/.aws` 후 콘솔 세션 자격증명을 그대로 쓴다)

@@ -48,8 +48,11 @@ resource "aws_vpc_security_group_ingress_rule" "msk_iam_clients" {
   referenced_security_group_id = each.value
 }
 
-# 제공 app 바이너리는 IAM 불가·9094 전용 TLS → producer 만 비인증 TLS 리스너 접근 허용
+# tls 모드에서만 존재한다. 제공 app 바이너리는 IAM 불가·9094 전용 TLS 라 producer 에게만
+# 비인증 리스너를 열어 준다. 기본 iam 모드엔 9094 리스너 자체가 없어 규칙도 만들지 않는다.
 resource "aws_vpc_security_group_ingress_rule" "msk_tls_producer" {
+  count = var.producer_auth_mode == "tls" ? 1 : 0
+
   security_group_id            = aws_security_group.msk.id
   description                  = "TLS (unauthenticated) from producer app"
   from_port                    = 9094

@@ -58,14 +58,14 @@ fi
 echo
 echo "[2-2] Client/Service EC2 및 애플리케이션 구성 (1.5점)"
 aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2,skills-lattice-service-ec2 Name=instance-state-name,Values=running --query 'Reservations[].Instances[].{Name:Tags[?Key==`Name`].Value|[0],Id:InstanceId,Type:InstanceType,PublicIp:PublicIpAddress,PrivateIp:PrivateIpAddress,State:State.Name}' --output table
-CLIENT_IP=$(aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || true)
+LATTICE_CLIENT_EC2_PUBLIC_IP=$(aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || true)
 SERVICE_INSTANCE_ID=$(aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-service-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null || true)
 SERVICE_SG_IDS=$(aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-service-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].SecurityGroups[].GroupId' --output text 2>/dev/null || true)
-echo "CLIENT_IP=${CLIENT_IP}"
+echo "LATTICE_CLIENT_EC2_PUBLIC_IP=${LATTICE_CLIENT_EC2_PUBLIC_IP}"
 echo "SERVICE_INSTANCE_ID=${SERVICE_INSTANCE_ID}"
 echo "SERVICE_SG_IDS=${SERVICE_SG_IDS}"
-if [ -n "$CLIENT_IP" ] && [ "$CLIENT_IP" != "None" ]; then
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}/health"; echo
+if [ -n "$LATTICE_CLIENT_EC2_PUBLIC_IP" ] && [ "$LATTICE_CLIENT_EC2_PUBLIC_IP" != "None" ]; then
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${LATTICE_CLIENT_EC2_PUBLIC_IP}/health"; echo
 else
   echo "Client EC2 Public IP 식별 실패"
 fi
@@ -82,6 +82,7 @@ aws vpc-lattice list-services --region ap-northeast-1 --query 'items[?name==`ski
 if [ -n "$SERVICE_NETWORK_ID" ] && [ "$SERVICE_NETWORK_ID" != "None" ]; then
   aws vpc-lattice list-service-network-vpc-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --query 'items[].{AssociationId:id,VpcId:vpcId,Status:status}' --output table
   VPC_ASSOCIATION_ID=$(aws vpc-lattice list-service-network-vpc-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --query 'items[0].id' --output text 2>/dev/null || true)
+  echo "VPC_ASSOCIATION_ID=${VPC_ASSOCIATION_ID}"
   if [ -n "$VPC_ASSOCIATION_ID" ] && [ "$VPC_ASSOCIATION_ID" != "None" ]; then
     aws vpc-lattice get-service-network-vpc-association --region ap-northeast-1 --service-network-vpc-association-identifier "$VPC_ASSOCIATION_ID" --query '{AssociationId:id,VpcId:vpcId,Status:status,SecurityGroupIds:securityGroupIds}' --output table
   fi
@@ -112,8 +113,8 @@ fi
 
 echo
 echo "[2-5] End-to-End 기능 검증 (1.5점)"
-if [ -n "$CLIENT_IP" ] && [ "$CLIENT_IP" != "None" ]; then
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}/v1/client/orders?id=1001"; echo
+if [ -n "$LATTICE_CLIENT_EC2_PUBLIC_IP" ] && [ "$LATTICE_CLIENT_EC2_PUBLIC_IP" != "None" ]; then
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${LATTICE_CLIENT_EC2_PUBLIC_IP}/v1/client/orders?id=1001"; echo
 else
   echo "Client EC2 Public IP 식별 실패"
 fi
