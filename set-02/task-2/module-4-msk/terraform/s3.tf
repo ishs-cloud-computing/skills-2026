@@ -8,7 +8,7 @@ resource "aws_s3_bucket" "alert" {
 }
 
 locals {
-  # tls(기본): 제공 바이너리(9094). iam: 자체 IAM 바이너리(9098) — placeholder 경로.
+  # iam(기본): 자체 IAM 바이너리(9098, `app/producer`). tls: 제공 바이너리(9094) — 호환 우회.
   app_source = var.producer_auth_mode == "iam" ? "${path.module}/${var.iam_producer_binary_path}" : "${path.module}/../../provided/module4/app"
 }
 
