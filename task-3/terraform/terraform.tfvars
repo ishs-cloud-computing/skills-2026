@@ -6,7 +6,7 @@
 prefix = "skills"
 
 # 전역 유일해야 한다.
-bucket_name = "wsc2026-task3-images-103"
+bucket_name = "wsc2026-task3-images-<비번호>"
 
 db_identifier = "apdev-rds-instance"
 
