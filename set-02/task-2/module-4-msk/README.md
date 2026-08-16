@@ -1,35 +1,46 @@
-# module-4-msk — MSK 이벤트 스트리밍 (ap-northeast-1)
+# Module 4 — MSK 이벤트 스트리밍 (ap-northeast-1)
 
-프라이빗 MSK(IAM 전용 인증, SASL/IAM 9098)로 Go producer가 센서 데이터를 발행하면, Lambda consumer가 이상치를 판별해 정상은 DynamoDB에 저장하고 이상치는 alert 토픽 → SNS 알림 + S3 저장으로 분기한다.
+프라이빗 MSK(IAM 전용 인증, SASL/IAM 9098)로 Go producer 가 센서 데이터를 발행하면, Lambda consumer 가 이상치를 판별해 정상은 DynamoDB 에 저장하고 이상치는 alert 토픽 → SNS 알림 + S3 저장으로 분기. 채점은 bastion 또는 CloudShell 에서 `mark/mark2-4.sh` 실행.
+본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(bastion·CloudShell 단계는 공통).
+
+## 디렉토리 구조
 
 ```
 module-4-msk/
-└── terraform/
-    ├── vpc.tf security.tf iam.tf
-    ├── msk.tf                        # wsc2026-msk-cluster (3.6.0, t3.small×2, IAM 전용)
-    ├── ec2.tf userdata.sh.tpl        # producer: 토픽 생성 + Go 바이너리 systemd 'app'
-    ├── dynamodb.tf s3.tf sns.tf
-    ├── lambda.tf                     # consumer 2개 (python3.14) + MSK ESM
-    ├── bastion.tf                    # kafka CLI 디버깅 겸 채점용
-    └── lambda/{sensor_consumer,alert_consumer}/index.py
+├── terraform/
+│   ├── vpc.tf security.tf iam.tf
+│   ├── msk.tf                        # wsc2026-msk-cluster (3.6.0, t3.small×2, IAM 전용)
+│   ├── ec2.tf userdata.sh.tpl        # producer: 토픽 생성 + Go 바이너리 systemd 'app'
+│   ├── dynamodb.tf s3.tf sns.tf
+│   ├── lambda.tf                     # consumer 2개 (python3.14) + MSK ESM
+│   ├── bastion.tf                    # kafka CLI 디버깅 겸 채점용
+│   └── lambda/{sensor_consumer,alert_consumer}/index.py
+├── app/producer                      # 자체 IAM 인증 producer (검증된 산출물)
+└── BINARY-ANALYSIS.md                # 제공 바이너리 분석 + tls 호환 경로
+
+# 제공 원본: task-2/provided/module4/ (수정 금지)
+# 채점: task-2/mark/mark2-4.sh (bastion 또는 CloudShell, ap-northeast-1)
 ```
 
-## 배포 (본 PC, PowerShell)
+## 배포 순서
+
+### 1) [본 PC·PowerShell] 의존성 번들 + 배포
+
+`terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼 뒤. 번들을 건너뛰면 apply 가 precondition 으로 실패한다.
 
 ```powershell
-# 0) terraform.tfvars 의 player_number 를 본인 비번호로 바꾼다 (-var 로 넘기지 않는다)
-cd module-4-msk\terraform
-
-# 1) sensor_consumer 의존성 번들 (없으면 apply 가 precondition 으로 실패한다)
+cd terraform
 py -m pip install -r lambda\sensor_consumer\requirements.txt -t lambda\sensor_consumer\
-
-# 2) 배포 — 50 리소스 / 실측 35분 (MSK 클러스터 하나가 31분 40초)
 terraform init
-terraform apply
+terraform apply                       # 50 리소스 / 실측 35분 (MSK 하나가 31분 40초)
 terraform output -json > outputs.json
+```
 
-# 3) 재접속 대비 .env (bash 포맷, 작업규칙 6): 로컬 보관 + bastion 배치.
-#    LF 로 써야 bastion 에서 source 된다 (Set-Content 는 CRLF 라 깨짐).
+### 2) [본 PC·PowerShell] `.env` 생성 + bastion 배치
+
+재접속 대비(작업규칙 6). LF 로 써야 bastion 에서 `source` 된다 — `Set-Content` 는 CRLF 라 깨진다.
+
+```powershell
 $o = terraform output -json | ConvertFrom-Json
 $envtext = (@(
   "export AWS_DEFAULT_REGION=ap-northeast-1"
@@ -44,14 +55,12 @@ $envtext = (@(
 scp .env ec2-user@$($o.bastion_public_ip.value):~/.env         # 비번: Skill53##
 ```
 
-### 4) 파이프라인 기동 확인 (고정 대기 대신 폴링)
+### 3) [본 PC·PowerShell] 파이프라인 기동 확인 (고정 대기 대신 폴링)
 
-producer EC2 부팅(kafka 다운로드 → IAM jar → 토픽 생성 재시도 최대 5분 → S3 바이너리 수신 → systemd 기동)과 ESM 활성화가 겹쳐 소요가 들쭉날쭉하다. 아래 두 루프가 끝나면 파이프라인이 살아 있는 것이다.
-
-**실측(2026-08-16)에서는 apply 가 끝난 시점에 이미 돌고 있었다** — producer `app` 은 apply 종료 1분 48초 **전**에 active 였고, 첫 DynamoDB 레코드·첫 S3 alert 객체가 apply 종료 직후에 찍혔다. 두 루프 모두 1회 만에 통과하는 게 정상이다. 여러 바퀴 도는 건 이상 신호다.
+**실측(2026-08-16)에서는 apply 가 끝난 시점에 이미 돌고 있었다** — producer `app` 은 apply 종료 1분 48초 **전**에 active 였고, 첫 DynamoDB 레코드·첫 S3 alert 객체가 apply 종료 직후에 찍혔다. 두 루프 모두 1회 만에 통과하는 게 정상이고, 여러 바퀴 도는 건 이상 신호다.
 
 ```powershell
-# 4-1) ESM 2개가 Enabled 될 때까지 (최대 10분)
+# 3-1) ESM 2개가 Enabled 될 때까지 (최대 10분)
 $fns = "wsc2026-sensor-consumer","wsc2026-sensor-alert-consumer"
 for ($i = 0; $i -lt 40; $i++) {
   $states = $fns | ForEach-Object { aws lambda list-event-source-mappings --function-name $_ --query "EventSourceMappings[0].State" --output text }
@@ -60,7 +69,7 @@ for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep 15
 }
 
-# 4-2) 첫 데이터가 DynamoDB 에 들어올 때까지 (최대 10분)
+# 3-2) 첫 데이터가 DynamoDB 에 들어올 때까지 (최대 10분)
 for ($i = 0; $i -lt 40; $i++) {
   $n = aws dynamodb scan --table-name wsc2026-sensor-data --select COUNT --query "Count" --output text
   Write-Host "items: $n"
@@ -80,35 +89,9 @@ aws ssm send-command --instance-ids $pid_ --document-name AWS-RunShellScript `
 aws ssm get-command-invocation --command-id <CMD_ID> --instance-id $pid_ --query "StandardOutputContent" --output text
 ```
 
-토픽 생성 여부는 bastion 의 kafka CLI 로 본다 (아래 "kafka 디버깅").
+토픽 생성 여부는 5단계의 bastion kafka CLI 로 본다.
 
-## producer 인증 모드 (기본 IAM 전용 — 본 PC, PowerShell)
-
-기본 `producer_auth_mode=iam` (`terraform.tfvars`) — 클러스터가 `unauthenticated=false` 로 좁혀지고 `app/producer` 가 SASL/IAM 9098 로 발행한다. 과제지 "MSK 클러스터는 IAM 인증을 통해서만 접근" 요구를 실제로 만족하는 상태이며 **기본 배포에 별도 지정이 필요 없다**.
-
-`app/producer` 는 저장소에 들어 있는 검증된 산출물이다(별도 빌드 불필요). apply 전에 한 번 판별한다:
-
-```powershell
-# cwd: module-4-msk (terraform\ 에서 왔다면 cd ..)
-.\check-binary-auth.ps1 app\producer
-# 판정: IAM 인증 지원 → SASL/IAM(9098). producer_auth_mode=iam 사용 가능.
-```
-
-제공 바이너리(`provided/module4/app`)는 IAM signer 가 없어 이 판정에서 떨어진다 — 그 바이너리를 쓰는 비인증 9094 경로는 과제지 요구를 위반하므로 런북에서 다루지 않는다. 분석과 호환 경로는 [BINARY-ANALYSIS.md](BINARY-ANALYSIS.md).
-
-## 채점 전 정리 (S3 바이너리 제거 — 본 PC, PowerShell)
-
-`bin/app` 은 producer EC2 부팅 다운로드용 임시 스테이징이다. EC2 는 `/opt/app/app` 에 이미
-캐시했으므로, 채점 전에 alert 버킷에서 지워 "오류 데이터 저장" 버킷을 데이터만 남긴 상태로 둔다.
-(별도 스테이징 버킷을 안 만든 것도 채점 무관 리소스를 남기지 않기 위함.)
-
-```powershell
-aws s3 rm "s3://wsc2026-sensor-alert-bucket-$env:NUM/bin/app"
-```
-
-지운 뒤 `terraform apply` 를 다시 돌리면 `aws_s3_object.app` 이 재업로드되니, **정리는 마지막 apply 이후·채점 직전에** 한다.
-
-## 리소스 검증 (본 PC, PowerShell)
+### 4) [본 PC·PowerShell] 리소스 검증
 
 ```powershell
 $env:AWS_DEFAULT_REGION = "ap-northeast-1"
@@ -140,44 +123,64 @@ aws logs tail /aws/lambda/wsc2026-sensor-alert-consumer --since 15m --format sho
 aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | Select-String "ALERT -"
 ```
 
-## bastion·CloudShell 작업 (bash — 원격 셸 안에서 실행)
+### 5) [bastion·bash] kafka 디버깅 + 셀프 채점
 
-본 PC 셸이 PowerShell이든 bash든 **여기부터는 접속한 리눅스 셸의 bash 그대로**다. 아래 세 가지가 이 경로에 속한다: 채점 스크립트 `mark/mark2-4.sh` 실행, kafka CLI 디버깅, producer EC2 SSM 세션.
-
-bastion 접속 (키페어 없이 패스워드 로그인):
+키페어 없이 패스워드 로그인. 접속이 안 되면 user_data 의 패스워드 설정이 아직 안 끝난 것 — 부팅 후 1~2분 대기.
 
 ```bash
 # BASTION_IP = terraform output -raw bastion_public_ip  (또는 .env 의 $BASTION_IP)
 ssh ec2-user@<BASTION_IP>          # 비번: Skill53## (var.ssh_password, tfvars 로 변경 가능)
 ```
 
-접속이 안 되면 user_data 의 패스워드 설정이 아직 안 끝난 것 — 부팅 후 1~2분 대기.
-
-채점 스크립트 실행 (`mark/mark2-4.sh` 를 올린 뒤):
-
-```bash
-sed -i 's/\r$//' mark2-4.sh          # Windows 에서 올렸으면 CRLF 제거
-bash mark2-4.sh 2>&1 | tee mark2-4.out
-```
-
-kafka 디버깅 (bastion 접속 후, IAM jar·CLI 는 user_data 로 설치됨):
-
 ```bash
 source ~/.env    # 배포 때 올린 .env — $BOOTSTRAP(IAM 9098), $TOPIC_RAW 사용
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server $BOOTSTRAP --command-config /opt/kafka/client.properties --describe   # 토픽/파티션/RF 확인
 /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server $BOOTSTRAP --consumer.config /opt/kafka/client.properties --topic $TOPIC_RAW --from-beginning --max-messages 5
+
+sed -i 's/\r$//' mark2-4.sh
+bash mark2-4.sh 2>&1 | tee mark2-4.out
 ```
 
-producer EC2 대화형 조사 (SSM 세션 — 본 PC 에서 `aws ssm start-session` 으로 들어간 뒤 bash):
+producer EC2 를 직접 볼 때는 본 PC 에서 `aws ssm start-session --target <producer_instance_id>` 로 들어간 뒤:
 
 ```bash
 systemctl status app
 journalctl -u app -n 50 --no-pager
 cat /var/log/cloud-init-output.log
 ```
-## Linux 런북
 
-개인 리눅스 로컬 전용 절차는 [README.linux.md](README.linux.md) 로 분리했다. 대회 본 PC 에서는 위 PowerShell 런북을 쓴다.
+### 6) [본 PC·PowerShell] 채점 전 정리 — S3 바이너리 제거
+
+`bin/app` 은 producer EC2 부팅 다운로드용 임시 스테이징이다. EC2 는 `/opt/app/app` 에 이미 캐시했으므로, 채점 전에 alert 버킷에서 지워 "오류 데이터 저장" 버킷을 데이터만 남긴 상태로 둔다. (별도 스테이징 버킷을 안 만든 것도 채점 무관 리소스를 남기지 않기 위함.)
+
+```powershell
+aws s3 rm "s3://wsc2026-sensor-alert-bucket-$env:NUM/bin/app"
+```
+
+지운 뒤 `terraform apply` 를 다시 돌리면 `aws_s3_object.app` 이 재업로드되니, **정리는 마지막 apply 이후·채점 직전에** 한다.
+
+## producer 인증 모드 (기본 IAM 전용)
+
+기본 `producer_auth_mode=iam` (`terraform.tfvars`) — 클러스터가 `unauthenticated=false` 로 좁혀지고 `app/producer` 가 SASL/IAM 9098 로 발행한다. 과제지 "MSK 클러스터는 IAM 인증을 통해서만 접근" 요구를 실제로 만족하는 상태이며 **기본 배포에 별도 지정이 필요 없다**.
+
+`app/producer` 는 저장소에 들어 있는 검증된 산출물이다(별도 빌드 불필요). apply 전에 한 번 판별한다:
+
+```powershell
+# cwd: module-4-msk (terraform\ 에서 왔다면 cd ..)
+.\check-binary-auth.ps1 app\producer
+# 판정: IAM 인증 지원 → SASL/IAM(9098). producer_auth_mode=iam 사용 가능.
+```
+
+제공 바이너리(`provided/module4/app`)는 IAM signer 가 없어 이 판정에서 떨어진다 — 그 바이너리를 쓰는 비인증 9094 경로는 과제지 요구를 위반하므로 런북에서 다루지 않는다. 분석과 호환 경로는 [BINARY-ANALYSIS.md](BINARY-ANALYSIS.md).
+
+## Teardown
+
+### [본 PC·PowerShell]
+
+```powershell
+cd terraform
+terraform destroy                     # 50 리소스 / 실측 23분 5초
+```
 
 ## 요구사항 ↔ 구현 매핑
 
