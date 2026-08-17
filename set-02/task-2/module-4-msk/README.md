@@ -3,21 +3,7 @@
 프라이빗 MSK 로 Go producer 가 센서 데이터를 발행하면, Lambda consumer 가 이상치를 판별해 정상은 DynamoDB 에 저장하고 이상치는 alert 토픽 → SNS 알림 + S3 저장으로 분기. 채점은 bastion 또는 CloudShell 에서 `mark/mark2-4.sh` 실행.
 본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(bastion·CloudShell 단계는 공통).
 
-**배포 경로가 둘이다.** 배포 순서·검증 단계는 공통이고 `producer_auth_mode` 하나만 다르다:
-
-| 경로 | 값 | producer 바이너리 | MSK 접속 | 언제 |
-|---|---|---|---|---|
-| **정통** (기본) | `iam` | 자체 구현 `app/producer` | SASL/IAM 9098 | 제공 바이너리가 IAM 인증을 지원할 때. 과제지 "IAM 인증을 통해서만 접근" 요구를 실제로 만족 |
-| **대회 제출 우회** | `tls` (`-var` 지정) | 제공 원본 `provided/module4/app` | TLS 9094 (비인증) | 제공 바이너리가 IAM 인증을 못 할 때(2026-08-17 배포본이 그렇다). 제공 바이너리 외 배포가 안 되므로 이 경로뿐 |
-
-**어느 쪽인지는 그날 지급된 제공 바이너리가 결정한다 — 대회 당일 아래를 먼저 돌린다:**
-
-```powershell
-# cwd: module-4-msk
-.\select-auth-mode.ps1     # 제공 바이너리를 검사해 쓸 모드와 apply 명령을 출력
-```
-
-상세와 전환 절차는 아래 [producer 인증 경로](#producer-인증-경로-정통--대회-제출-우회) 절.
+**배포 경로가 둘이다** — `producer_auth_mode` 하나만 다르고 배포 순서·검증 단계는 같다. 어느 쪽인지는 그날 지급된 제공 바이너리가 정하므로 아래 0단계를 먼저 돌린다. 두 경로 비교는 [producer 인증 경로](#producer-인증-경로) 절.
 
 ## 디렉토리 구조
 
@@ -34,7 +20,8 @@ module-4-msk/
 ├── app/producer                      # 자체 IAM 인증 producer (검증된 산출물)
 ├── select-auth-mode.ps1/.sh          # 대회 당일 쓸 producer_auth_mode 판별 (0단계)
 ├── check-binary-auth.ps1/.sh         # 개별 바이너리 IAM 지원 여부 검사
-└── BINARY-ANALYSIS.md                # 제공 바이너리 리버싱 분석 (IAM 불가 근거)
+├── teardown-eni.ps1/.sh              # destroy 멈춤 대응 — Lambda/MSK 잔여 ENI 정리
+└── BINARY-ANALYSIS.md                # 제공 바이너리 리버싱 분석 (2026-08-17 배포본 기준)
 
 # 제공 원본: task-2/provided/module4/ (수정 금지)
 # 채점: task-2/mark/mark2-4.sh (bastion 또는 CloudShell, ap-northeast-1)
@@ -42,20 +29,30 @@ module-4-msk/
 
 ## 배포 순서
 
-### 0) [본 PC·PowerShell] 인증 경로 판별
+### 0) [본 PC·PowerShell] 리전 + 인증 경로 판별
 
-그날 지급된 제공 바이너리가 IAM 인증을 지원하는지에 따라 1단계 apply 명령이 갈린다. 먼저 판별한다:
+리전은 이 셸에서 한 번만 잡아두면 3·4·6단계와 teardown 이 전부 이걸 쓴다. 새 터미널을 열거나
+재부팅했으면 다시 잡는다 — 안 잡힌 셸에서 3단계를 돌리면 다른 리전을 조회해 ESM 이 `None`,
+DynamoDB 가 0 으로 나온다(리소스는 멀쩡한데 안 보이는 것).
+
+`Set-ExecutionPolicy` 도 여기서 같이 잡는다 — 대회 PC 기본 정책(`Restricted`)이면 이 모듈의
+`.ps1` 스크립트(`select-auth-mode`·`check-binary-auth`·`teardown-eni`)가 전부
+"실행할 수 없습니다" 로 막힌다. `-Scope Process` 라 이 셸에만 적용되고 새 터미널을 열면 다시
+잡아야 한다 — 위 리전 설정과 생명주기가 같다.
 
 ```powershell
 # cwd: module-4-msk
-.\select-auth-mode.ps1
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+$env:AWS_DEFAULT_REGION = "ap-northeast-1"
+
+.\select-auth-mode.ps1     # 제공 바이너리를 검사해 쓸 모드와 apply 명령을 출력
 ```
 
 출력된 apply 명령을 1단계에서 그대로 쓴다. IAM 불가 판정이면 `-var "producer_auth_mode=tls"` 가 붙는다.
 
 ### 1) [본 PC·PowerShell] 의존성 번들 + 배포
 
-`terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼 뒤. 번들을 건너뛰면 apply 가 precondition 으로 실패한다. apply 명령은 0단계 판별 결과를 따른다.
+`terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼 뒤. 번들을 건너뛰면 apply 가 precondition 으로 실패한다.
 
 ```powershell
 cd terraform
@@ -76,7 +73,7 @@ terraform output -json > outputs.json
 $o = terraform output -json | ConvertFrom-Json
 $envtext = (@(
   "export AWS_DEFAULT_REGION=ap-northeast-1"
-  "export NUM=$env:NUM"
+  "export NUM=$($o.player_number.value)"
   "export CLUSTER_ARN=$($o.cluster_arn.value)"
   "export BOOTSTRAP=$($o.bootstrap_brokers_sasl_iam.value)"     # IAM 9098 (producer·bastion kafka CLI)
   "export TOPIC_RAW=wsc2026-sensor-raw"
@@ -84,8 +81,21 @@ $envtext = (@(
   "export BASTION_IP=$($o.bastion_public_ip.value)"
 ) -join "`n") + "`n"
 [IO.File]::WriteAllText("$PWD\.env", $envtext)
-scp .env ec2-user@$($o.bastion_public_ip.value):~/.env         # 비번: Skill53##
 ```
+
+bastion 으로 올린다. SSM 경로가 기본이다 — 22 를 안 거치므로 아웃바운드 22 가 막힌 망에서도 된다:
+
+```powershell
+$bid = terraform output -raw bastion_instance_id
+$env_b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\.env"))
+aws ssm send-command --instance-ids $bid --document-name AWS-RunShellScript `
+  --parameters "commands=[`"echo $env_b64 | base64 -d > /home/ec2-user/.env`",`"chown ec2-user:ec2-user /home/ec2-user/.env`"]" `
+  --query "Command.CommandId" --output text
+```
+
+22 가 열려 있는 망이면 `scp .env ec2-user@$($o.bastion_public_ip.value):~/.env` (비번 `Skill53##`) 도 된다.
+**대회장 망은 22 를 막을 수 있다** — 대회 설계상 채점은 전부 CloudShell/콘솔(443)이라 주최측이 22 를
+열어둘 이유가 없다. 위 SSM 경로는 `send-command` 라 로컬에 Session Manager plugin 도 필요 없다.
 
 ### 3) [본 PC·PowerShell] 파이프라인 기동 확인 (고정 대기 대신 폴링)
 
@@ -110,15 +120,18 @@ for ($i = 0; $i -lt 40; $i++) {
 }
 ```
 
-두 번째 루프가 끝까지 0이면 producer 쪽을 본다 — SSM 으로 서비스와 부팅 로그를 확인한다.
+두 번째 루프가 끝까지 0이면 producer 쪽을 본다 — SSM 으로 서비스와 부팅 로그를 확인한다. `send-command` 를 부팅 후 2~3분 안에 치면 SSM agent 미등록으로 `InvalidInstanceId` 가 난다. `get-command-invocation` 은 명령 실행이 끝나기 전에 조회하면 `InvocationDoesNotExist` — 몇 초면 끝나는 명령이라 5초면 충분하다. 둘 다 나면 몇 분 뒤 재시도.
 
 ```powershell
+Start-Sleep 180    # SSM agent 등록 대기 (send-command 전, 1회만)
+
 $pid_ = terraform output -raw producer_instance_id
-aws ssm send-command --instance-ids $pid_ --document-name AWS-RunShellScript `
+$cmd = aws ssm send-command --instance-ids $pid_ --document-name AWS-RunShellScript `
   --parameters 'commands=["systemctl is-active app","journalctl -u app -n 20 --no-pager","tail -30 /var/log/cloud-init-output.log"]' `
   --query "Command.CommandId" --output text
-# 몇 초 뒤 결과 조회 (<CMD_ID> 는 위 출력)
-aws ssm get-command-invocation --command-id <CMD_ID> --instance-id $pid_ --query "StandardOutputContent" --output text
+
+Start-Sleep 5    # 명령 실행 완료 대기
+aws ssm get-command-invocation --command-id $cmd --instance-id $pid_ --query "StandardOutputContent" --output text
 ```
 
 토픽 생성 여부는 5단계의 bastion kafka CLI 로 본다.
@@ -127,7 +140,7 @@ aws ssm get-command-invocation --command-id <CMD_ID> --instance-id $pid_ --query
 
 ```powershell
 $env:AWS_DEFAULT_REGION = "ap-northeast-1"
-$NUM = $env:NUM
+$NUM = terraform output -raw player_number      # cwd 가 terraform\ 이 아니면 -chdir=terraform 을 붙인다
 $CLUSTER_ARN = aws kafka list-clusters --cluster-name-filter wsc2026-msk-cluster --query "ClusterInfoList[0].ClusterArn" --output text
 
 # 4-1 DynamoDB (sensorId/timestamp) + S3
@@ -157,12 +170,22 @@ aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | S
 
 ### 5) [bastion·bash] kafka 디버깅 + 셀프 채점
 
-키페어 없이 패스워드 로그인. 접속이 안 되면 user_data 의 패스워드 설정이 아직 안 끝난 것 — 부팅 후 1~2분 대기.
+접속 경로 두 가지. **SSM 이 기본**이고, SSH 는 22 가 열린 망에서만 쓴다.
+
+```powershell
+# [본 PC] SSM 세션 (22 불필요, 단 Session Manager plugin 은 로컬에 있어야 함)
+aws ssm start-session --target (terraform output -raw bastion_instance_id)
+sudo su - ec2-user       # 세션은 ssm-user 로 붙으므로 ~/.env 를 쓰려면 전환한다
+```
 
 ```bash
-# BASTION_IP = terraform output -raw bastion_public_ip  (또는 .env 의 $BASTION_IP)
-ssh ec2-user@<BASTION_IP>          # 비번: Skill53## (var.ssh_password, tfvars 로 변경 가능)
+# [본 PC] SSH — 아웃바운드 22 가 열린 망에서만. 비번: Skill53## (var.ssh_password)
+ssh ec2-user@$(terraform output -raw bastion_public_ip)
 ```
+
+접속이 안 되면 먼저 어느 쪽이 문제인지 가른다: `Test-NetConnection <BASTION_IP> -Port 22` 가 실패하고
+`aws ssm describe-instance-information` 의 `PingStatus` 가 `Online` 이면 인스턴스는 정상이고 망이 22 를
+막은 것이다(SSM 으로 진행). 둘 다 안 되면 user_data 의 패스워드·agent 설정이 아직인 것 — 부팅 후 1~2분 대기.
 
 ```bash
 source ~/.env    # 배포 때 올린 .env — $BOOTSTRAP(IAM 9098), $TOPIC_RAW 사용
@@ -173,7 +196,11 @@ sed -i 's/\r$//' mark2-4.sh
 bash mark2-4.sh 2>&1 | tee mark2-4.out
 ```
 
-producer EC2 를 직접 볼 때는 본 PC 에서 `aws ssm start-session --target <producer_instance_id>` 로 들어간 뒤:
+셀프 채점만 할 거면 bastion 에 붙을 필요 없이 **CloudShell 에서 `mark2-4.sh` 를 돌려도 된다**(README 첫 줄).
+22 도 막히고 plugin 도 없는 최악의 경우 이게 유일한 경로다.
+
+producer EC2 를 직접 볼 때는 본 PC 에서 `aws ssm start-session --target <producer_instance_id>` 로 들어간 뒤
+(plugin 이 없으면 3단계의 `send-command` 블록을 쓴다):
 
 ```bash
 systemctl status app
@@ -186,52 +213,37 @@ cat /var/log/cloud-init-output.log
 `bin/app` 은 producer EC2 부팅 다운로드용 임시 스테이징이다. EC2 는 `/opt/app/app` 에 이미 캐시했으므로, 채점 전에 alert 버킷에서 지워 "오류 데이터 저장" 버킷을 데이터만 남긴 상태로 둔다. (별도 스테이징 버킷을 안 만든 것도 채점 무관 리소스를 남기지 않기 위함.)
 
 ```powershell
-aws s3 rm "s3://wsc2026-sensor-alert-bucket-$env:NUM/bin/app"
+aws s3 rm "s3://$(terraform output -raw alert_bucket)/bin/app"
 ```
 
 지운 뒤 `terraform apply` 를 다시 돌리면 `aws_s3_object.app` 이 재업로드되니, **정리는 마지막 apply 이후·채점 직전에** 한다.
 
-## producer 인증 경로 (정통 / 대회 제출 우회)
+## producer 인증 경로
 
-배포 순서·검증 단계는 두 경로가 동일하다. `producer_auth_mode` 값 하나가 (1) S3 에 올릴 바이너리, (2) 클러스터 `unauthenticated` 설정, (3) producer 에 주입할 부트스트랩 엔드포인트를 한꺼번에 결정한다.
+`producer_auth_mode` 값 하나가 (1) S3 에 올릴 바이너리, (2) 클러스터 `unauthenticated` 설정, (3) producer 에 주입할 부트스트랩 엔드포인트를 한꺼번에 결정한다.
 
-### A. 정통 경로 — `iam` (기본값, 별도 지정 불필요)
+| | `iam` — 정통 (기본값) | `tls` — 대회 제출 우회 |
+|---|---|---|
+| apply | `terraform apply` | `terraform apply -var "producer_auth_mode=tls"` |
+| 바이너리 | 자체 구현 `app/producer` (저장소 산출물, 빌드 불필요) | 제공 원본 `provided/module4/app` |
+| MSK 접속 | SASL/IAM 9098 | TLS 9094 (비인증) |
+| 클러스터 | `unauthenticated=false`, 9094 리스너·SG 규칙 없음 | `unauthenticated=true` + 9094 리스너, producer SG 에만 9094 인바운드 |
+| 엔드포인트 | `bootstrap_brokers_sasl_iam` (`_tls` 는 빈 값) | `bootstrap_brokers_tls` |
+| 과제지 "IAM 인증을 통해서만 접근" | 만족 (2026-08-16 실배포 검증) | producer 실제 경로 기준으론 미만족 |
+| 쓰는 때 | 그날 제공 바이너리가 IAM 인증을 지원할 때 | 지원하지 않을 때 |
 
-과제지 "MSK 클러스터는 IAM 인증을 통해서만 접근" 요구를 실제로 만족하는 구성. 자체 구현한 `app/producer`(저장소에 들어 있는 검증된 산출물, 별도 빌드 불필요)가 SASL/IAM 9098 로 발행한다.
+- **어느 쪽인지는 미리 정해두지 않는다** — 대회는 제공 바이너리 외 배포를 허용하지 않으므로, 그날 지급된 그 바이너리가 IAM 인증을 하느냐가 경로를 결정한다. 판정은 0단계 `select-auth-mode` 출력을 그대로 따른다.
+- 2026-08-17 시점의 배포본은 IAM signer 가 없어 `tls` 로 판정된다([BINARY-ANALYSIS.md](BINARY-ANALYSIS.md)). 출제 측이 바이너리를 교체하면 뒤집히므로 대회 당일 다시 돌린다.
+- 클러스터의 SASL/IAM(9098) 은 두 경로 모두 켜져 있고(bastion CLI·ESM 이 쓴다) 채점 4-3 은 `Sasl.Iam.Enabled` 만 보므로 양쪽 다 통과한다.
+- 이미 뜬 클러스터의 경로를 바꾸는 apply 는 리스너 in-place 변경 ~15-30분. 부트스트랩 값이 한 번 빈 값으로 잡혀 EC2 생성이 `inconsistent final plan` 으로 1회 실패할 수 있다 — MSK 변경은 이미 적용됐으므로 apply 를 한 번 더 돌린다.
 
-```powershell
-terraform apply                      # producer_auth_mode=iam (terraform.tfvars 기본값)
-```
-
-- 클러스터가 `unauthenticated=false` 로 좁혀지고 9094 리스너·SG 규칙이 만들어지지 않는다.
-- 엔드포인트는 `terraform output bootstrap_brokers_sasl_iam`. `bootstrap_brokers_tls` 는 빈 값이다.
-- 2026-08-16 실배포 검증 완료 — `Sasl.Iam.Enabled=True` / `Unauthenticated.Enabled=False` 상태에서 DynamoDB 적재·alert 분기까지 정상 동작.
-
-### B. 대회 제출 우회 경로 — `tls` (`-var` 로 지정)
-
-대회는 제공 바이너리(`provided/module4/app`) 외 배포를 허용하지 않는다. 그 바이너리는 리버싱으로 IAM signer 자체가 없음이 확정됐고(`BINARY-ANALYSIS.md`) 접속 가능한 경로는 9094 TLS(비인증)뿐이다 — **대회 당일 실제로 제출할 수 있는 건 이쪽이다.**
-
-```powershell
-terraform apply -var "producer_auth_mode=tls"     # 리스너 in-place 변경 ~15-30분
-```
-
-- 클러스터에 `unauthenticated=true` + 9094 리스너가 열리고, producer SG 에만 9094 인바운드가 붙는다.
-- 엔드포인트는 `terraform output bootstrap_brokers_tls`.
-- 클러스터의 SASL/IAM(9098) 자체는 이 경로에서도 켜져 있다 — bastion CLI·ESM 이 쓰고, 채점 4-3(`Sasl.Iam.Enabled`)도 이걸 보므로 통과한다.
-- **한계**: 과제지 문구를 producer 실제 경로 기준으론 리터럴로 만족하지 못한다. 제공 바이너리의 구조적 한계라 대회에선 감수한다.
-- 기존 클러스터의 리스너 모드를 바꾸는 apply 는 부트스트랩 값이 한 번 빈 값으로 잡혀 EC2 생성에서 `inconsistent final plan` 으로 1회 실패할 수 있다 — MSK 변경은 이미 적용됐으므로 apply 를 한 번 더 돌린다.
-
-### 판별 스크립트
-
-모드 판별은 0단계 `select-auth-mode.ps1` 이 한다 — 제공 바이너리를 검사해 쓸 모드와 apply 명령을 출력한다. 개별 바이너리를 따로 보고 싶으면:
+개별 바이너리 판별(모드 판별 자체는 0단계):
 
 ```powershell
 # cwd: module-4-msk (terraform\ 에서 왔다면 cd ..)
-.\check-binary-auth.ps1 app\producer             # IAM 인증 지원  → iam 경로 (기본)
-.\check-binary-auth.ps1 ..\provided\module4\app  # IAM 마커 0건   → tls 경로만 가능 (2026-08-17 배포본)
+.\check-binary-auth.ps1 app\producer             # 자체 바이너리 — IAM 마커 있음
+.\check-binary-auth.ps1 ..\provided\module4\app  # 제공 바이너리 — 이 판정이 모드를 정한다
 ```
-
-분석 전체는 [BINARY-ANALYSIS.md](BINARY-ANALYSIS.md).
 
 ## Teardown
 
@@ -244,31 +256,16 @@ terraform destroy                     # 50 리소스 / 실측 23분 5초
 
 #### destroy 가 private 서브넷·VPC 삭제에서 멈출 때 — Lambda/MSK ENI 정리
 
-`msk-priv-a`·`msk-priv-d` 삭제와 그 뒤 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸린다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 남아 서브넷을 잡고 있어서다 — 함수·ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다. 먼저 5~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 걸리면 서브넷의 잔여 ENI 를 직접 지운다.
+`msk-priv-a`·`msk-priv-d` 삭제와 그 뒤 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸린다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 남아 서브넷을 잡고 있어서다 — 함수·ESM 이 지워져도 ENI 회수가 수 분\~수십 분 늦다. 먼저 5\~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 걸리면 `teardown-eni.ps1` 로 잔여 ENI 를 직접 지운다. VPC ID 는 `terraform output vpc_id` 에서 자동으로 읽는다 — 손으로 옮겨 적지 않는다.
 
 ```powershell
-$env:AWS_DEFAULT_REGION = "ap-northeast-1"
-
-# 1) VPC 의 잔여 ENI 조회 — 어느 서브넷을 누가 잡고 있는지 확인
-$VPCID = aws ec2 describe-vpcs --filters "Name=tag:Name,Values=msk-vpc" --query "Vpcs[0].VpcId" --output text
-aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
-  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Subnet:SubnetId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
+# cwd: module-4-msk (terraform\ 에서 왔다면 cd ..)
+.\teardown-eni.ps1
 ```
 
-`Description` 이 `AWS Lambda VPC ENI-*`(sensor_consumer) 또는 `Amazon MSK network interface`(ESM 폴러) 면 잔여물이다. `Status=in-use` 면 detach 부터, `available` 이면 delete 만 한다.
+Lambda Kafka 트리거 삭제 → 이 VPC 를 쓰는 Lambda 의 VPC 연결 해제 → 남은 ENI detach·delete 순으로 진행하고, 각 단계에서 지울 게 없으면(destroy 가 이미 지웠으면) 건너뛴다는 로그를 남긴다. 끝나면:
 
 ```powershell
-$enis = aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
-  --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text
-foreach ($line in ($enis -split "`n" | Where-Object { $_ })) {
-  $eni, $status, $att = $line -split "\s+"
-  if ($status -eq "in-use" -and $att -and $att -ne "None") {
-    aws ec2 detach-network-interface --attachment-id $att --force
-    Start-Sleep 20                    # detach 완료 대기 (available 전이)
-  }
-  aws ec2 delete-network-interface --network-interface-id $eni
-}
-
 terraform destroy                     # ENI 정리 후 재실행
 ```
 
@@ -280,7 +277,7 @@ terraform destroy                     # ENI 정리 후 재실행
 | 항목 | 요구 | 구현 |
 |---|---|---|
 | task 1. VPC | msk-vpc 192.168.0.0/16, pub/priv a·d, 표의 RTB/IGW/NAT 이름 | `vpc.tf` (`variables.tf` subnets 맵) |
-| task 2. MSK | wsc2026-msk-cluster, 3.6.0, kafka.t3.small, 프라이빗, HA, IAM 인증 | `msk.tf` (mark 4-3: `Sasl.Iam.Enabled=True` — 두 경로 공통). 기본은 IAM 전용(`iam`), 대회 제출은 `-var producer_auth_mode=tls` 우회, 함정 참고 |
+| task 2. MSK | wsc2026-msk-cluster, 3.6.0, kafka.t3.small, 프라이빗, HA, IAM 인증 | `msk.tf` (mark 4-3: `Sasl.Iam.Enabled=True`, 두 경로 공통) — "producer 인증 경로" 절 |
 | task 3. Topic | sensor-raw 3/2, sensor-alert 1/2, PK sensorId | `userdata.sh.tpl` 토픽 생성 + producer/consumer 가 sensorId 키 사용 |
 | task 4. EC2 | wsc2026-sensor-producer t3.small 프라이빗, wsc2026-msk-ec2-role 최소권한 | `ec2.tf` + `iam.tf` + `userdata.sh.tpl` (systemd `app`) |
 | task 5. Lambda | consumer 2개 python3.14, MSK 트리거, wsc2026-msk-lambda-role 최소권한 | `lambda.tf` + `lambda/*/index.py` + `iam.tf` (mark 4-2/4-4) |
@@ -292,7 +289,7 @@ terraform destroy                     # ENI 정리 후 재실행
 ## 설계 근거 · 함정
 
 - **MSK 클러스터 생성 31분 40초(실측).** apply 전체 35분 중 이것 하나가 90% 다 — 나머지 49개 리소스는 NAT GW 1분 55초, VPC 배치 sensor_consumer 2분 7초, ESM 55초/2분 37초가 전부다. producer EC2 의 user_data 가 `bootstrap_brokers_sasl_iam` 을 참조해 클러스터 ACTIVE 후에만 부팅된다 — `-target` 으로 EC2 를 먼저 만들지 말 것. 토픽 생성이 첫 부팅에 자동 수행된다(실패 시 bastion 의 kafka CLI 로 수동 생성 가능).
-- **제공 producer 바이너리는 SASL/IAM 을 못 한다** — IAM signer·SigV4 문자열이 통째로 없고 포트가 9094 일 때만 TLS 를 켠다(`BINARY-ANALYSIS.md` / https://github.com/ishs-cloud-computing/skills-2026/issues/49). 9094 TLS 는 전송 구간 암호화일 뿐 **인증이 없는 접속**이고, 9098 IAM 이 TLS 위에 SASL/IAM 신원 인증까지 얹은 경로 — 과제지 요구는 후자다. 그래서 기본값은 IAM 전용(`iam` + 자체 `app/producer`)이다. 다만 대회는 제공 바이너리 외 배포를 허용하지 않으므로 **대회 당일 제출은 `-var producer_auth_mode=tls` 로 9094 TLS 우회 경로를 쓴다** — 두 경로 다 런북 "producer 인증 경로" 절에 있다.
+- **2026-08-17 배포본의 제공 producer 바이너리는 SASL/IAM 을 못 한다** — IAM signer·SigV4 문자열이 통째로 없고 포트가 9094 일 때만 TLS 를 켠다(`BINARY-ANALYSIS.md` / https://github.com/ishs-cloud-computing/skills-2026/issues/49). 9094 TLS 는 전송 구간 암호화일 뿐 **인증이 없는 접속**이고, 9098 IAM 이 TLS 위에 SASL/IAM 신원 인증까지 얹은 경로 — 과제지 요구는 후자다. 그래서 기본값은 `iam` 이고, 그날 바이너리가 IAM 을 못 하는 것으로 판정되면 `tls` 우회로 내려간다("producer 인증 경로" 절). 바이너리가 교체될 수 있으니 판정은 대회 당일 0단계로 다시 한다.
 - **mark 4-5-A 가 `temperature.S`/`status.S` 를 조회 — DynamoDB 에 Number 로 저장하면 0점.** sensor_consumer 는 전 속성을 String 으로 저장한다.
 - **`pip install -t` 를 건너뛰면 zip 에 kafka-python 이 빠져 import 실패로 조용히 죽는다** → `lambda.tf` 의 precondition 이 apply 단계에서 잡아준다. kafka-python 3.0.8 / aws-msk-iam-sasl-signer-python 1.0.2 는 pure-python 이라 Windows/리눅스 동일하게 동작 (Docker 불필요).
 - **Lambda 런타임은 python3.14 정확 일치** (mark 4-2). aws provider 6.21+ 에서 지원 — versions.tf `~> 6.54` 로 충족.

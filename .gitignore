@@ -8,6 +8,8 @@ outputs.json
 **/terraform/build/
 crash.log
 crash.*.log
+# 실습 중 tfvars 등을 고치기 전 떠두는 로컬 백업 (커밋 대상 아님)
+*.bak
 __pycache__/
 **/*.rendered.yaml
 # rendered/ 서브디렉토리 렌더링 (eksctl·k8s 공용, set-08 module-4부터)

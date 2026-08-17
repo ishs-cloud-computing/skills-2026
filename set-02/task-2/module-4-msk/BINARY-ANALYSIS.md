@@ -92,20 +92,13 @@ r2 -2 -q -c 'af @ 0x6786c0; pdf @ 0x6786c0' ../provided/module4/app | grep -E 'c
 # 기대: cmp rax, 0x2386  /  mov word [rax + 0x108], 0x303
 ```
 
-## 결론이 배포에 미치는 영향 — 대회 제출은 `tls` 우회 경로
+## 결론이 배포에 미치는 영향
 
-이 분석이 확정한 건 "제공 바이너리로는 IAM 인증이 불가능하다"이고, 대회는 제공 바이너리 외 배포를 허용하지 않는다. 두 사실을 겹치면 **대회 당일 제출은 9094 TLS 우회 경로로 갈 수밖에 없다.** 저장소 기본값은 과제지 요구대로의 IAM 전용(`producer_auth_mode=iam`)이고, 대회 제출 시 `-var` 로 우회한다.
+이 분석이 확정한 건 **"2026-08-17 시점에 배포된 이 바이너리로는 IAM 인증이 불가능하다"** 까지다. 대회는 제공 바이너리 외 배포를 허용하지 않으므로, 그날 지급된 바이너리가 같은 판정이면 제출은 9094 TLS 우회 경로가 된다. 출제 측이 바이너리를 교체하면 판정이 뒤집히므로 **대회 당일 `select-auth-mode` 로 다시 판별한다** — 이 문서의 결론을 그대로 전제하지 않는다. 저장소 기본값은 과제지 요구대로의 IAM 전용(`producer_auth_mode=iam`)이다.
 
-```powershell
-terraform apply                                   # iam — 정통 경로 (기본값)
-terraform apply -var "producer_auth_mode=tls"     # tls — 대회 제출 우회, 리스너 변경 ~15-30분
-```
+두 경로의 차이·전환 절차는 [README.md](README.md) 의 "producer 인증 경로" 절. 이 분석에서만 나오는 실패 모드 하나:
 
-- `iam` 은 자체 구현 `app/producer` + SASL/IAM 9098 로 과제지 요구를 실제로 만족한다(2026-08-16 실배포 검증 완료). 엔드포인트는 `bootstrap_brokers_sasl_iam`, 이때 `bootstrap_brokers_tls` 는 빈 값이다.
-- `tls` 는 클러스터에 `unauthenticated=true` 와 9094 리스너를 열고(`msk.tf`), producer SG 에만 9094 인바운드를 붙인다(`security.tf`). 엔드포인트는 `terraform output bootstrap_brokers_tls`.
-- 채점 스크립트 4-3 은 `Sasl.Iam.Enabled` 만 보고 그 값은 두 경로 모두 True 이므로 4-3 은 통과한다. 다만 `tls` 에서는 과제지 "IAM 인증을 통해서만 접근" 문구를 producer 실제 경로 기준으론 리터럴로 만족하지 못한다 — 제공 바이너리의 구조적 한계다.
-- tls 경로에서 9098 을 주면 `unexpected EOF: broker appears to be expecting TLS` 로 영원히 실패한다. 배포된 EC2 즉시 복구:
+- tls 경로에서 9098 을 주면 `unexpected EOF: broker appears to be expecting TLS` 로 영원히 실패한다(위 `main.tlsConfigFor` 가 9094 에서만 TLS 를 켜기 때문). 배포된 EC2 즉시 복구:
   ```bash
   sudo sed -i 's/:9098/:9094/g' /etc/systemd/system/app.service && sudo systemctl daemon-reload && sudo systemctl restart app
   ```
-- 경로를 전환하는 apply 는 부트스트랩 출력이 한 번 빈 값으로 잡혀 EC2 생성에서 `inconsistent final plan` 으로 1회 실패할 수 있다 — MSK 변경은 이미 적용됐으므로 apply 를 한 번 더 돌린다.
