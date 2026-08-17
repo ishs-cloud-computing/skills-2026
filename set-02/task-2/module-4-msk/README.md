@@ -35,8 +35,14 @@ module-4-msk/
 재부팅했으면 다시 잡는다 — 안 잡힌 셸에서 3단계를 돌리면 다른 리전을 조회해 ESM 이 `None`,
 DynamoDB 가 0 으로 나온다(리소스는 멀쩡한데 안 보이는 것).
 
+`Set-ExecutionPolicy` 도 여기서 같이 잡는다 — 대회 PC 기본 정책(`Restricted`)이면 이 모듈의
+`.ps1` 스크립트(`select-auth-mode`·`check-binary-auth`·`teardown-eni`)가 전부
+"실행할 수 없습니다" 로 막힌다. `-Scope Process` 라 이 셸에만 적용되고 새 터미널을 열면 다시
+잡아야 한다 — 위 리전 설정과 생명주기가 같다.
+
 ```powershell
 # cwd: module-4-msk
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 $env:AWS_DEFAULT_REGION = "ap-northeast-1"
 
 .\select-auth-mode.ps1     # 제공 바이너리를 검사해 쓸 모드와 apply 명령을 출력
