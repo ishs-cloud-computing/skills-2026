@@ -263,16 +263,47 @@ aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
 `Description` 이 `AWS Lambda VPC ENI-*`(sensor_consumer) 또는 `Amazon MSK network interface`(ESM 폴러) 면 잔여물이다. `Status=in-use` 면 detach 부터, `available` 이면 delete 만 한다.
 
 ```powershell
+# VPC 내 모든 ENI 정보 가져오기
 $enis = aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
   --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text
-foreach ($line in ($enis -split "`n" | Where-Object { $_ })) {
-  $eni, $status, $att = $line -split "\s+"
-  if ($status -eq "in-use" -and $att -and $att -ne "None") {
-    aws ec2 detach-network-interface --attachment-id $att --force
-    Start-Sleep 20                    # detach 완료 대기 (available 전이)
-  }
-  aws ec2 delete-network-interface --network-interface-id $eni
+
+# 결과가 비어있지 않은 경우에만 진행
+if ($enis) {
+    # 결과가 단일 행(String)일 경우를 대비해 명시적으로 배열 처리 후 반복
+    foreach ($line in @($enis -split "`r?`n" | Where-Object { $_ -match '\S' })) {
+        
+        # 공백 기준으로 ENI ID, 상태, Attachment ID 분리
+        $eni, $status, $att = $line -split "\s+"
+        
+        Write-Host "처리 중인 ENI: $eni (상태: $status)"
+
+        # 1. 사용 중(in-use)이고 Attachment ID가 존재하는 경우 Detach 진행
+        if ($status -eq "in-use" -and $att -and $att -ne "None") {
+            Write-Host "  -> Attachment $att 연결 해제 중 (Force)..."
+            aws ec2 detach-network-interface --attachment-id $att --force | Out-Null
+            
+            # 2. ENI 상태가 available로 바뀔 때까지 최대 60초 대기 (안정성 강화)
+            $retry = 0
+            while ($retry -lt 12) {
+                Start-Sleep -Seconds 5
+                $currentStatus = aws ec2 describe-network-interfaces --network-interface-ids $eni --query "NetworkInterfaces[0].Status" --output text 2>$null
+                
+                if ($currentStatus -eq "available") {
+                    Write-Host "  -> 연결 해제 완료 (available 상태 진입)"
+                    break
+                }
+                $retry++
+            }
+        }
+
+        # 3. ENI 삭제 진행
+        Write-Host "  -> ENI $eni 삭제 중..."
+        aws ec2 delete-network-interface --network-interface-id $eni
+    }
+} else {
+    Write-Host "해당 VPC에 존재하는 ENI가 없습니다."
 }
+
 
 terraform destroy                     # ENI 정리 후 재실행
 ```

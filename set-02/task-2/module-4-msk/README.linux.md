@@ -141,15 +141,37 @@ VPCID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=msk-vpc" --query "
 aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" \
   --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Subnet:SubnetId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
 
-aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" \
-  --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text |
-while read -r eni status att; do
-  if [ "$status" = "in-use" ] && [ -n "$att" ] && [ "$att" != "None" ]; then
-    aws ec2 detach-network-interface --attachment-id "$att" --force
-    sleep 20
-  fi
-  aws ec2 delete-network-interface --network-interface-id "$eni"
-done
+# VPC 내 모든 ENI 정보 가져오기
+ENIS=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" \
+  --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text)
+
+if [ -z "$ENIS" ]; then
+  echo "해당 VPC에 존재하는 ENI가 없습니다."
+else
+  echo "$ENIS" | while read -r eni status att; do
+    [ -z "$eni" ] && continue
+    echo "처리 중인 ENI: $eni (상태: $status)"
+
+    if [ "$status" = "in-use" ] && [ -n "$att" ] && [ "$att" != "None" ]; then
+      echo "  -> Attachment $att 연결 해제 중 (Force)..."
+      aws ec2 detach-network-interface --attachment-id "$att" --force >/dev/null
+
+      # ENI 상태가 available로 바뀔 때까지 최대 60초 대기 (안정성 강화)
+      for retry in $(seq 1 12); do
+        sleep 5
+        current_status=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" \
+          --query "NetworkInterfaces[0].Status" --output text 2>/dev/null)
+        if [ "$current_status" = "available" ]; then
+          echo "  -> 연결 해제 완료 (available 상태 진입)"
+          break
+        fi
+      done
+    fi
+
+    echo "  -> ENI $eni 삭제 중..."
+    aws ec2 delete-network-interface --network-interface-id "$eni"
+  done
+fi
 
 terraform destroy
 ```
