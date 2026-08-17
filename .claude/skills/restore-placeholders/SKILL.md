@@ -1,6 +1,6 @@
 ---
 name: restore-placeholders
-description: Before committing or pushing this skills-2026 repo to the remote, check tracked *.tfvars for personal-value drift (player_number, ssh_password, bucket_suffix 등 로컬 실습값) that must not leak, judge which changed lines are real spec fixes vs local test leftovers, get the user's explicit accept on what to restore, then restore and proceed. Use whenever the user asks to commit or push, or says "커밋해", "푸시해", "이거 원격에 올려", "이 원격 저장소 내에서만 사용", or asks whether a diff has personal test values mixed in.
+description: Before committing or pushing this skills-2026 repo to the remote, when this session actually edited *.tf, *.tfvars, or *.yaml (terraform/eksctl/k8s files), check tracked *.tfvars for personal-value drift (player_number, ssh_password, bucket_suffix 등 로컬 실습값) that must not leak, judge which changed lines are real spec fixes vs local test leftovers, get the user's explicit accept on what to restore, then restore and proceed. Does NOT apply to a commit/push that only touches docs, skills, or other non-infra files this session — skip silently there. Use whenever the user asks to commit or push infra work, or says "커밋해", "푸시해", "이거 원격에 올려", "이 원격 저장소 내에서만 사용", or asks whether a diff has personal test values mixed in.
 ---
 
 # Catch personal-value drift before it hits the remote
@@ -21,6 +21,18 @@ testing happened against the wrong region/profile, not a real correction. The sc
 region drift the same way as a personal-value leak.
 
 ## Workflow
+
+0. **Gate on whether this session touched infra files at all.** Recall the conversation so far —
+   did it edit any `*.tf`, `*.tfvars`, or `*.yaml` (terraform/eksctl/k8s manifest) file? If not —
+   e.g. the commit/push is only docs, only this skill's own files, only a Python script unrelated
+   to a set — this skill has nothing to check and doesn't apply. Skip everything below silently:
+   don't run `report`, don't mention placeholders, just do the commit/push as asked. Leaks only
+   happen through tfvars edits, and if none of this session's changes could have touched one,
+   running the check is pure overhead.
+
+   If the session did touch infra files, continue to step 1 even if the actual file being
+   committed/pushed right now looks unrelated — a `*.tfvars` edit made earlier in the session can
+   still be sitting uncommitted or already committed on the branch.
 
 1. **Run `report` internally — don't paste its raw output into chat:**
 

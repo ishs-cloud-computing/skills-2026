@@ -28,10 +28,16 @@ module-4-msk/
 
 ## 배포 순서
 
-### 0) [본 PC·PowerShell] 인증 경로 판별
+### 0) [본 PC·PowerShell] 리전 + 인증 경로 판별
+
+리전은 이 셸에서 한 번만 잡아두면 3·4·6단계와 teardown 이 전부 이걸 쓴다. 새 터미널을 열거나
+재부팅했으면 다시 잡는다 — 안 잡힌 셸에서 3단계를 돌리면 다른 리전을 조회해 ESM 이 `None`,
+DynamoDB 가 0 으로 나온다(리소스는 멀쩡한데 안 보이는 것).
 
 ```powershell
 # cwd: module-4-msk
+$env:AWS_DEFAULT_REGION = "ap-northeast-1"
+
 .\select-auth-mode.ps1     # 제공 바이너리를 검사해 쓸 모드와 apply 명령을 출력
 ```
 
@@ -60,7 +66,7 @@ terraform output -json > outputs.json
 $o = terraform output -json | ConvertFrom-Json
 $envtext = (@(
   "export AWS_DEFAULT_REGION=ap-northeast-1"
-  "export NUM=$env:NUM"
+  "export NUM=$($o.player_number.value)"
   "export CLUSTER_ARN=$($o.cluster_arn.value)"
   "export BOOTSTRAP=$($o.bootstrap_brokers_sasl_iam.value)"     # IAM 9098 (producer·bastion kafka CLI)
   "export TOPIC_RAW=wsc2026-sensor-raw"
@@ -68,8 +74,21 @@ $envtext = (@(
   "export BASTION_IP=$($o.bastion_public_ip.value)"
 ) -join "`n") + "`n"
 [IO.File]::WriteAllText("$PWD\.env", $envtext)
-scp .env ec2-user@$($o.bastion_public_ip.value):~/.env         # 비번: Skill53##
 ```
+
+bastion 으로 올린다. SSM 경로가 기본이다 — 22 를 안 거치므로 아웃바운드 22 가 막힌 망에서도 된다:
+
+```powershell
+$bid = terraform output -raw bastion_instance_id
+$env_b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\.env"))
+aws ssm send-command --instance-ids $bid --document-name AWS-RunShellScript `
+  --parameters "commands=[`"echo $env_b64 | base64 -d > /home/ec2-user/.env`",`"chown ec2-user:ec2-user /home/ec2-user/.env`"]" `
+  --query "Command.CommandId" --output text
+```
+
+22 가 열려 있는 망이면 `scp .env ec2-user@$($o.bastion_public_ip.value):~/.env` (비번 `Skill53##`) 도 된다.
+**대회장 망은 22 를 막을 수 있다** — 대회 설계상 채점은 전부 CloudShell/콘솔(443)이라 주최측이 22 를
+열어둘 이유가 없다. 위 SSM 경로는 `send-command` 라 로컬에 Session Manager plugin 도 필요 없다.
 
 ### 3) [본 PC·PowerShell] 파이프라인 기동 확인 (고정 대기 대신 폴링)
 
@@ -114,7 +133,7 @@ aws ssm get-command-invocation --command-id $cmd --instance-id $pid_ --query "St
 
 ```powershell
 $env:AWS_DEFAULT_REGION = "ap-northeast-1"
-$NUM = $env:NUM
+$NUM = terraform output -raw player_number      # cwd 가 terraform\ 이 아니면 -chdir=terraform 을 붙인다
 $CLUSTER_ARN = aws kafka list-clusters --cluster-name-filter wsc2026-msk-cluster --query "ClusterInfoList[0].ClusterArn" --output text
 
 # 4-1 DynamoDB (sensorId/timestamp) + S3
@@ -144,12 +163,22 @@ aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | S
 
 ### 5) [bastion·bash] kafka 디버깅 + 셀프 채점
 
-키페어 없이 패스워드 로그인. 접속이 안 되면 user_data 의 패스워드 설정이 아직 안 끝난 것 — 부팅 후 1~2분 대기.
+접속 경로 두 가지. **SSM 이 기본**이고, SSH 는 22 가 열린 망에서만 쓴다.
+
+```powershell
+# [본 PC] SSM 세션 (22 불필요, 단 Session Manager plugin 은 로컬에 있어야 함)
+aws ssm start-session --target (terraform output -raw bastion_instance_id)
+sudo su - ec2-user       # 세션은 ssm-user 로 붙으므로 ~/.env 를 쓰려면 전환한다
+```
 
 ```bash
-# BASTION_IP = terraform output -raw bastion_public_ip  (또는 .env 의 $BASTION_IP)
-ssh ec2-user@<BASTION_IP>          # 비번: Skill53## (var.ssh_password, tfvars 로 변경 가능)
+# [본 PC] SSH — 아웃바운드 22 가 열린 망에서만. 비번: Skill53## (var.ssh_password)
+ssh ec2-user@$(terraform output -raw bastion_public_ip)
 ```
+
+접속이 안 되면 먼저 어느 쪽이 문제인지 가른다: `Test-NetConnection <BASTION_IP> -Port 22` 가 실패하고
+`aws ssm describe-instance-information` 의 `PingStatus` 가 `Online` 이면 인스턴스는 정상이고 망이 22 를
+막은 것이다(SSM 으로 진행). 둘 다 안 되면 user_data 의 패스워드·agent 설정이 아직인 것 — 부팅 후 1~2분 대기.
 
 ```bash
 source ~/.env    # 배포 때 올린 .env — $BOOTSTRAP(IAM 9098), $TOPIC_RAW 사용
@@ -160,7 +189,11 @@ sed -i 's/\r$//' mark2-4.sh
 bash mark2-4.sh 2>&1 | tee mark2-4.out
 ```
 
-producer EC2 를 직접 볼 때는 본 PC 에서 `aws ssm start-session --target <producer_instance_id>` 로 들어간 뒤:
+셀프 채점만 할 거면 bastion 에 붙을 필요 없이 **CloudShell 에서 `mark2-4.sh` 를 돌려도 된다**(README 첫 줄).
+22 도 막히고 plugin 도 없는 최악의 경우 이게 유일한 경로다.
+
+producer EC2 를 직접 볼 때는 본 PC 에서 `aws ssm start-session --target <producer_instance_id>` 로 들어간 뒤
+(plugin 이 없으면 3단계의 `send-command` 블록을 쓴다):
 
 ```bash
 systemctl status app
@@ -173,7 +206,7 @@ cat /var/log/cloud-init-output.log
 `bin/app` 은 producer EC2 부팅 다운로드용 임시 스테이징이다. EC2 는 `/opt/app/app` 에 이미 캐시했으므로, 채점 전에 alert 버킷에서 지워 "오류 데이터 저장" 버킷을 데이터만 남긴 상태로 둔다. (별도 스테이징 버킷을 안 만든 것도 채점 무관 리소스를 남기지 않기 위함.)
 
 ```powershell
-aws s3 rm "s3://wsc2026-sensor-alert-bucket-$env:NUM/bin/app"
+aws s3 rm "s3://$(terraform output -raw alert_bucket)/bin/app"
 ```
 
 지운 뒤 `terraform apply` 를 다시 돌리면 `aws_s3_object.app` 이 재업로드되니, **정리는 마지막 apply 이후·채점 직전에** 한다.

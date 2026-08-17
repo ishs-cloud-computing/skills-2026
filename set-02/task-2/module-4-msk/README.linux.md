@@ -2,12 +2,18 @@
 
 [README.md](README.md) 의 본 PC 단계를 bash 로 옮긴 것. 번호는 README.md 와 1:1 대응이며, bastion·CloudShell 단계는 자리에 stub 으로 표시했다. 대회 본 PC(Windows 11 + PowerShell 7)에서는 README.md 를 쓴다.
 
-### 0) [본 PC] 인증 경로 판별
+### 0) [본 PC] 리전 + 인증 경로 판별
+
+리전은 이 셸에서 한 번만 잡아두면 3·4·6단계와 teardown 이 전부 이걸 쓴다. 새 터미널을 열었으면
+다시 잡는다 — 안 잡힌 셸에서 3단계를 돌리면 다른 리전을 조회해 ESM 이 `None`, DynamoDB 가 0 으로
+나온다(리소스는 멀쩡한데 안 보이는 것).
 
 그날 지급된 제공 바이너리가 IAM 인증을 지원하는지에 따라 1단계 apply 명령이 갈린다:
 
 ```bash
 # cwd: module-4-msk
+export AWS_DEFAULT_REGION=ap-northeast-1
+
 ./select-auth-mode.sh
 ```
 
@@ -32,7 +38,7 @@ terraform output -json > outputs.json
 ```bash
 cat > .env <<EOF
 export AWS_DEFAULT_REGION=ap-northeast-1
-export NUM=$NUM
+export NUM=$(jq -r '.player_number.value' outputs.json)
 export CLUSTER_ARN=$(jq -r '.cluster_arn.value' outputs.json)
 export BOOTSTRAP=$(jq -r '.bootstrap_brokers_sasl_iam.value' outputs.json)   # IAM 9098
 export TOPIC_RAW=wsc2026-sensor-raw
@@ -40,8 +46,22 @@ export BUCKET=$(jq -r '.alert_bucket.value' outputs.json)
 export BASTION_IP=$(jq -r '.bastion_public_ip.value' outputs.json)
 EOF
 
-source .env && scp .env ec2-user@$BASTION_IP:~/.env      # 비번: Skill53##
+source .env
 ```
+
+bastion 으로 올린다. SSM 경로가 기본이다 — 22 를 안 거치므로 아웃바운드 22 가 막힌 망에서도 된다:
+
+```bash
+BID=$(terraform output -raw bastion_instance_id)
+ENV_B64=$(base64 -w0 .env)
+aws ssm send-command --instance-ids "$BID" --document-name AWS-RunShellScript \
+  --parameters "commands=[\"echo $ENV_B64 | base64 -d > /home/ec2-user/.env\",\"chown ec2-user:ec2-user /home/ec2-user/.env\"]" \
+  --query "Command.CommandId" --output text
+```
+
+22 가 열려 있는 망이면 `scp .env ec2-user@$BASTION_IP:~/.env` (비번 `Skill53##`) 도 된다. 대회장 망은
+22 를 막을 수 있고(채점이 전부 CloudShell/콘솔 443 이라 주최측이 열어둘 이유가 없다), 위 `send-command`
+경로는 로컬에 Session Manager plugin 도 필요 없다.
 
 ### 3) [본 PC] 파이프라인 기동 확인 (각 최대 10분)
 
