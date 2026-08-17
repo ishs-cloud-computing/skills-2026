@@ -148,13 +148,6 @@ Select-String -Path eksctl/rendered/cluster.yaml -Pattern 'vpc-|subnet-|arn:aws:
 eksctl create cluster -f eksctl/rendered/cluster.yaml   # kubeconfig 는 $env:KUBECONFIG(모듈 경로)에 기록됨
 ```
 
-생성은 실측 **약 19분**이라 도구·셸 타임아웃(보통 10분)을 넘긴다. 타임아웃으로 중간에 끊기는 환경이라면 별도 창에 detach 실행하고 로그 파일로 진행을 확인한다:
-
-```powershell
-Start-Process pwsh -ArgumentList "-NoProfile","-Command","`$env:KUBECONFIG='$PWD\kubeconfig'; eksctl create cluster -f eksctl/rendered/cluster.yaml" -RedirectStandardOutput eksctl.log -RedirectStandardError eksctl.err -WindowStyle Hidden
-Get-Content eksctl.log -Tail 5   # 진행 확인. "is ready" 가 나오면 완료
-```
-
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
 
 빌드에 필요한 3개 파일(`app/Dockerfile`, `provided/module-4/worker.py`, `.env`)을 module 홈폴더(`module-4-sqs-scaling/`)에 zip으로 묶은 뒤 그 zip 하나만 업로드한다 — 파일 3개를 개별 업로드하는 것보다 실수(빠뜨림·다른 리전 탭 재업로드)가 적다.
@@ -164,7 +157,6 @@ Compress-Archive -Path app\Dockerfile,..\provided\module-4\worker.py,.env -Desti
 ```
 
 **us-west-2 CloudShell**에서 작업 → 파일 업로드로 `m4.zip`을 올린다. 업로드 파일은 항상 홈(`/home/cloudshell-user`)에 평평하게 저장되고, CloudShell 홈은 리전별로 분리되므로 반드시 us-west-2 탭에서 올려야 한다.
-
 ```bash
 mkdir -p ~/module4-build && cd ~/module4-build
 unzip -oj ~/m4.zip
