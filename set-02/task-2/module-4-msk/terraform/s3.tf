@@ -8,8 +8,8 @@ resource "aws_s3_bucket" "alert" {
 }
 
 locals {
-  # iam(기본): 자체 IAM 바이너리(9098, `app/producer`). tls: 제공 바이너리(9094) — 호환 우회.
-  app_source = var.producer_auth_mode == "iam" ? "${path.module}/${var.iam_producer_binary_path}" : "${path.module}/../../provided/module4/app"
+  # 대회 제공 바이너리만 배포한다 (자체 제작 대체 바이너리 없음).
+  app_source = "${path.module}/../../provided/module4/app"
 }
 
 resource "aws_s3_object" "app" {

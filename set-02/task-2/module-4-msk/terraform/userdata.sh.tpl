@@ -47,8 +47,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-# tls: 제공 바이너리(9094 비인증 TLS). iam: 자체 IAM 전용 바이너리(SASL/IAM 9098, AWS_REGION 으로 signer 리전 지정).
-# 바이너리 선택은 producer_auth_mode 로 결정(s3.tf), 엔드포인트는 그에 맞춰 주입된다.
+# 제공 바이너리 (9094 비인증 TLS) — s3.tf 참고.
 Environment=BOOTSTRAP_SERVERS=${app_bootstrap_servers}
 Environment=TOPIC_RAW=${raw_topic_name}
 Environment=AWS_REGION=${region}

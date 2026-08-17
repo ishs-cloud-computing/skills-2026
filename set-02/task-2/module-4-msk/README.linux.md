@@ -65,7 +65,7 @@ aws logs tail /aws/lambda/wsc2026-sensor-alert-consumer --since 15m --format sho
 aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | grep "ALERT -"   # 위가 비면 여기부터
 ```
 
-바이너리 판별은 `./check-binary-auth.sh app/producer` (cwd: module-4-msk).
+제공 바이너리 IAM 지원 여부 재검증(cwd: module-4-msk, 결과는 항상 "불가"가 정상 — 배포는 TLS 고정): `./check-binary-auth.sh ../provided/module4/app`.
 
 ### 5) [bastion·bash] kafka 디버깅 + 셀프 채점
 
