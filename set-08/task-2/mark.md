@@ -171,48 +171,55 @@ curl -s -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:80
 aws ec2 describe-vpcs --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-vpc,skills-lattice-service-vpc --output table
 ```
 
-#### 2-2. Client/Service EC2 및 애플리케이션 구성 (배점 1.5)
+#### 2-2. Client/Service EC2 및 애플리케이션 구성 (배점 1.5) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
 2) Client/Service EC2 상태, Public IP 조건, Client `/health` HTTP 200 응답을 확인합니다.
 
 ```bash
-aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2,skills-lattice-service-ec2 Name=instance-state-name,Values=running --output table
-curl -s -w "\nhttp_code=%{http_code}\n" http://${LATTICE_CLIENT_EC2_PUBLIC_IP}/health
+aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2,skills-lattice-service-ec2 Name=instance-state-name,Values=running --query 'Reservations[].Instances[].{Name:Tags[?Key==`Name`].Value|[0],Id:InstanceId,Type:InstanceType,PublicIp:PublicIpAddress,PrivateIp:PrivateIpAddress,State:State.Name}' --output table
+LATTICE_CLIENT_EC2_PUBLIC_IP=$(aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || true)
+curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${LATTICE_CLIENT_EC2_PUBLIC_IP}/health"
 ```
 
-#### 2-3. VPC Lattice Service Network 및 Service 구성 (배점 1.5)
+#### 2-3. VPC Lattice Service Network 및 Service 구성 (배점 1.5) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
 2) Service Network가 존재하고, Service, VPC Association, Service Association이 ACTIVE 상태인지 확인합니다.
 
 ```bash
-aws vpc-lattice list-service-networks --region ap-northeast-1 --output table
-aws vpc-lattice list-services --region ap-northeast-1 --output table
-aws vpc-lattice list-service-network-vpc-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --output table
-aws vpc-lattice get-service-network-vpc-association --region ap-northeast-1 --service-network-vpc-association-identifier "$(aws vpc-lattice list-service-network-vpc-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --query "items[0].id" --output text)" --output table
-aws vpc-lattice list-service-network-service-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --output table
+SERVICE_NETWORK_ID=$(aws vpc-lattice list-service-networks --region ap-northeast-1 --query 'items[?name==`skills-lattice-sn`].id|[0]' --output text 2>/dev/null || true)
+aws vpc-lattice list-service-networks --region ap-northeast-1 --query 'items[?name==`skills-lattice-sn`].{Name:name,Id:id,AssociatedVPCs:numberOfAssociatedVPCs,AssociatedServices:numberOfAssociatedServices}' --output table
+aws vpc-lattice list-services --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-service`].{Name:name,Id:id,Dns:dnsEntry.domainName,Status:status}' --output table
+aws vpc-lattice list-service-network-vpc-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --query 'items[].{AssociationId:id,VpcId:vpcId,Status:status}' --output table
+VPC_ASSOCIATION_ID=$(aws vpc-lattice list-service-network-vpc-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --query 'items[0].id' --output text 2>/dev/null || true)
+echo "VPC_ASSOCIATION_ID=${VPC_ASSOCIATION_ID}"
+aws vpc-lattice get-service-network-vpc-association --region ap-northeast-1 --service-network-vpc-association-identifier "$VPC_ASSOCIATION_ID" --query '{AssociationId:id,VpcId:vpcId,Status:status,SecurityGroupIds:securityGroupIds}' --output table
+aws vpc-lattice list-service-network-service-associations --region ap-northeast-1 --service-network-identifier "$SERVICE_NETWORK_ID" --query 'items[].{ServiceId:serviceId,Status:status,Dns:dnsEntry.domainName}' --output table
 ```
 
-#### 2-4. Target Group, Listener, Security Group 구성 (배점 1.5)
+#### 2-4. Target Group, Listener, Security Group 구성 (배점 1.5) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) Target Group, Target, Listener, Service EC2 Security Group 구성이 요구사항과 일치하는지 확인합니다.
+2) Target Group, Target, Listener, Service EC2 Security Group 구성이 요구사항과 일치하는지 확인합니다. Service EC2 Security Group의 TCP/8080 Inbound는 VPC Lattice Managed Prefix List로 제한되어야 하며 `0.0.0.0/0` 허용 시 미충족입니다.
 
 ```bash
-aws vpc-lattice list-target-groups --region ap-northeast-1 --output table
-aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TARGET_GROUP_ID" --output table
-aws vpc-lattice list-listeners --region ap-northeast-1 --service-identifier "$SERVICE_ID" --output table
-aws ec2 describe-security-groups --region ap-northeast-1 --group-ids "$SERVICE_EC2_SECURITY_GROUP_ID" --output json
+TARGET_GROUP_ID=$(aws vpc-lattice list-target-groups --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-tg`].id|[0]' --output text 2>/dev/null || true)
+SERVICE_ID=$(aws vpc-lattice list-services --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-service`].id|[0]' --output text 2>/dev/null || true)
+SERVICE_SG_IDS=$(aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-service-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].SecurityGroups[].GroupId' --output text 2>/dev/null || true)
+aws vpc-lattice list-target-groups --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-tg`].{Name:name,Id:id,Type:type,Port:port,Protocol:protocol,Vpc:vpcIdentifier,Status:status}' --output table
+aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TARGET_GROUP_ID" --query 'items[].{Target:id,Port:port,Status:status}' --output table
+aws vpc-lattice list-listeners --region ap-northeast-1 --service-identifier "$SERVICE_ID" --query 'items[?name==`skills-lattice-http-listener`].{Name:name,Id:id,Port:port,Protocol:protocol}' --output table
+aws ec2 describe-security-groups --region ap-northeast-1 --group-ids $SERVICE_SG_IDS --query 'SecurityGroups[].{GroupId:GroupId,GroupName:GroupName,VpcId:VpcId,Inbound:IpPermissions}' --output json
 ```
 
 #### 2-5. End-to-End 기능 검증 (배점 1.5)
 
 1) 아래 명령어를 입력합니다.
-2) Client API가 HTTP 200을 반환하고 `order_id=1001, via=vpc-lattice` 값이 포함되는지 확인합니다.
+2) Client API가 HTTP 200을 반환하고 응답 JSON에 `client=ok, service.order_id=1001, service.via=vpc-lattice`가 포함되는지 확인합니다.
 
 ```bash
-curl -s -w "\nhttp_code=%{http_code}\n" "http://${LATTICE_CLIENT_EC2_PUBLIC_IP}/v1/client/orders?id=1001"
+curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${LATTICE_CLIENT_EC2_PUBLIC_IP}/v1/client/orders?id=1001"
 ```
 
 ---
@@ -287,17 +294,17 @@ aws logs describe-log-groups --region ap-southeast-1 --log-group-name-prefix /aw
 
 > 본 모듈은 오레곤 리전(us-west-2)에서 채점합니다.
 
-#### 4-1. EKS Cluster, VPC, Fargate Profile 구성 (배점 1.25)
+#### 4-1. EKS Cluster, VPC, Fargate Profile 구성 (배점 1.25) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) EKS Cluster와 Fargate Profile 2개가 ACTIVE이며 CloudShell에서 `kubectl` 접근 가능한지 확인합니다.
+2) EKS Cluster와 Fargate Profile 2개가 ACTIVE이며(각 Namespaces에 keda/karpenter 포함), CloudShell에서 `kubectl` 접근 가능한지 확인합니다. `Version`·`Role`은 채점 대상이 아니며 EKS 버전은 풀이자 지정입니다.
 
 ```bash
-aws eks describe-cluster --region us-west-2 --name skills-sqs-cluster --output table
-aws eks describe-fargate-profile --region us-west-2 --cluster-name skills-sqs-cluster --fargate-profile-name skills-sqs-fp-keda --output table
-aws eks describe-fargate-profile --region us-west-2 --cluster-name skills-sqs-cluster --fargate-profile-name skills-sqs-fp-karpenter --output table
+aws eks describe-cluster --region us-west-2 --name skills-sqs-cluster --query 'cluster.{Name:name,Status:status,Endpoint:endpoint,VpcId:resourcesVpcConfig.vpcId,Subnets:resourcesVpcConfig.subnetIds}' --output table
+aws eks describe-fargate-profile --region us-west-2 --cluster-name skills-sqs-cluster --fargate-profile-name skills-sqs-fp-keda --query 'fargateProfile.{Name:fargateProfileName,Status:status,Namespaces:selectors[].namespace}' --output table
+aws eks describe-fargate-profile --region us-west-2 --cluster-name skills-sqs-cluster --fargate-profile-name skills-sqs-fp-karpenter --query 'fargateProfile.{Name:fargateProfileName,Status:status,Namespaces:selectors[].namespace}' --output table
 aws eks update-kubeconfig --region us-west-2 --name skills-sqs-cluster
-kubectl get nodes -l eks.amazonaws.com/compute-type=fargate -o wide
+kubectl get nodes -l eks.amazonaws.com/compute-type=fargate -o json | jq '[.items[] | {name:.metadata.name}]'
 ```
 
 #### 4-2. SQS Queue 및 IAM ServiceAccount 구성 (배점 1.25)
@@ -313,37 +320,39 @@ kubectl get serviceaccount karpenter -n karpenter -o yaml
 kubectl get serviceaccount sqs-worker-sa -n skills-sqs -o yaml
 ```
 
-#### 4-3. KEDA/Karpenter Controller Fargate 배포 구성 (배점 1.25)
+#### 4-3. KEDA/Karpenter Controller Fargate 배포 구성 (배점 1.25) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) KEDA/Karpenter Controller Pod가 Running 상태이며 Fargate Node에서 실행되는지 확인합니다.
+2) KEDA/Karpenter Controller Deployment의 availableReplicas가 1 이상, 각 Pod의 phase가 Running이며 Fargate Node에서 실행되는지 확인합니다.
 
 ```bash
-kubectl get deployment,pod -n keda -o wide
-kubectl get deployment,pod -n karpenter -o wide
+kubectl get deployment keda-operator -n keda -o json | jq '{name:.metadata.name, availableReplicas:(.status.availableReplicas // 0), readyReplicas:(.status.readyReplicas // 0)}'
+kubectl get pods -n keda -o json | jq '[.items[] | select(.metadata.name | test("^keda-operator-")) | {name:.metadata.name, phase:.status.phase, node:.spec.nodeName}]'
+kubectl get deployment karpenter -n karpenter -o json | jq '{name:.metadata.name, availableReplicas:(.status.availableReplicas // 0), readyReplicas:(.status.readyReplicas // 0)}'
+kubectl get pods -n karpenter -o json | jq '[.items[] | select(.metadata.name | test("^karpenter-")) | {name:.metadata.name, phase:.status.phase, node:.spec.nodeName}]'
 ```
 
-#### 4-4. Worker Application 및 KEDA ScaledObject 구성 (배점 1.25)
+#### 4-4. Worker Application 및 KEDA ScaledObject 구성 (배점 1.25) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) Worker Deployment, 환경변수, Node Selector, ScaledObject, TriggerAuthentication 구성이 요구사항과 일치하는지 확인합니다.
+2) Worker Deployment(`serviceAccountName=sqs-worker-sa`, `nodeSelector`, env), ScaledObject(`minReplicaCount=0`, `maxReplicaCount=6`, `pollingInterval<=15`, `cooldownPeriod<=30`, trigger `aws-sqs-queue`/`queueLength=2`), TriggerAuthentication(`podIdentity.provider=aws-eks`) 구성이 요구사항과 일치하는지 확인합니다.
 
 ```bash
-kubectl get deployment sqs-worker -n skills-sqs -o yaml
-kubectl get scaledobject sqs-worker-scaledobject -n skills-sqs -o yaml
-kubectl get triggerauthentication sqs-worker-trigger-auth -n skills-sqs -o yaml
+kubectl get deployment sqs-worker -n skills-sqs -o jsonpath='name={.metadata.name}{"\n"}serviceAccountName={.spec.template.spec.serviceAccountName}{"\n"}selector={.spec.selector.matchLabels}{"\n"}podLabels={.spec.template.metadata.labels}{"\n"}nodeSelector={.spec.template.spec.nodeSelector}{"\n"}env={.spec.template.spec.containers[0].env}{"\n"}image={.spec.template.spec.containers[0].image}{"\n"}'
+kubectl get scaledobject sqs-worker-scaledobject -n skills-sqs -o json | jq '{name:.metadata.name, namespace:.metadata.namespace, scaleTargetRef:.spec.scaleTargetRef, minReplicaCount:.spec.minReplicaCount, maxReplicaCount:.spec.maxReplicaCount, pollingInterval:.spec.pollingInterval, cooldownPeriod:.spec.cooldownPeriod, triggers:.spec.triggers}'
+kubectl get triggerauthentication sqs-worker-trigger-auth -n skills-sqs -o json | jq '{name:.metadata.name, namespace:.metadata.namespace, podIdentity:.spec.podIdentity}'
 ```
 
-#### 4-5. Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 (배점 1.25)
+#### 4-5. Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 (배점 1.25) — 20260812 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) NodePool, EC2NodeClass, Worker EC2 Node, Worker Pod 배치가 요구사항과 일치하는지 확인합니다.
+2) NodePool(`nodeClassRef.name=skills-sqs-nodeclass`, labels `skills-nodepool=event-worker`, `consolidationPolicy` 존재), EC2NodeClass(`role` 또는 `instanceProfile` 출력), Worker EC2 Node(`nodepool`/`skillsNodepool` 라벨, `ready=True`), Worker Pod 배치가 요구사항과 일치하는지 확인합니다. `minReplicaCount=0` 특성상 채점 시점에 Worker EC2 Node 또는 Worker Pod가 없을 수 있으며, 이 경우 4-6 Scale Out 실행 결과에서 확인된 출력을 포함해 판정할 수 있습니다.
 
 ```bash
-kubectl get nodepool skills-sqs-nodepool -o yaml
-kubectl get ec2nodeclass skills-sqs-nodeclass -o yaml
-kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker -o wide
-kubectl get pods -n skills-sqs -l app=sqs-worker -o wide
+kubectl get nodepool skills-sqs-nodepool -o json | jq '{name:.metadata.name, labels:.spec.template.metadata.labels, nodeClassRef:.spec.template.spec.nodeClassRef, requirements:.spec.template.spec.requirements, consolidationPolicy:.spec.disruption.consolidationPolicy}'
+kubectl get ec2nodeclass skills-sqs-nodeclass -o json | jq '{name:.metadata.name, role:.spec.role, instanceProfile:.spec.instanceProfile, subnetSelectorTerms:.spec.subnetSelectorTerms, securityGroupSelectorTerms:.spec.securityGroupSelectorTerms, amiFamily:.spec.amiFamily}'
+kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker -o json | jq '[.items[] | {name:.metadata.name, nodepool:.metadata.labels["karpenter.sh/nodepool"], skillsNodepool:.metadata.labels["skills-nodepool"], instanceType:.metadata.labels["node.kubernetes.io/instance-type"], ready:([.status.conditions[] | select(.type=="Ready")][0].status)}]'
+kubectl get pods -n skills-sqs -l app=sqs-worker -o json | jq '[.items[] | {name:.metadata.name, phase:.status.phase, node:.spec.nodeName}]'
 ```
 
 #### 4-6. SQS 기반 Scale Out 및 처리 기능 검증 (배점 1.25)

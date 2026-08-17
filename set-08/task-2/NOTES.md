@@ -123,6 +123,12 @@
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
 
+### 2026-08-17 [공통] mark.md를 정정 패치 내용으로 동기화 (기존 방침 번복)
+- 맥락: mark.md는 mark.pdf 자체가 아니라 우리가 만든 채점기준표 사본이다. 지금까지는 CLAUDE.md 규칙("provided/·task.pdf·mark.pdf는 원본 그대로 두고 정정은 NOTES.md에 기록")을 mark.md에도 유사 적용해 원문 그대로 두고 `mark/mark2-N.sh`·NOTES.md 정정 로그로만 반영했다
+- 채택: 출제 측이 실제로 채점 명령어·판정기준을 바꿨으면(20260807/0809/0812 CHANGELOG) mark.md도 최신 내용으로 갱신한다 — mark.md가 "현재 유효한 채점기준"을 보여주지 못하면 문서로서 의미가 없다는 지적 반영. 2-2·2-3·2-4·2-5·4-1·4-3·4-4·4-5 섹션 코드블록·판정 문구를 각 CHANGELOG 최신본으로 교체, 절 제목에 `— YYYYMMDD 정정 반영` 표기 추가
+- 기각: 종전 방침(mark.md 원문 유지) → mark.pdf 원본이 애초에 없어 "원본 보존"의 실익이 없고, 실제 채점 판정 기준과 문서가 어긋나는 대가만 남았다
+- 대가: mark.md가 더 이상 최초 추출본과 동일하지 않음 — 최초본 대조가 필요하면 git 이력(`git log -- mark.md`)으로 추적. provided/의 CHANGELOG·PATCH 원본은 여전히 무수정 보존
+
 ### 2026-08-17 [module-4] CloudShell 3단계 업로드를 zip 1개로 전환
 - 맥락: 3단계(worker 이미지 build/push)가 `app/Dockerfile`·`provided/module-4/worker.py`·`.env` 3개를 CloudShell에 개별 업로드했다 — 파일 하나 빠뜨리거나 다른 리전 탭에서 업로드하면 build 시점에야 실패가 드러난다
 - 채택: 본 PC에서 `Compress-Archive`로 3개 파일을 module 홈폴더(`module-4-sqs-scaling/`)에 `m4.zip`으로 묶고, CloudShell엔 zip 하나만 업로드 후 `unzip -oj`로 홈에 풀어 진행. 모듈별 zip은 `mN.zip`(module-N)으로 통일 — CloudShell에서 타이핑 짧게. `.gitignore`에 패턴 추가(`**/m[0-9].zip`)해 커밋 방지
