@@ -110,6 +110,17 @@ grep -nE 'vpc-|subnet-|arn:aws:' eksctl/rendered/cluster.yaml
 eksctl create cluster -f eksctl/rendered/cluster.yaml
 ```
 
+### 2-5. 완료 확인
+
+`eksctl create`가 `$KUBECONFIG`(모듈 경로)에 컨텍스트를 자동 기록하므로 별도 `aws eks update-kubeconfig`는 불필요하다 — 아래로 클러스터 생성과 컨텍스트 연결을 함께 확인한다:
+
+```bash
+kubectl config current-context   # 모듈 kubeconfig 파일 경로가 그대로 나오면 연결 확인
+kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
+```
+
+Fargate Node 2개(keda/karpenter용)가 나오면 4단계로 진행한다.
+
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
 
 [README.md](README.md) 3단계를 수행한다.

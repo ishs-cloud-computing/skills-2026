@@ -148,6 +148,17 @@ Select-String -Path eksctl/rendered/cluster.yaml -Pattern 'vpc-|subnet-|arn:aws:
 eksctl create cluster -f eksctl/rendered/cluster.yaml   # kubeconfig 는 $env:KUBECONFIG(모듈 경로)에 기록됨
 ```
 
+### 2-5. 완료 확인
+
+`eksctl create`가 `$env:KUBECONFIG`(모듈 경로)에 컨텍스트를 자동 기록하므로 별도 `aws eks update-kubeconfig`는 불필요하다 — 아래로 클러스터 생성과 컨텍스트 연결을 함께 확인한다:
+
+```powershell
+kubectl config current-context   # 모듈 kubeconfig 파일 경로가 그대로 나오면 연결 확인
+kubectl get nodes -l eks.amazonaws.com/compute-type=fargate
+```
+
+Fargate Node 2개(keda/karpenter용)가 나오면 4단계로 진행한다.
+
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
 
 빌드에 필요한 3개 파일(`app/Dockerfile`, `provided/module-4/worker.py`, `.env`)을 module 홈폴더(`module-4-sqs-scaling/`)에 zip으로 묶은 뒤 그 zip 하나만 업로드한다 — 파일 3개를 개별 업로드하는 것보다 실수(빠뜨림·다른 리전 탭 재업로드)가 적다.
