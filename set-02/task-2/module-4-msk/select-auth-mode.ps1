@@ -27,6 +27,6 @@ if ($providedSupportsIam) {
   Write-Host "  terraform apply -var `"producer_auth_mode=tls`""
   Write-Host ""
   Write-Host "주의: 기본값은 iam 이므로 -var 를 빠뜨리면 자체 바이너리로 배포된다"
-  Write-Host "      (대회 제출 불가). README 'producer 인증 경로' B 절 참고."
+  Write-Host "      (대회 제출 불가). README 'producer 인증 경로' 절 참고."
 }
 Write-Host "===================================================================="

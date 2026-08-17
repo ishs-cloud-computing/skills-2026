@@ -165,15 +165,10 @@ variable "msk_iam_auth_version" {
   default     = "2.3.7"
 }
 
-# producer 인증 경로 스위치. 두 경로를 모두 유지한다 — 성격이 다르다.
-#
-# iam(기본, 정통 경로): 자체 구현 IAM 바이너리(app/producer) + SASL/IAM 9098, 클러스터를
-#   unauthenticated=false 로 좁혀 과제지 "IAM 인증을 통해서만 접근" 요구를 실제로 만족한다.
-#   기본값으로 두는 이유는 이게 과제가 요구하는 올바른 구성이기 때문이다.
-# tls(우회 경로, 대회 제출용 — -var 로 지정): 제공 바이너리(provided/module4/app) +
-#   비인증 TLS 9094. 그 바이너리는 IAM signer 가 없어 9094 로만 붙는다(BINARY-ANALYSIS.md
-#   리버싱 확정). 대회는 제공 바이너리 외 배포를 허용하지 않으므로 대회 당일 실제로 낼 수
-#   있는 경로는 이쪽이다 — 과제지 문구를 리터럴로는 만족하지 못한다.
+# producer 인증 경로 스위치. 이 값 하나가 S3 로 올릴 바이너리·클러스터 unauthenticated 설정·
+# producer 부트스트랩 엔드포인트를 함께 결정한다. 기본값이 iam 인 건 그게 과제지 요구
+# ("IAM 인증을 통해서만 접근")를 실제로 만족하는 구성이기 때문. 두 경로 비교는 README.md
+# "producer 인증 경로" 절.
 variable "producer_auth_mode" {
   description = "producer 접속 방식: iam(자체 바이너리·9098, 기본·정통) 또는 tls(제공 바이너리·9094, 대회 제출 우회)"
   type        = string

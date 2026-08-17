@@ -56,7 +56,17 @@ for i in $(seq 1 40); do
 done
 ```
 
-실측에서는 두 루프 모두 1회에 통과했다. 여러 바퀴 돌면 producer 쪽을 본다 — [README.md](README.md) 3단계의 SSM `send-command` 블록.
+실측에서는 두 루프 모두 1회에 통과했다. 여러 바퀴 돌면 producer 쪽을 본다. **부팅 후 2~3분 지난 뒤에 친다** — 그 전이면 SSM agent 미등록으로 `InvalidInstanceId`, 명령이 끝나기 전 조회면 `InvocationDoesNotExist` 가 난다. 둘 다 2~3분 뒤 재시도하면 된다.
+
+```bash
+PID=$(terraform output -raw producer_instance_id)
+CMD=$(aws ssm send-command --instance-ids "$PID" --document-name AWS-RunShellScript \
+  --parameters 'commands=["systemctl is-active app","journalctl -u app -n 20 --no-pager","tail -30 /var/log/cloud-init-output.log"]' \
+  --query "Command.CommandId" --output text)
+
+sleep 120    # 명령 실행 완료 대기
+aws ssm get-command-invocation --command-id "$CMD" --instance-id "$PID" --query "StandardOutputContent" --output text
+```
 
 ### 4) [본 PC] 리소스 검증
 
@@ -79,7 +89,7 @@ aws logs tail /aws/lambda/wsc2026-sensor-alert-consumer --since 15m --format sho
 aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | grep "ALERT -"   # 위가 비면 여기부터
 ```
 
-개별 바이너리 판별(cwd: module-4-msk): `./check-binary-auth.sh app/producer`(정통 경로·기본 — IAM 지원) / `./check-binary-auth.sh ../provided/module4/app`(대회 제출 우회 — IAM 불가가 정상). 모드 판별 자체는 0단계 `./select-auth-mode.sh`.
+개별 바이너리 판별(cwd: module-4-msk): `./check-binary-auth.sh app/producer` / `./check-binary-auth.sh ../provided/module4/app`. 모드 판별 자체는 0단계 `./select-auth-mode.sh`.
 
 ### 5) [bastion·bash] kafka 디버깅 + 셀프 채점
 
