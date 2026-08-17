@@ -17,6 +17,8 @@ __pycache__/
 # bastion 작업물 회수분 (set-03/task-1 README step 9)
 **/_backup/
 **/_backup.tgz
+# CloudShell 업로드용 빌드 zip (set-08 module-4 3단계, 모듈별 mN.zip)
+**/m[0-9].zip
 # set-02 module-4: sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
 **/lambda/sensor_consumer/*
 !**/lambda/sensor_consumer/index.py

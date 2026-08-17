@@ -157,11 +157,17 @@ Get-Content eksctl.log -Tail 5   # 진행 확인. "is ready" 가 나오면 완�
 
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
 
-**us-west-2 CloudShell**에서 작업 → 파일 업로드로 `app/Dockerfile`, `provided/module-4/worker.py`, `.env`를 올린다. 업로드 파일은 항상 홈(`/home/cloudshell-user`)에 평평하게 저장되고, CloudShell 홈은 리전별로 분리되므로 반드시 us-west-2 탭에서 올려야 한다.
+빌드에 필요한 3개 파일(`app/Dockerfile`, `provided/module-4/worker.py`, `.env`)을 module 홈폴더(`module-4-sqs-scaling/`)에 zip으로 묶은 뒤 그 zip 하나만 업로드한다 — 파일 3개를 개별 업로드하는 것보다 실수(빠뜨림·다른 리전 탭 재업로드)가 적다.
+
+```powershell
+Compress-Archive -Path app\Dockerfile,..\provided\module-4\worker.py,.env -DestinationPath m4.zip -Force
+```
+
+**us-west-2 CloudShell**에서 작업 → 파일 업로드로 `m4.zip`을 올린다. 업로드 파일은 항상 홈(`/home/cloudshell-user`)에 평평하게 저장되고, CloudShell 홈은 리전별로 분리되므로 반드시 us-west-2 탭에서 올려야 한다.
 
 ```bash
 mkdir -p ~/module4-build && cd ~/module4-build
-cp ~/Dockerfile ~/worker.py ~/.env .
+unzip -oj ~/m4.zip
 sed -i 's/\r$//' .env   # CRLF 가드 (멱등) — \r 이 섞이면 ECR_IMAGE 태그가 깨진다
 source .env
 aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"

@@ -123,6 +123,12 @@
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
 
+### 2026-08-17 [module-4] CloudShell 3단계 업로드를 zip 1개로 전환
+- 맥락: 3단계(worker 이미지 build/push)가 `app/Dockerfile`·`provided/module-4/worker.py`·`.env` 3개를 CloudShell에 개별 업로드했다 — 파일 하나 빠뜨리거나 다른 리전 탭에서 업로드하면 build 시점에야 실패가 드러난다
+- 채택: 본 PC에서 `Compress-Archive`로 3개 파일을 module 홈폴더(`module-4-sqs-scaling/`)에 `m4.zip`으로 묶고, CloudShell엔 zip 하나만 업로드 후 `unzip -oj`로 홈에 풀어 진행. 모듈별 zip은 `mN.zip`(module-N)으로 통일 — CloudShell에서 타이핑 짧게. `.gitignore`에 패턴 추가(`**/m[0-9].zip`)해 커밋 방지
+- 기각: 개별 3파일 업로드 유지 → 업로드 누락·오탭 위험이 여전
+- 대가: 없음 (unzip은 CloudShell 기본 제공)
+
 ### 2026-08-01 [공통] 공식 채점 스크립트 수정 diff를 mark/에 적용
 - 맥락: 협의회가 예고한 공식 예상 출력 파일(`008_chall_2nd_patched_0801.md`)이 도착 — 판정 기준 전문 + 채점 스크립트 4개의 수정 diff(CloudShell 도구 자동 설치 헤더, module-4는 조회를 yaml 덤프에서 jq 필드 추출로 교체, 4-6 메시지 body `judge-N` 고정) 포함. 출제 측은 원본 파일을 직접 수정하지 않고 정정본을 별도 배포하는 방식
 - 채택: 공식 문서 원본은 `provided/008_chall_2nd_patched_0801.md`에 무수정 보존하고, diff는 `mark/mark2-{1..4}.sh`에 적용 — mark/는 "대회에서 실제 실행될 채점 스크립트"를 항상 반영한다는 원칙. `bash -n` 문법 검증 통과
