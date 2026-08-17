@@ -1,6 +1,6 @@
 # Module 4 — MSK 이벤트 스트리밍 (ap-northeast-1)
 
-프라이빗 MSK 로 대회 제공 Go producer 바이너리가 센서 데이터를 발행하면, Lambda consumer 가 이상치를 판별해 정상은 DynamoDB 에 저장하고 이상치는 alert 토픽 → SNS 알림 + S3 저장으로 분기. 클러스터는 SASL/IAM(9098, mark 4-3 판정 대상)과 TLS(9094) 를 함께 열어 두는데, 제공 바이너리가 IAM signer 없이 9094 로만 붙을 수 있어(`BINARY-ANALYSIS.md`) producer 실제 발행 경로는 TLS 다 — IAM 은 bastion CLI·ESM 이 쓴다. 채점은 bastion 또는 CloudShell 에서 `mark/mark2-4.sh` 실행.
+프라이빗 MSK(IAM 전용 인증, SASL/IAM 9098)로 Go producer 가 센서 데이터를 발행하면, Lambda consumer 가 이상치를 판별해 정상은 DynamoDB 에 저장하고 이상치는 alert 토픽 → SNS 알림 + S3 저장으로 분기. 채점은 bastion 또는 CloudShell 에서 `mark/mark2-4.sh` 실행.
 본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(bastion·CloudShell 단계는 공통).
 
 ## 디렉토리 구조
@@ -9,14 +9,14 @@
 module-4-msk/
 ├── terraform/
 │   ├── vpc.tf security.tf iam.tf
-│   ├── msk.tf                        # wsc2026-msk-cluster (3.6.0, t3.small×2, SASL/IAM+TLS 병용)
-│   ├── ec2.tf userdata.sh.tpl        # producer: 토픽 생성 + 제공 바이너리 systemd 'app'
+│   ├── msk.tf                        # wsc2026-msk-cluster (3.6.0, t3.small×2, IAM 전용)
+│   ├── ec2.tf userdata.sh.tpl        # producer: 토픽 생성 + Go 바이너리 systemd 'app'
 │   ├── dynamodb.tf s3.tf sns.tf
 │   ├── lambda.tf                     # consumer 2개 (python3.14) + MSK ESM
 │   ├── bastion.tf                    # kafka CLI 디버깅 겸 채점용
 │   └── lambda/{sensor_consumer,alert_consumer}/index.py
-├── check-binary-auth.ps1/.sh         # 제공 바이너리 IAM 지원 여부 재검증 스크립트
-└── BINARY-ANALYSIS.md                # 제공 바이너리 리버싱 분석 (IAM 구조적 불가 증명)
+├── app/producer                      # 자체 IAM 인증 producer (검증된 산출물)
+└── BINARY-ANALYSIS.md                # 제공 바이너리 분석 + tls 호환 경로
 
 # 제공 원본: task-2/provided/module4/ (수정 금지)
 # 채점: task-2/mark/mark2-4.sh (bastion 또는 CloudShell, ap-northeast-1)
@@ -159,20 +159,19 @@ aws s3 rm "s3://wsc2026-sensor-alert-bucket-$env:NUM/bin/app"
 
 지운 뒤 `terraform apply` 를 다시 돌리면 `aws_s3_object.app` 이 재업로드되니, **정리는 마지막 apply 이후·채점 직전에** 한다.
 
-## producer 인증 (제공 바이너리 · TLS 고정)
+## producer 인증 모드 (기본 IAM 전용)
 
-대회는 제공 바이너리(`provided/module4/app`) 외 배포를 허용하지 않는다 — 자체 제작 대체 바이너리는 대회 당일 쓸 수 없고 저장소에도 두지 않는다. 그 바이너리는 리버싱으로 IAM signer 자체가 없음이 확정됐고(`BINARY-ANALYSIS.md`), 접속 가능한 경로는 9094 TLS(비인증)뿐이다. 그래서 클러스터는 `unauthenticated=true` + 9094 리스너를 항상 열고, 제공 바이너리가 그대로 TLS 로 발행한다 — 모드 전환 없이 이 경로 하나다. **별도 지정이 필요 없다.**
+기본 `producer_auth_mode=iam` (`terraform.tfvars`) — 클러스터가 `unauthenticated=false` 로 좁혀지고 `app/producer` 가 SASL/IAM 9098 로 발행한다. 과제지 "MSK 클러스터는 IAM 인증을 통해서만 접근" 요구를 실제로 만족하는 상태이며 **기본 배포에 별도 지정이 필요 없다**.
 
-과제지 "MSK 클러스터는 IAM 인증을 통해서만 접근" 문구는 이 상태로는 리터럴로 못 만족한다 — 클러스터의 SASL/IAM(9098) 자체는 항상 켜져 있어 mark 4-3(`Sasl.Iam.Enabled=True`) 판정은 통과하지만, producer 가 실제로 타는 경로는 TLS 다. 제공 바이너리로 낼 수 있는 유일한 배포라 감수한다.
-
-제공 바이너리의 IAM 지원 여부를 재검증하려면(결과는 항상 "불가"가 정상):
+`app/producer` 는 저장소에 들어 있는 검증된 산출물이다(별도 빌드 불필요). apply 전에 한 번 판별한다:
 
 ```powershell
 # cwd: module-4-msk (terraform\ 에서 왔다면 cd ..)
-.\check-binary-auth.ps1 ..\provided\module4\app
+.\check-binary-auth.ps1 app\producer
+# 판정: IAM 인증 지원 → SASL/IAM(9098). producer_auth_mode=iam 사용 가능.
 ```
 
-분석 전체는 [BINARY-ANALYSIS.md](BINARY-ANALYSIS.md).
+제공 바이너리(`provided/module4/app`)는 IAM signer 가 없어 이 판정에서 떨어진다 — 그 바이너리를 쓰는 비인증 9094 경로는 과제지 요구를 위반하므로 런북에서 다루지 않는다. 분석과 호환 경로는 [BINARY-ANALYSIS.md](BINARY-ANALYSIS.md).
 
 ## Teardown
 
@@ -188,7 +187,7 @@ terraform destroy                     # 50 리소스 / 실측 23분 5초
 | 항목 | 요구 | 구현 |
 |---|---|---|
 | task 1. VPC | msk-vpc 192.168.0.0/16, pub/priv a·d, 표의 RTB/IGW/NAT 이름 | `vpc.tf` (`variables.tf` subnets 맵) |
-| task 2. MSK | wsc2026-msk-cluster, 3.6.0, kafka.t3.small, 프라이빗, HA, IAM 인증 | `msk.tf` (mark 4-3: `Sasl.Iam.Enabled=True`) — 제공 바이너리 제약으로 producer 는 TLS 고정, 함정 참고 |
+| task 2. MSK | wsc2026-msk-cluster, 3.6.0, kafka.t3.small, 프라이빗, HA, IAM 인증 | `msk.tf` (mark 4-3) — IAM 전용(`producer_auth_mode=iam`), 함정 참고 |
 | task 3. Topic | sensor-raw 3/2, sensor-alert 1/2, PK sensorId | `userdata.sh.tpl` 토픽 생성 + producer/consumer 가 sensorId 키 사용 |
 | task 4. EC2 | wsc2026-sensor-producer t3.small 프라이빗, wsc2026-msk-ec2-role 최소권한 | `ec2.tf` + `iam.tf` + `userdata.sh.tpl` (systemd `app`) |
 | task 5. Lambda | consumer 2개 python3.14, MSK 트리거, wsc2026-msk-lambda-role 최소권한 | `lambda.tf` + `lambda/*/index.py` + `iam.tf` (mark 4-2/4-4) |
@@ -200,7 +199,7 @@ terraform destroy                     # 50 리소스 / 실측 23분 5초
 ## 설계 근거 · 함정
 
 - **MSK 클러스터 생성 31분 40초(실측).** apply 전체 35분 중 이것 하나가 90% 다 — 나머지 49개 리소스는 NAT GW 1분 55초, VPC 배치 sensor_consumer 2분 7초, ESM 55초/2분 37초가 전부다. producer EC2 의 user_data 가 `bootstrap_brokers_sasl_iam` 을 참조해 클러스터 ACTIVE 후에만 부팅된다 — `-target` 으로 EC2 를 먼저 만들지 말 것. 토픽 생성이 첫 부팅에 자동 수행된다(실패 시 bastion 의 kafka CLI 로 수동 생성 가능).
-- **제공 producer 바이너리는 SASL/IAM 을 못 한다** — IAM signer·SigV4 문자열이 통째로 없고 포트가 9094 일 때만 TLS 를 켠다(`BINARY-ANALYSIS.md` / https://github.com/ishs-cloud-computing/skills-2026/issues/49). 대회는 이 바이너리 외 배포를 허용하지 않으므로(자체 제작 대체 바이너리 금지) 발행 경로는 9094 TLS 로 확정이다 — 클러스터는 `unauthenticated=true` 고정. 9094 TLS 는 전송 구간 암호화일 뿐 **인증이 없는 접속**이라 과제지 "IAM 인증을 통해서만 접근" 문구를 리터럴로는 못 만족하지만, 제공 바이너리로 낼 수 있는 유일한 경로다.
+- **제공 producer 바이너리는 SASL/IAM 을 못 한다** — IAM signer·SigV4 문자열이 통째로 없고 포트가 9094 일 때만 TLS 를 켠다(`BINARY-ANALYSIS.md` / https://github.com/ishs-cloud-computing/skills-2026/issues/49). 그래서 발행은 저장소의 `app/producer`(IAM 전용)가 맡고 클러스터는 `unauthenticated=false` 다. 9094 TLS 는 전송 구간 암호화일 뿐 **인증이 없는 접속**이고, 9098 IAM 이 TLS 위에 SASL/IAM 신원 인증까지 얹은 경로 — 과제지 요구는 후자다. 비인증 9094 경로(`producer_auth_mode=tls`)는 호환 우회라 런북에서 뺐고, 절차는 `BINARY-ANALYSIS.md` 의 "호환성 참고" 절에 있다.
 - **mark 4-5-A 가 `temperature.S`/`status.S` 를 조회 — DynamoDB 에 Number 로 저장하면 0점.** sensor_consumer 는 전 속성을 String 으로 저장한다.
 - **`pip install -t` 를 건너뛰면 zip 에 kafka-python 이 빠져 import 실패로 조용히 죽는다** → `lambda.tf` 의 precondition 이 apply 단계에서 잡아준다. kafka-python 3.0.8 / aws-msk-iam-sasl-signer-python 1.0.2 는 pure-python 이라 Windows/리눅스 동일하게 동작 (Docker 불필요).
 - **Lambda 런타임은 python3.14 정확 일치** (mark 4-2). aws provider 6.21+ 에서 지원 — versions.tf `~> 6.54` 로 충족.

@@ -92,14 +92,24 @@ r2 -2 -q -c 'af @ 0x6786c0; pdf @ 0x6786c0' ../provided/module4/app | grep -E 'c
 # 기대: cmp rax, 0x2386  /  mov word [rax + 0x108], 0x303
 ```
 
-## 대회 배포 경로 — TLS 고정
+## 호환성 참고 — `producer_auth_mode=tls` (대회 런북 대상 아님)
 
-대회는 제공 바이너리(`../provided/module4/app`) 외 배포를 허용하지 않는다 — 자체 제작 대체 바이너리는 대회 규정상 쓸 수 없고 저장소에도 두지 않는다. 위 분석대로 이 바이너리는 IAM 인증이 구조적으로 불가능하므로, 실제로 낼 수 있는 유일한 경로는 9094 TLS(비인증)다. `terraform apply` 는 모드 전환 없이 이 경로 하나로 고정돼 있다.
+기본 배포는 IAM 전용(`producer_auth_mode=iam`)이다. `tls` 는 이 문서의 분석 결과를 되짚을 때만 쓰는 호환 경로라 README 런북에서 뺐다. 쓸 자리는 둘뿐이다.
 
-- `unauthenticated=true` 와 9094 리스너가 항상 열리고(`msk.tf`), producer SG 에 9094 인바운드가 붙는다(`security.tf`).
-- 엔드포인트는 `terraform output bootstrap_brokers_tls`(9094).
-- 클러스터의 SASL/IAM(9098) 자체는 항상 켜져 있다 — bastion CLI·ESM 은 이걸 쓴다. 채점 스크립트 4-3 은 `Sasl.Iam.Enabled` 만 보므로 통과하지만, 과제지 "IAM 인증을 통해서만 접근" 문구는 producer 실제 경로 기준으론 리터럴로 못 만족한다 — 제공 바이너리 제약이 원인이라 감수한다.
-- 9098 로 접속을 시도하면(예: 배포된 EC2 설정 실수) `unexpected EOF: broker appears to be expecting TLS` 로 영원히 실패한다. 즉시 복구:
+1. 제공 원본 producer 만으로 토픽·Lambda 파이프라인 자체가 도는지 빠르게 보는 경우
+2. IAM producer 가 실패했을 때 IAM 서명 문제인지 나머지 Kafka 경로 문제인지 갈라 보는 경우
+
+둘 다 대회 중 장애 대응 수단으로는 효율이 낮다 — 전환에 클러스터 리스너 변경 + 재적용 대기(~15-30분)가 들어간다.
+
+```powershell
+terraform apply -var "producer_auth_mode=tls"     # 리스너 in-place 변경 ~15-30분
+```
+
+- 이 모드는 클러스터에 `unauthenticated=true` 와 9094 리스너를 열고(`msk.tf`), producer SG 에만 9094 인바운드를 붙인다(`security.tf`). 과제지 "IAM 인증을 통해서만 접근" 요구를 위반한 상태이므로 채점 대상 배포에 쓰지 않는다.
+- 엔드포인트는 `terraform output bootstrap_brokers_tls`(9094). iam 모드에서는 빈 값이다.
+- tls 모드에서 9098 을 주면 `unexpected EOF: broker appears to be expecting TLS` 로 영원히 실패한다. 배포된 EC2 즉시 복구:
   ```bash
   sudo sed -i 's/:9098/:9094/g' /etc/systemd/system/app.service && sudo systemctl daemon-reload && sudo systemctl restart app
   ```
+- 기존 클러스터에 리스너를 추가하는 apply 는 `bootstrap_brokers_tls` 가 빈 값이라 EC2 생성에서 `inconsistent final plan` 으로 1회 실패할 수 있다 — MSK 변경은 이미 적용됐으므로 apply 를 한 번 더 돌린다.
+- 채점 스크립트 4-3 은 `Sasl.Iam.Enabled` 만 보므로 tls 모드로도 4-3 자체는 통과한다. 과제지 문구가 채점 항목보다 넓다는 점이 이 모드를 못 쓰는 이유다.
