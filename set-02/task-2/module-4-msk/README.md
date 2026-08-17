@@ -242,6 +242,41 @@ cd terraform
 terraform destroy                     # 50 리소스 / 실측 23분 5초
 ```
 
+#### destroy 가 SG 삭제에서 멈출 때 — Lambda/MSK ENI 정리
+
+`wsc2026-msk-sg`·`wsc2026-msk-lambda-sg` 는 `DependencyViolation` 으로 남는 경우가 있다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 있어서다 — ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다. 먼저 5~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 남으면 ENI 를 직접 지운다.
+
+```powershell
+$env:AWS_DEFAULT_REGION = "ap-northeast-1"
+
+# 1) 두 SG 를 참조하는 ENI 조회 (Status/Description 으로 정체 확인)
+$SGIDS = aws ec2 describe-security-groups --filters "Name=group-name,Values=wsc2026-msk-sg,wsc2026-msk-lambda-sg" --query "SecurityGroups[].GroupId" --output text
+aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$($SGIDS -replace '\s+',',')" `
+  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
+```
+
+`Description` 이 `AWS Lambda VPC ENI-*` 또는 `Amazon MSK network interface` 면 아래로 정리한다. `Status=in-use` 면 detach 부터, `available` 이면 delete 만 한다.
+
+```powershell
+foreach ($id in ($SGIDS -split '\s+')) {
+  $enis = aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$id" `
+    --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text
+  foreach ($line in ($enis -split "`n" | Where-Object { $_ })) {
+    $eni, $status, $att = $line -split "\s+"
+    if ($status -eq "in-use" -and $att -and $att -ne "None") {
+      aws ec2 detach-network-interface --attachment-id $att --force
+      Start-Sleep 20                  # detach 완료 대기 (available 전이)
+    }
+    aws ec2 delete-network-interface --network-interface-id $eni
+  }
+}
+
+terraform destroy                     # ENI 정리 후 재실행
+```
+
+- Lambda Hyperplane ENI 는 detach 직후 바로 delete 가 안 될 수 있다 — `InvalidParameterValue: Network interface is currently in use` 가 나오면 1~2분 뒤 재시도한다.
+- ENI 를 지웠는데도 SG 가 안 지워지면 다른 SG 의 규칙이 참조 중인 경우다. `aws ec2 describe-security-groups --filters "Name=ip-permission.group-id,Values=<SG_ID>"` 로 참조원을 찾아 해당 규칙을 먼저 지운다(MSK SG 는 셀프 참조 인바운드가 있다).
+
 ## 요구사항 ↔ 구현 매핑
 
 | 항목 | 요구 | 구현 |

@@ -29,6 +29,9 @@
 - 가동 20분 시점: DynamoDB 327건, `alert/` 객체 32개 (발행 간격 약 8초, 이상치 비율 ~10%)
 - `terraform destroy`: 50 리소스 / **23분 5초** (23:13:58 → 23:37:03), 수동 개입 없이 1회 완료.
   MSK 클러스터 삭제가 대부분이다 — 리허설 종료 시각을 잡을 때 이 23분을 빼고 계산한다
+- 단, `wsc2026-msk-sg`·`wsc2026-msk-lambda-sg` 가 `DependencyViolation` 으로 남는 경우가 있다.
+  VPC Lambda(sensor_consumer)·MSK ESM 의 Hyperplane ENI 가 terraform state 밖이라 회수가 늦다.
+  5~10분 뒤 destroy 재실행으로 대개 풀리고, 안 풀리면 ENI detach/delete 수동 정리(런북 Teardown 절)
 
 ---
 ## 결정 로그
