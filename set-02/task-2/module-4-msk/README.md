@@ -20,6 +20,7 @@ module-4-msk/
 ├── app/producer                      # 자체 IAM 인증 producer (검증된 산출물)
 ├── select-auth-mode.ps1/.sh          # 대회 당일 쓸 producer_auth_mode 판별 (0단계)
 ├── check-binary-auth.ps1/.sh         # 개별 바이너리 IAM 지원 여부 검사
+├── teardown-eni.ps1/.sh              # destroy 멈춤 대응 — Lambda/MSK 잔여 ENI 정리
 └── BINARY-ANALYSIS.md                # 제공 바이너리 리버싱 분석 (2026-08-17 배포본 기준)
 
 # 제공 원본: task-2/provided/module4/ (수정 금지)
@@ -249,62 +250,16 @@ terraform destroy                     # 50 리소스 / 실측 23분 5초
 
 #### destroy 가 private 서브넷·VPC 삭제에서 멈출 때 — Lambda/MSK ENI 정리
 
-`msk-priv-a`·`msk-priv-d` 삭제와 그 뒤 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸린다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 남아 서브넷을 잡고 있어서다 — 함수·ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다. 먼저 5~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 걸리면 서브넷의 잔여 ENI 를 직접 지운다.
+`msk-priv-a`·`msk-priv-d` 삭제와 그 뒤 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸린다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 남아 서브넷을 잡고 있어서다 — 함수·ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다. 먼저 5~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 걸리면 `teardown-eni.ps1` 로 잔여 ENI 를 직접 지운다. VPC ID 는 `terraform output vpc_id` 에서 자동으로 읽는다 — 손으로 옮겨 적지 않는다.
 
 ```powershell
-$env:AWS_DEFAULT_REGION = "ap-northeast-1"
-
-# 1) VPC 의 잔여 ENI 조회 — 어느 서브넷을 누가 잡고 있는지 확인
-$VPCID = aws ec2 describe-vpcs --filters "Name=tag:Name,Values=msk-vpc" --query "Vpcs[0].VpcId" --output text
-aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
-  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Subnet:SubnetId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
+# cwd: module-4-msk (terraform\ 에서 왔다면 cd ..)
+.\teardown-eni.ps1
 ```
 
-`Description` 이 `AWS Lambda VPC ENI-*`(sensor_consumer) 또는 `Amazon MSK network interface`(ESM 폴러) 면 잔여물이다. `Status=in-use` 면 detach 부터, `available` 이면 delete 만 한다.
+Lambda Kafka 트리거 삭제 → 이 VPC 를 쓰는 Lambda 의 VPC 연결 해제 → 남은 ENI detach·delete 순으로 진행하고, 각 단계에서 지울 게 없으면(destroy 가 이미 지웠으면) 건너뛴다는 로그를 남긴다. 끝나면:
 
 ```powershell
-# VPC 내 모든 ENI 정보 가져오기
-$enis = aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
-  --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text
-
-# 결과가 비어있지 않은 경우에만 진행
-if ($enis) {
-    # 결과가 단일 행(String)일 경우를 대비해 명시적으로 배열 처리 후 반복
-    foreach ($line in @($enis -split "`r?`n" | Where-Object { $_ -match '\S' })) {
-        
-        # 공백 기준으로 ENI ID, 상태, Attachment ID 분리
-        $eni, $status, $att = $line -split "\s+"
-        
-        Write-Host "처리 중인 ENI: $eni (상태: $status)"
-
-        # 1. 사용 중(in-use)이고 Attachment ID가 존재하는 경우 Detach 진행
-        if ($status -eq "in-use" -and $att -and $att -ne "None") {
-            Write-Host "  -> Attachment $att 연결 해제 중 (Force)..."
-            aws ec2 detach-network-interface --attachment-id $att --force | Out-Null
-            
-            # 2. ENI 상태가 available로 바뀔 때까지 최대 60초 대기 (안정성 강화)
-            $retry = 0
-            while ($retry -lt 12) {
-                Start-Sleep -Seconds 5
-                $currentStatus = aws ec2 describe-network-interfaces --network-interface-ids $eni --query "NetworkInterfaces[0].Status" --output text 2>$null
-                
-                if ($currentStatus -eq "available") {
-                    Write-Host "  -> 연결 해제 완료 (available 상태 진입)"
-                    break
-                }
-                $retry++
-            }
-        }
-
-        # 3. ENI 삭제 진행
-        Write-Host "  -> ENI $eni 삭제 중..."
-        aws ec2 delete-network-interface --network-interface-id $eni
-    }
-} else {
-    Write-Host "해당 VPC에 존재하는 ENI가 없습니다."
-}
-
-
 terraform destroy                     # ENI 정리 후 재실행
 ```
 

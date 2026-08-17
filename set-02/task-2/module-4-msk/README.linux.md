@@ -132,46 +132,17 @@ terraform destroy                     # 50 리소스 / 실측 23분 5초
 
 ### destroy 가 private 서브넷·VPC 삭제에서 멈출 때 — Lambda/MSK ENI 정리
 
-`msk-priv-a`·`msk-priv-d` 와 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸리면 VPC Lambda·MSK ESM 의 Hyperplane ENI 가 아직 회수되지 않은 것이다(배경은 [README.md](README.md) 같은 절). 5~10분 뒤 재시도 → 그래도 걸리면 직접 정리:
+`msk-priv-a`·`msk-priv-d` 와 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸리면 VPC Lambda·MSK ESM 의 Hyperplane ENI 가 아직 회수되지 않은 것이다(배경은 [README.md](README.md) 같은 절). 5~10분 뒤 재시도 → 그래도 걸리면 `teardown-eni.sh` 로 직접 정리한다. VPC ID 는 `terraform output vpc_id` 에서 자동으로 읽는다.
 
 ```bash
+# cwd: module-4-msk (terraform/ 에서 왔다면 cd ..)
 export AWS_DEFAULT_REGION=ap-northeast-1
-VPCID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=msk-vpc" --query "Vpcs[0].VpcId" --output text)
+chmod +x teardown-eni.sh
+./teardown-eni.sh
+```
 
-aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" \
-  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Subnet:SubnetId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
+Lambda Kafka 트리거 삭제 → 이 VPC 를 쓰는 Lambda 의 VPC 연결 해제 → 남은 ENI detach·delete 순으로 진행하고, 각 단계에서 지울 게 없으면(destroy 가 이미 지웠으면) 건너뛴다는 로그를 남긴다. 끝나면:
 
-# VPC 내 모든 ENI 정보 가져오기
-ENIS=$(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" \
-  --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text)
-
-if [ -z "$ENIS" ]; then
-  echo "해당 VPC에 존재하는 ENI가 없습니다."
-else
-  echo "$ENIS" | while read -r eni status att; do
-    [ -z "$eni" ] && continue
-    echo "처리 중인 ENI: $eni (상태: $status)"
-
-    if [ "$status" = "in-use" ] && [ -n "$att" ] && [ "$att" != "None" ]; then
-      echo "  -> Attachment $att 연결 해제 중 (Force)..."
-      aws ec2 detach-network-interface --attachment-id "$att" --force >/dev/null
-
-      # ENI 상태가 available로 바뀔 때까지 최대 60초 대기 (안정성 강화)
-      for retry in $(seq 1 12); do
-        sleep 5
-        current_status=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" \
-          --query "NetworkInterfaces[0].Status" --output text 2>/dev/null)
-        if [ "$current_status" = "available" ]; then
-          echo "  -> 연결 해제 완료 (available 상태 진입)"
-          break
-        fi
-      done
-    fi
-
-    echo "  -> ENI $eni 삭제 중..."
-    aws ec2 delete-network-interface --network-interface-id "$eni"
-  done
-fi
-
+```bash
 terraform destroy
 ```

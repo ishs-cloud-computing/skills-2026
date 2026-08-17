@@ -44,3 +44,10 @@ output "sns_topic_arn" {
   description = "alert consumer 가 발행하는 SNS Topic"
   value       = aws_sns_topic.alert.arn
 }
+
+# teardown 의 ENI 정리 스크립트가 이 값을 쓴다 — 태그 이름(var.vpc_name)으로 다시 찾으면
+# 변수를 바꿨을 때 조용히 어긋날 수 있어 리소스 참조로 직접 낸다
+output "vpc_id" {
+  description = "msk-vpc VPC ID (teardown ENI 정리용)"
+  value       = aws_vpc.msk.id
+}
