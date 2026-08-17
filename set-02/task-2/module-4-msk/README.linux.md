@@ -56,15 +56,17 @@ for i in $(seq 1 40); do
 done
 ```
 
-실측에서는 두 루프 모두 1회에 통과했다. 여러 바퀴 돌면 producer 쪽을 본다. **부팅 후 2~3분 지난 뒤에 친다** — 그 전이면 SSM agent 미등록으로 `InvalidInstanceId`, 명령이 끝나기 전 조회면 `InvocationDoesNotExist` 가 난다. 둘 다 2~3분 뒤 재시도하면 된다.
+실측에서는 두 루프 모두 1회에 통과했다. 여러 바퀴 돌면 producer 쪽을 본다. `send-command` 를 부팅 후 2~3분 안에 치면 SSM agent 미등록으로 `InvalidInstanceId`. `get-command-invocation` 은 명령이 끝나기 전에 조회하면 `InvocationDoesNotExist` — 몇 초면 끝나는 명령이라 5초면 충분하다. 둘 다 나면 몇 분 뒤 재시도.
 
 ```bash
+sleep 180    # SSM agent 등록 대기 (send-command 전, 1회만)
+
 PID=$(terraform output -raw producer_instance_id)
 CMD=$(aws ssm send-command --instance-ids "$PID" --document-name AWS-RunShellScript \
   --parameters 'commands=["systemctl is-active app","journalctl -u app -n 20 --no-pager","tail -30 /var/log/cloud-init-output.log"]' \
   --query "Command.CommandId" --output text)
 
-sleep 120    # 명령 실행 완료 대기
+sleep 5    # 명령 실행 완료 대기
 aws ssm get-command-invocation --command-id "$CMD" --instance-id "$PID" --query "StandardOutputContent" --output text
 ```
 

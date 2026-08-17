@@ -94,15 +94,17 @@ for ($i = 0; $i -lt 40; $i++) {
 }
 ```
 
-두 번째 루프가 끝까지 0이면 producer 쪽을 본다 — SSM 으로 서비스와 부팅 로그를 확인한다. **부팅 후 2~3분 지난 뒤에 친다.** 그 전이면 SSM agent 가 아직 등록되지 않아 `InvalidInstanceId` 가 나고, 명령이 끝나기 전에 조회하면 `InvocationDoesNotExist` 가 난다 — 둘 다 2~3분 뒤 같은 명령을 그대로 재시도하면 된다.
+두 번째 루프가 끝까지 0이면 producer 쪽을 본다 — SSM 으로 서비스와 부팅 로그를 확인한다. `send-command` 를 부팅 후 2~3분 안에 치면 SSM agent 미등록으로 `InvalidInstanceId` 가 난다. `get-command-invocation` 은 명령 실행이 끝나기 전에 조회하면 `InvocationDoesNotExist` — 몇 초면 끝나는 명령이라 5초면 충분하다. 둘 다 나면 몇 분 뒤 재시도.
 
 ```powershell
+Start-Sleep 180    # SSM agent 등록 대기 (send-command 전, 1회만)
+
 $pid_ = terraform output -raw producer_instance_id
 $cmd = aws ssm send-command --instance-ids $pid_ --document-name AWS-RunShellScript `
   --parameters 'commands=["systemctl is-active app","journalctl -u app -n 20 --no-pager","tail -30 /var/log/cloud-init-output.log"]' `
   --query "Command.CommandId" --output text
 
-Start-Sleep 120    # 명령 실행 완료 대기
+Start-Sleep 5    # 명령 실행 완료 대기
 aws ssm get-command-invocation --command-id $cmd --instance-id $pid_ --query "StandardOutputContent" --output text
 ```
 
