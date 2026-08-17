@@ -256,7 +256,7 @@ terraform destroy                     # 50 리소스 / 실측 23분 5초
 
 #### destroy 가 private 서브넷·VPC 삭제에서 멈출 때 — Lambda/MSK ENI 정리
 
-`msk-priv-a`·`msk-priv-d` 삭제와 그 뒤 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸린다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 남아 서브넷을 잡고 있어서다 — 함수·ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다. 먼저 5~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 걸리면 `teardown-eni.ps1` 로 잔여 ENI 를 직접 지운다. VPC ID 는 `terraform output vpc_id` 에서 자동으로 읽는다 — 손으로 옮겨 적지 않는다.
+`msk-priv-a`·`msk-priv-d` 삭제와 그 뒤 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸린다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 남아 서브넷을 잡고 있어서다 — 함수·ESM 이 지워져도 ENI 회수가 수 분\~수십 분 늦다. 먼저 5\~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 걸리면 `teardown-eni.ps1` 로 잔여 ENI 를 직접 지운다. VPC ID 는 `terraform output vpc_id` 에서 자동으로 읽는다 — 손으로 옮겨 적지 않는다.
 
 ```powershell
 # cwd: module-4-msk (terraform\ 에서 왔다면 cd ..)
