@@ -98,27 +98,25 @@ cd terraform
 terraform destroy                     # 50 리소스 / 실측 23분 5초
 ```
 
-### destroy 가 SG 삭제에서 멈출 때 — Lambda/MSK ENI 정리
+### destroy 가 private 서브넷·VPC 삭제에서 멈출 때 — Lambda/MSK ENI 정리
 
-`wsc2026-msk-sg`·`wsc2026-msk-lambda-sg` 가 `DependencyViolation` 으로 남으면 VPC Lambda·MSK ESM 의 Hyperplane ENI 가 아직 회수되지 않은 것이다(배경은 [README.md](README.md) 같은 절). 5~10분 뒤 재시도 → 그래도 남으면 직접 정리:
+`msk-priv-a`·`msk-priv-d` 와 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸리면 VPC Lambda·MSK ESM 의 Hyperplane ENI 가 아직 회수되지 않은 것이다(배경은 [README.md](README.md) 같은 절). 5~10분 뒤 재시도 → 그래도 걸리면 직접 정리:
 
 ```bash
 export AWS_DEFAULT_REGION=ap-northeast-1
-SGIDS=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=wsc2026-msk-sg,wsc2026-msk-lambda-sg" --query "SecurityGroups[].GroupId" --output text)
+VPCID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=msk-vpc" --query "Vpcs[0].VpcId" --output text)
 
-aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$(echo $SGIDS | tr ' ' ',')" \
-  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
+aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" \
+  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Subnet:SubnetId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
 
-for id in $SGIDS; do
-  aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$id" \
-    --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text |
-  while read -r eni status att; do
-    if [ "$status" = "in-use" ] && [ -n "$att" ] && [ "$att" != "None" ]; then
-      aws ec2 detach-network-interface --attachment-id "$att" --force
-      sleep 20
-    fi
-    aws ec2 delete-network-interface --network-interface-id "$eni"
-  done
+aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" \
+  --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text |
+while read -r eni status att; do
+  if [ "$status" = "in-use" ] && [ -n "$att" ] && [ "$att" != "None" ]; then
+    aws ec2 detach-network-interface --attachment-id "$att" --force
+    sleep 20
+  fi
+  aws ec2 delete-network-interface --network-interface-id "$eni"
 done
 
 terraform destroy

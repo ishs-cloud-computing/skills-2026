@@ -242,40 +242,38 @@ cd terraform
 terraform destroy                     # 50 리소스 / 실측 23분 5초
 ```
 
-#### destroy 가 SG 삭제에서 멈출 때 — Lambda/MSK ENI 정리
+#### destroy 가 private 서브넷·VPC 삭제에서 멈출 때 — Lambda/MSK ENI 정리
 
-`wsc2026-msk-sg`·`wsc2026-msk-lambda-sg` 는 `DependencyViolation` 으로 남는 경우가 있다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 있어서다 — ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다. 먼저 5~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 남으면 ENI 를 직접 지운다.
+`msk-priv-a`·`msk-priv-d` 삭제와 그 뒤 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸린다. VPC 배치 Lambda(`sensor_consumer`)와 MSK ESM 이 만든 **Hyperplane ENI** 가 terraform state 밖에 남아 서브넷을 잡고 있어서다 — 함수·ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다. 먼저 5~10분 기다렸다가 `terraform destroy` 를 한 번 더 돌리고, 그래도 걸리면 서브넷의 잔여 ENI 를 직접 지운다.
 
 ```powershell
 $env:AWS_DEFAULT_REGION = "ap-northeast-1"
 
-# 1) 두 SG 를 참조하는 ENI 조회 (Status/Description 으로 정체 확인)
-$SGIDS = aws ec2 describe-security-groups --filters "Name=group-name,Values=wsc2026-msk-sg,wsc2026-msk-lambda-sg" --query "SecurityGroups[].GroupId" --output text
-aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$($SGIDS -replace '\s+',',')" `
-  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
+# 1) VPC 의 잔여 ENI 조회 — 어느 서브넷을 누가 잡고 있는지 확인
+$VPCID = aws ec2 describe-vpcs --filters "Name=tag:Name,Values=msk-vpc" --query "Vpcs[0].VpcId" --output text
+aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
+  --query "NetworkInterfaces[].{Id:NetworkInterfaceId,Subnet:SubnetId,Status:Status,Desc:Description,Attach:Attachment.AttachmentId}" --output table
 ```
 
-`Description` 이 `AWS Lambda VPC ENI-*` 또는 `Amazon MSK network interface` 면 아래로 정리한다. `Status=in-use` 면 detach 부터, `available` 이면 delete 만 한다.
+`Description` 이 `AWS Lambda VPC ENI-*`(sensor_consumer) 또는 `Amazon MSK network interface`(ESM 폴러) 면 잔여물이다. `Status=in-use` 면 detach 부터, `available` 이면 delete 만 한다.
 
 ```powershell
-foreach ($id in ($SGIDS -split '\s+')) {
-  $enis = aws ec2 describe-network-interfaces --filters "Name=group-id,Values=$id" `
-    --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text
-  foreach ($line in ($enis -split "`n" | Where-Object { $_ })) {
-    $eni, $status, $att = $line -split "\s+"
-    if ($status -eq "in-use" -and $att -and $att -ne "None") {
-      aws ec2 detach-network-interface --attachment-id $att --force
-      Start-Sleep 20                  # detach 완료 대기 (available 전이)
-    }
-    aws ec2 delete-network-interface --network-interface-id $eni
+$enis = aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPCID" `
+  --query "NetworkInterfaces[].[NetworkInterfaceId,Status,Attachment.AttachmentId]" --output text
+foreach ($line in ($enis -split "`n" | Where-Object { $_ })) {
+  $eni, $status, $att = $line -split "\s+"
+  if ($status -eq "in-use" -and $att -and $att -ne "None") {
+    aws ec2 detach-network-interface --attachment-id $att --force
+    Start-Sleep 20                    # detach 완료 대기 (available 전이)
   }
+  aws ec2 delete-network-interface --network-interface-id $eni
 }
 
 terraform destroy                     # ENI 정리 후 재실행
 ```
 
 - Lambda Hyperplane ENI 는 detach 직후 바로 delete 가 안 될 수 있다 — `InvalidParameterValue: Network interface is currently in use` 가 나오면 1~2분 뒤 재시도한다.
-- ENI 를 지웠는데도 SG 가 안 지워지면 다른 SG 의 규칙이 참조 중인 경우다. `aws ec2 describe-security-groups --filters "Name=ip-permission.group-id,Values=<SG_ID>"` 로 참조원을 찾아 해당 규칙을 먼저 지운다(MSK SG 는 셀프 참조 인바운드가 있다).
+- ENI 를 다 지웠는데도 VPC 가 안 지워지면 서브넷 외 의존물을 본다: `aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$VPCID"`(있으면 먼저 삭제), NAT GW 가 `deleting` 인 동안에도 서브넷이 안 지워지므로 `available` 이 아닌 상태가 사라질 때까지 기다린다.
 
 ## 요구사항 ↔ 구현 매핑
 
