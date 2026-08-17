@@ -2,6 +2,17 @@
 
 [README.md](README.md) 의 본 PC 단계를 bash 로 옮긴 것. 번호는 README.md 와 1:1 대응이며, bastion·CloudShell 단계는 자리에 stub 으로 표시했다. 대회 본 PC(Windows 11 + PowerShell 7)에서는 README.md 를 쓴다.
 
+### 0) [본 PC] 인증 경로 판별
+
+그날 지급된 제공 바이너리가 IAM 인증을 지원하는지에 따라 1단계 apply 명령이 갈린다:
+
+```bash
+# cwd: module-4-msk
+./select-auth-mode.sh
+```
+
+출력된 apply 명령을 1단계에서 그대로 쓴다. 경로 비교는 [README.md](README.md) 의 "producer 인증 경로" 절.
+
 ### 1) [본 PC] 의존성 번들 + 배포
 
 ```bash
@@ -9,7 +20,10 @@
 cd terraform
 pip install -r lambda/sensor_consumer/requirements.txt -t lambda/sensor_consumer/
 terraform init
+
+# 0단계가 iam 판정 → 아래 그대로. tls 판정 → -var "producer_auth_mode=tls" 를 붙인다.
 terraform apply                       # 50 리소스 / 실측 35분 (MSK 하나가 31분 40초)
+
 terraform output -json > outputs.json
 ```
 
@@ -65,7 +79,7 @@ aws logs tail /aws/lambda/wsc2026-sensor-alert-consumer --since 15m --format sho
 aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | grep "ALERT -"   # 위가 비면 여기부터
 ```
 
-바이너리 판별은 `./check-binary-auth.sh app/producer` (cwd: module-4-msk).
+개별 바이너리 판별(cwd: module-4-msk): `./check-binary-auth.sh app/producer`(정통 경로·기본 — IAM 지원) / `./check-binary-auth.sh ../provided/module4/app`(대회 제출 우회 — IAM 불가가 정상). 모드 판별 자체는 0단계 `./select-auth-mode.sh`.
 
 ### 5) [bastion·bash] kafka 디버깅 + 셀프 채점
 
