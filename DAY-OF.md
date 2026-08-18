@@ -6,6 +6,12 @@
 
 ## 0. 도착 직후
 
+터미널 작업 전에 IAM 부터 끝낸다: SSO 대신 대회 당일 배부받는 IAM 사용자 액세스 키를 쓴다.
+
+1. 배부받은 IAM 사용자로 콘솔 로그인 → 액세스 키 발급. 절차는 [IAM 액세스 키 발급 가이드](https://sungbin-park.tistory.com/142) 참고.
+2. 본 PC에서 `aws configure` 로 발급받은 키를 등록한다 (Access Key ID / Secret / 리전 / 출력형식 `json`).
+3. `aws sts get-caller-identity` 로 등록을 확인한다.
+
 ```powershell
 git clone <저장소> ; cd skills-2026
 mise install
@@ -14,6 +20,7 @@ mise install
 - 세트 번호를 확인한다. 종이 과제지 표지·모듈 구성으로 판별한다.
 - `.env.ps1`(본 PC)·`.env`(CloudShell) 를 재생성한다. 재부팅·CloudShell 세션 초기화 때마다 다시 만든다.
 - CloudShell 접속을 **가장 먼저** 확인한다. 여기가 막히면 채점 경로 전체가 막힌다.
+- 위 IAM 등록까지 끝난 뒤에 종이 과제지를 펼치고 1절로 넘어간다.
 
 ## 1. 종이 과제지 대조 — 형광펜 2색 (15분 이내)
 
