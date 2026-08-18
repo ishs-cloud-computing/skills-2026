@@ -12,8 +12,9 @@
 ```bash
 cd module-4-container-logging
 export KUBECONFIG="$PWD/kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
-zip -r /tmp/m4.zip k8s helm cs-deploy.sh
-zip -j /tmp/m4.zip app/Dockerfile ../provided/module-4/app.py ../mark/mark4-2026-08-04.sh   # -j: 경로 없이 루트에
+rm -f m4.zip
+zip -r m4.zip k8s helm cs-deploy.sh
+zip -j m4.zip app/Dockerfile ../provided/module-4/app.py ../mark/mark4-2026-08-04.sh   # -j: 경로 없이 루트에
 cd terraform
 terraform init
 terraform apply -auto-approve
@@ -57,7 +58,7 @@ eksctl create cluster -f cluster.rendered.yaml
 
 ### 3) [CloudShell — 2단계 대기 중 병렬] 전송 + 이미지 빌드 & ECR push
 
-[README.md](README.md) 3단계 수행 (업로드할 zip 은 `/tmp/m4.zip`).
+[README.md](README.md) 3단계 수행 (업로드할 zip 은 `m4.zip`).
 
 ### 4) [CloudShell] 클러스터 접속 확인 + 노드 검증
 

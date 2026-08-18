@@ -81,8 +81,8 @@ $env:BUCKET     = $o.s3_bucket_name.value
 # CloudShell 은 파일 업로드 UI 가 없고(VPC environment 는 Actions 업로드 자체가 막혀 있다)
 # 레포가 비공개라 git clone 도 불가 → 붙여넣을 수 없는 것만 S3 릴레이로 넘긴다.
 # _transfer/ 는 채점 직전 step 8 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
-tar czf "$env:TEMP\unicorn-cs.tgz" -C .. k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
-aws s3 cp "$env:TEMP\unicorn-cs.tgz" "s3://$env:BUCKET/_transfer/unicorn-cs.tgz"
+tar czf "..\task.tgz" -C .. k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
+aws s3 cp "..\task.tgz" "s3://$env:BUCKET/_transfer/task.tgz"
 aws s3 cp ..\..\..\shared\provided\task-1\book "s3://$env:BUCKET/_transfer/book"   # 8.7MB 바이너리
 ```
 
@@ -229,7 +229,7 @@ curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | b
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 mkdir -p ~/unicorn && cd ~/unicorn
-aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/unicorn-cs.tgz" . && tar xzf unicorn-cs.tgz
+aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/task.tgz" . && tar xzf task.tgz
 cp mark-2026-08-10.sh ~/                                  # /home/cloudshell-user (유의사항 13)
 ```
 
