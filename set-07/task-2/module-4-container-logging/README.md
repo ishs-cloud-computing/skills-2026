@@ -59,7 +59,7 @@ ALB·TG 는 pod 등록(6단계) 전까지 unhealthy — 정상이다.
 ```powershell
 cd module-4-container-logging
 $env:KUBECONFIG = "$PWD\kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
-Compress-Archive -Force -DestinationPath "$env:TEMP\m4.zip" `
+Compress-Archive -Force -DestinationPath m4.zip `
   -Path k8s, helm, cs-deploy.sh, app\Dockerfile, ..\provided\module-4\app.py, ..\mark\mark4-2026-08-04.sh
 cd terraform
 terraform init
@@ -73,13 +73,15 @@ terraform apply -auto-approve
 **① 값 수집·존재 확인**
 
 ```powershell
-cd ../eksctl
-$ACCOUNT_ID = terraform -chdir=../terraform output -raw account_id
-$VPC_ID     = terraform -chdir=../terraform output -raw vpc_id
-$SN = terraform -chdir=../terraform output -json private_subnet_ids | ConvertFrom-Json
+# 1단계에 이어서 실행 (cwd = module-4-container-logging/terraform)
+# PS7 은 -chdir=<path> 를 온전히 전달하지 못한다 — terraform 디렉터리 안에서 직접 조회한다
+$ACCOUNT_ID = terraform output -raw account_id
+$VPC_ID     = terraform output -raw vpc_id
+$SN = terraform output -json private_subnet_ids | ConvertFrom-Json
 # .Replace() 는 빈 값도 그대로 치환해 가드를 통과시키므로 치환 전 비어있음 검사 필수
 if (!$ACCOUNT_ID -or !$VPC_ID -or !$SN.'o11y-sn-priv-a' -or !$SN.'o11y-sn-priv-c') { throw "terraform output 값 누락" }
 [pscustomobject]@{ACCOUNT_ID=$ACCOUNT_ID; VPC_ID=$VPC_ID; SUBNET_A=$SN.'o11y-sn-priv-a'; SUBNET_C=$SN.'o11y-sn-priv-c'} | Format-List
+cd ../eksctl
 ```
 
 **② 치환**

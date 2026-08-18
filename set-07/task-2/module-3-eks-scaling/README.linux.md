@@ -8,8 +8,9 @@
 ```bash
 cd module-3-eks-scaling
 export KUBECONFIG="$PWD/kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
-zip -r /tmp/m3.zip k8s cs-deploy.sh
-zip -j /tmp/m3.zip ../provided/module-3/* ../mark/mark3-2026-08-01.sh   # -j: 경로 없이 루트에 담는다
+rm -f m3.zip
+zip -r m3.zip k8s cs-deploy.sh
+zip -j m3.zip ../provided/module-3/* ../mark/mark3-2026-08-01.sh   # -j: 경로 없이 루트에 담는다
 ```
 
 ### 1) [본 PC] Terraform
@@ -39,7 +40,7 @@ else echo "STOP: terraform output 값 누락"; fi
 
 ### 3) [CloudShell — 2단계 대기 중 병렬] 전송 + 이미지 빌드 & ECR push
 
-[README.md](README.md) 3단계 수행 (업로드할 zip 은 `/tmp/m3.zip`).
+[README.md](README.md) 3단계 수행 (업로드할 zip 은 `m3.zip`).
 
 ### 4) [CloudShell] 클러스터 접속 확인
 

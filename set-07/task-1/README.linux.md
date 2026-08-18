@@ -39,8 +39,8 @@ EOF
 # CloudShell 은 파일 업로드 UI 가 없고(VPC environment 는 Actions 업로드 자체가 막혀 있다)
 # 레포가 비공개라 git clone 도 불가 → 붙여넣을 수 없는 것만 S3 릴레이로 넘긴다.
 # _transfer/ 는 채점 직전 step 8 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
-tar czf /tmp/unicorn-cs.tgz -C .. k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
-aws s3 cp /tmp/unicorn-cs.tgz "s3://$BUCKET/_transfer/unicorn-cs.tgz"
+tar czf ../task.tgz -C .. k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
+aws s3 cp ../task.tgz "s3://$BUCKET/_transfer/task.tgz"
 aws s3 cp ../../../shared/provided/task-1/book "s3://$BUCKET/_transfer/book"   # 8.7MB 바이너리
 ```
 
@@ -135,7 +135,7 @@ aws eks describe-cluster --name unicorn-eks-cluster \
 
 ### 4~5) → README.md step 4~5 (`unicorn-mark` CloudShell — 부트스트랩 · helm · kubectl)
 
-`unicorn-mark` VPC environment 를 만들고 helm 설치 → S3 에서 `unicorn-cs.tgz` 수신 →
+`unicorn-mark` VPC environment 를 만들고 helm 설치 → S3 에서 `task.tgz` 수신 →
 **step 1 이 출력한 `.env` 블록 붙여넣기** → `source ~/.env` → `kubectl get nodes`,
 이어서 helm 애드온 3개 + `kubectl apply -R -f rendered/`. README.md 와 동일한 bash 다.
 

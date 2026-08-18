@@ -71,6 +71,10 @@
 
 #### module-3 함정 (구현 중 발견)
 
+- **[module-3·4 공통] PS7 은 `terraform -chdir=<경로>` 를 온전히 전달하지 못한다** (2026-08-18 실측):
+  `Invalid -chdir option: must include an equals sign followed by a directory path` 로 실패 — terraform 이 `-chdir` 만 받는다.
+  런북에서는 `-chdir` 을 쓰지 말고 해당 terraform 디렉터리 안에서 직접 실행한다(2단계 값 수집을 `cd ../eksctl` 앞으로 옮김).
+  bash 에서는 정상이라 README.linux.md 는 그대로 둔다. 다음 세트 런북도 PowerShell 블록에는 `-chdir` 을 쓰지 않는다.
 - **MNG `tags` 는 EC2 인스턴스에 전파 안 됨**: 노드 Name 태그 채점(3-2)은 eksctl `instanceName` 필드로만 충족된다.
   set-05 의 `tags: {Name: ...}` 패턴은 해당 항목이 미채점이라 안 들켰을 뿐 여기서는 실패한다.
 - **KEDA chart 는 기본 tolerations 가 빈 배열**: addon NG 가 CriticalAddonsOnly taint 라 `--set-json tolerations=[...]` 누락 시

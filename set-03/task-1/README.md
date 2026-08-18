@@ -108,8 +108,8 @@ terraform output -json | Set-Content ..\outputs.json   # PS7 기본 UTF-8 no BOM
 $o = Get-Content ..\outputs.json | ConvertFrom-Json
 $BUCKET = $o.s3_bucket_name.value
 aws s3 cp ..\outputs.json "s3://$BUCKET/_transfer/outputs.json"
-tar czf "$env:TEMP\wsc2026-cs.tgz" -C .. k8s
-aws s3 cp "$env:TEMP\wsc2026-cs.tgz" "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
+tar czf "..\task.tgz" -C .. k8s
+aws s3 cp "..\task.tgz" "s3://$BUCKET/_transfer/task.tgz"
 ```
 
 ### 2) [일반 CloudShell] 컨테이너 이미지 빌드 & ECR push (v1.0.0 단일 태그)
@@ -203,7 +203,7 @@ aws sts get-caller-identity --query Arn --output text    # 본 PC·채점 셸과
 
 BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static')].Name" --output text)
 mkdir -p ~/wsc2026 && cd ~/wsc2026
-aws s3 cp "s3://$BUCKET/_transfer/wsc2026-cs.tgz" . && tar xzf wsc2026-cs.tgz
+aws s3 cp "s3://$BUCKET/_transfer/task.tgz" . && tar xzf task.tgz
 aws s3 cp "s3://$BUCKET/_transfer/outputs.json" .
 
 cat > ~/.env <<EOF

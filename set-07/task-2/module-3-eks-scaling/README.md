@@ -39,7 +39,7 @@ CloudShell 쪽은 홈이 리전별로 갈려 있어 격리가 자동으로 된�
 ```powershell
 cd module-3-eks-scaling
 $env:KUBECONFIG = "$PWD\kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
-Compress-Archive -Force -DestinationPath "$env:TEMP\m3.zip" `
+Compress-Archive -Force -DestinationPath m3.zip `
   -Path k8s, cs-deploy.sh, ..\provided\module-3\*, ..\mark\mark3-2026-08-01.sh
 ```
 
@@ -60,12 +60,14 @@ terraform apply -auto-approve
 ### 2) [본 PC·PowerShell] EKS 클러스터 생성 (~15분 — 3단계와 병렬 진행)
 
 ```powershell
-cd ../eksctl
-$ACCOUNT_ID = terraform -chdir=../terraform output -raw account_id
-$VPC_ID     = terraform -chdir=../terraform output -raw vpc_id
-$SN = terraform -chdir=../terraform output -json private_subnet_ids | ConvertFrom-Json
+# 1단계에 이어서 실행 (cwd = module-3-eks-scaling/terraform)
+# PS7 은 -chdir=<path> 를 온전히 전달하지 못한다 — terraform 디렉터리 안에서 직접 조회한다
+$ACCOUNT_ID = terraform output -raw account_id
+$VPC_ID     = terraform output -raw vpc_id
+$SN = terraform output -json private_subnet_ids | ConvertFrom-Json
 # .Replace() 는 빈 값도 그대로 치환해 가드를 통과시키므로 치환 전 비어있음 검사 필수
 if (!$ACCOUNT_ID -or !$VPC_ID -or !$SN.'skm-eks-sn-priv-a' -or !$SN.'skm-eks-sn-priv-c') { throw "terraform output 값 누락" }
+cd ../eksctl
 $Y = Get-Content cluster.yaml -Raw
 $Y = $Y.Replace('${ACCOUNT_ID}', $ACCOUNT_ID).Replace('${VPC_ID}', $VPC_ID)
 $Y = $Y.Replace('${PRIV_SUBNET_A}', $SN.'skm-eks-sn-priv-a').Replace('${PRIV_SUBNET_C}', $SN.'skm-eks-sn-priv-c')
