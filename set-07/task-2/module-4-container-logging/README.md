@@ -59,7 +59,7 @@ ALB·TG 는 pod 등록(6단계) 전까지 unhealthy — 정상이다.
 ```powershell
 cd module-4-container-logging
 $env:KUBECONFIG = "$PWD\kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
-Compress-Archive -Force -DestinationPath "$env:TEMP\m4.zip" `
+Compress-Archive -Force -DestinationPath m4.zip `
   -Path k8s, helm, cs-deploy.sh, app\Dockerfile, ..\provided\module-4\app.py, ..\mark\mark4-2026-08-04.sh
 cd terraform
 terraform init

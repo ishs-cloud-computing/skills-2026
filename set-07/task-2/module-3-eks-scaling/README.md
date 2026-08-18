@@ -39,7 +39,7 @@ CloudShell 쪽은 홈이 리전별로 갈려 있어 격리가 자동으로 된�
 ```powershell
 cd module-3-eks-scaling
 $env:KUBECONFIG = "$PWD\kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
-Compress-Archive -Force -DestinationPath "$env:TEMP\m3.zip" `
+Compress-Archive -Force -DestinationPath m3.zip `
   -Path k8s, cs-deploy.sh, ..\provided\module-3\*, ..\mark\mark3-2026-08-01.sh
 ```
 
