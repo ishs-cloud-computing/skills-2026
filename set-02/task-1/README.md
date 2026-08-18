@@ -3,6 +3,28 @@
 CloudFront + S3(정적 웹) + EKS(book 앱) + Lambda(예매 조회) + DynamoDB + 모니터링(Grafana)을
 **Terraform / eksctl / Kubernetes manifest** 로 구성한다. 모든 리소스는 서울(`ap-northeast-2`).
 
+> **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
+> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+
+## 값 대조표 (당일 종이 과제지 대조용)
+
+| 축 | 준비본 값 | 다르면 고칠 곳 |
+|---|---|---|
+| 리전 | `ap-northeast-2` | `terraform/terraform.tfvars: region` |
+| 비번호 | `<비번호>` | `terraform.tfvars: player_number` |
+| VPC 이름·CIDR | `wskorea26-vpc` · `172.16.0.0/16` | `terraform.tfvars: vpc_cidr` / `variables.tf: vpc_name` |
+| EKS 클러스터 | `wskorea26-cluster` (네임스페이스 `wskorea26`) | `terraform.tfvars: cluster_name` ⚠ |
+| DynamoDB 테이블 | `wskorea26-data-table` | `terraform.tfvars: table_name` |
+| ECR | `wskorea26-book-repo` | `variables.tf: ecr_repo_name` |
+| Lambda | `wskorea26-book-lambda` · `python3.14` | `variables.tf: lambda_function_name`·`lambda_runtime` |
+| S3 버킷 | `wskorea26-concert-bucket-<비번호>` | `variables.tf: bucket_name_prefix` |
+| CloudFront | `wskorea26-concert-cf` · 헤더 `X-Origin-Verify` | `variables.tf: cloudfront_name`·`origin_verify_header` |
+| ALB | `wskorea26-book-alb` / `wskorea26-grafana-alb` | `variables.tf: book_alb_name`·`grafana_alb_name` |
+| 포트 | app `8080` / grafana `3000` | `variables.tf: container_port`·`grafana_port` |
+| 로그 그룹 | `/wskorea26/eks/pod-logs` | `variables.tf: pod_log_group_name` |
+
+⚠ **이름 접두어 `wskorea26` 는 tfvars 한 줄로 안 끝난다.** `eksctl/cluster.yaml` 과 `k8s/**` 전부에 리터럴로 박혀 있다. 접두어가 바뀌면 두 디렉토리를 전부 치환한다.
+
 ## 디렉토리 구조
 
 ```

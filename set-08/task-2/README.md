@@ -11,6 +11,24 @@
 
 각 모듈의 배포·채점·teardown 절차는 해당 모듈 README(런북)를 따른다. 여기서는 절차를 반복하지 않고 모듈 간 공통 사항만 다룬다.
 
+> **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
+> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+
+## 값 대조표 (당일 종이 과제지 대조용)
+
+| 모듈 | 리전 | 준비본 이름·값 | CIDR |
+|---|---|---|---|
+| module-1-nosql | `ap-northeast-2` (`2a`) | VPC `skills-nosql-vpc` / DocDB 클러스터 `skills-nosql-docdb-cluster`·인스턴스 `skills-nosql-docdb-instance-1`(`db.t3.medium`, 포트 `27017`, 백업 `1`일) / Secret `skills-nosql-docdb-secret` / KMS `alias/skills-nosql-docdb` / EC2 `skills-nosql-client-ec2`(`t3.micro`, 앱 `8080`) | `10.63.0.0/16` |
+| module-2-lattice | `ap-northeast-1` (`1a`) | Client VPC `skills-lattice-client-vpc` / Service VPC `skills-lattice-service-vpc` / EC2 `skills-lattice-client-ec2`·`skills-lattice-service-ec2` / SN `skills-lattice-sn` / Service `skills-lattice-order-service` / TG `skills-lattice-order-tg` / Listener `skills-lattice-http-listener`(`80` → `8080`) | client `10.61.0.0/16` · service `10.62.0.0/16` |
+| module-3-event-handling | `ap-southeast-1` (`1a`) | VPC `skills-ceh-vpc` / EC2 `skills-ceh-ec2`(`t3.micro`) / 보호 SG `skills-ceh-protected-sg` / SNS `skills-ceh-alert-topic` / Lambda `skills-ceh-remediate-fn`(timeout `30`) / Trail `skills-ceh-cloudtrail` / 룰 `skills-ceh-sg-change-rule` | `10.73.0.0/16` |
+| module-4-sqs-scaling | `us-west-2` | 클러스터 `skills-sqs-cluster` / SQS `skills-sqs-queue`(visibility `30`) / ECR `skills-sqs-worker` / 접두 `skills-sqs` | `10.64.0.0/16` |
+
+4모듈 모두 `terraform.tfvars` 가 비어 있고 기본값이 과제지 값이다. **다른 값만 tfvars 에 적어 덮는다.**
+
+⚠ **module-4 `cluster_name` 을 바꾸면 tfvars 로 안 끝난다.** `k8s/10-karpenter-nodepool.yaml` 의 `subnetSelectorTerms`(`karpenter.sh/discovery`)·`securityGroupSelectorTerms`(`aws:eks:cluster-name`) 태그 값과 `eksctl/cluster.yaml` 의 정책 ARN·accessEntry, EC2NodeClass `role` 이 이름을 리터럴로 재조립한다. 놓치면 Karpenter 가 서브넷·SG 를 못 찾아 노드 프로비저닝이 조용히 실패한다.
+
+⚠ **module-2 service SG 에 CIDR 을 절대 추가하지 않는다.** 과제지가 `0.0.0.0/0` 허용 시 미충족을 명시한다.
+
 ## 공통 워크플로
 
 ```powershell

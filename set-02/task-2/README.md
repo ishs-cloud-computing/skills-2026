@@ -9,6 +9,22 @@
 | [module-3-event](module-3-event/) | 정책 위반 자동 복구·알림 | eu-west-1 | EventBridge + Lambda + CloudTrail + Config + SNS | CloudShell |
 | [module-4-msk](module-4-msk/) | MSK 센서 스트리밍 | ap-northeast-1 | VPC + MSK + EC2 + Lambda + DynamoDB + S3 | bastion 또는 CloudShell |
 
+> **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
+> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+
+## 값 대조표 (당일 종이 과제지 대조용)
+
+| 모듈 | 리전 | 준비본 이름·값 | CIDR |
+|---|---|---|---|
+| module-1-workflow | `ap-southeast-1` | 버킷 `wsc2026-student-score-bucket-<비번호>` / 테이블 `wsc2026-student-score` / 함수 `wsc2026-student-score-function`·`-trigger` / 상태머신 `wsc2026-student-score-workflow` / `python3.12` | — |
+| module-2-analytics | `ap-northeast-2` | `analytics-vpc` / EC2 `wsc2026-analytics-ec2`(`t3.small`, 앱 포트 `5000`) / ALB `wsc2026-analytics-alb` / 스트림 `wsc2026-order-stream` / Flink `wsc2026-analytics-flink`(`ZEPPELIN-FLINK-3_0`) / Glue `wsc2026_analytics_db` | `10.20.0.0/16` |
+| module-3-event | `eu-west-1` | `event-vpc` / EC2 `wsc2026-event-ec2`(`t3.micro`) / SG `wsc2026-event-sg` / Trail `wsc2026-event-trail` / SNS `wsc2026-event-alert` / Config 룰 `wsc2026-sg-ssh-rule`·`wsc2026-required-tags-rule` / 필수 태그 키 `Project` | `172.16.0.0/16` |
+| module-4-msk | `ap-northeast-1` | `msk-vpc` / MSK `wsc2026-msk-cluster`(Kafka `3.6.0`, `kafka.t3.small`) / Producer `wsc2026-sensor-producer` / 테이블 `wsc2026-sensor-data` / 함수 `wsc2026-sensor-consumer`·`-alert-consumer` | `192.168.0.0/16` |
+
+각 모듈 `terraform/terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다.
+
+⚠ **module-4 producer 인증 모드는 tfvars 가 아니라 당일 판정 대상이다.** 지급 바이너리가 IAM 인증을 못 하면 `terraform apply -var "producer_auth_mode=tls"` 로 내려간다 (`module-4-msk/select-auth-mode.ps1`).
+
 ## 배포 순서 — 오래 걸리는 것부터, 터미널 병렬
 
 모듈은 서로 의존하지 않는다. **PowerShell 터미널 4개를 열어 모듈별로 하나씩 붙이고, apply 가 오래 걸리는 순서로 착수한다.** module-4 를 먼저 걸어두고 그 30여 분 동안 나머지 셋을 끝내는 게 전체 소요를 지배한다. 순차로 돌리면 합이 50분을 넘지만, 병렬이면 module-4 의 35분이 곧 총 소요다.

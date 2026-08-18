@@ -12,6 +12,26 @@ EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / 
 > 주의/함정·설계 이력은 [NOTES.md](NOTES.md).
 
 
+> **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
+> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+
+## 값 대조표 (당일 종이 과제지 대조용)
+
+| 축 | 준비본 값 | 다르면 고칠 곳 |
+|---|---|---|
+| 리전 | `ap-northeast-2` | `terraform/variables.tf: region` |
+| 이름 접두어 | `wsc2026` | `variables.tf: name_prefix` ⚠ |
+| 비번호·버킷 접미 | `<비번호>` · `bucket_suffix` | `terraform.tfvars: player_number`·`bucket_suffix` |
+| EKS 클러스터 | `wsc2026-eks-cluster` · `1.35` | `variables.tf: cluster_name`·`cluster_version` |
+| VPC 이름·CIDR | `wsc2026-skills-vpc` · `192.168.0.0/16` | `variables.tf: vpc_name`·`vpc_cidr` |
+| DynamoDB 테이블 | `wsc2026-book-table` | `variables.tf: table_name` |
+| ECR | `wsc2026-book-ecr` | `variables.tf: ecr_name` |
+| Lambda | `wsc2026-book-get-function` | `variables.tf: lambda_function_name` |
+| CDN 사용 | `false` | `variables.tf: enable_cdn` |
+| bastion | `true` · `t3.small` | `variables.tf: enable_bastion`·`bastion_instance_type` |
+
+⚠ **접두어가 바뀌면 `name_prefix` 만으로 안 끝난다** (NOTES.md 참조). 서브넷 맵의 **키가 리터럴** `wsc2026-...` 이고, `eksctl/cluster.yaml`·`k8s/**` 도 전부 리터럴이다.
+
 ## NOTICE
 
 채점지의 5-5 항목이 클러스터를 `wsi2026-xxxxx` 형식으로 조회하는 오류를 발견 및 임의 수정하였습니다.  
