@@ -52,8 +52,8 @@ terraform output -json > ../outputs.json
 # S3 릴레이 (VPC CloudShell 은 업로드 UI 없음. _transfer/ 는 채점 전 삭제 — README step 9)
 BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
 aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
-tar czf /tmp/wsc2026-cs.tgz -C .. k8s
-aws s3 cp /tmp/wsc2026-cs.tgz "s3://$BUCKET/_transfer/wsc2026-cs.tgz"
+tar czf ../task.tgz -C .. k8s
+aws s3 cp ../task.tgz "s3://$BUCKET/_transfer/task.tgz"
 ```
 
 ### 2) → README.md step 2 (일반 CloudShell — 이미지 빌드/푸시)
