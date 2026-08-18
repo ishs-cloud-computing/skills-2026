@@ -17,19 +17,28 @@
 
 ### 설치
 
-1. Repository 클론 또는 다운로드
+- 저장소 복제 또는 다운로드
 
 ```bash
 git clone https://github.com/ishs-cloud-computing/skills-2026.git
 cd skills-2026
 ```
 
+- GitLab 미러링 저장소 복제 또는 다운로드
+
+```bash
+git clone https://gitlab.com/ishs-cloud/skills-2026.git
+cd skills-2026
+```
+
+> GitLab 미러링은 대회 전날 밤에 공개로 전환됩니다.
+
 ## 학습 가이드
 
 치트시트, 트러블슈팅 관련 문서는 해당 학습 가이드를 참고해주세요!
 
 - 주소: https://skills-2026-learn-module.vercel.app/
-- 기여: 김우진 [@rladnwls122](https://github.com/rladnwls122)
+- 기여: 김우진 ([@rladnwls122](https://github.com/rladnwls122))
 
 ## 진행 상황
 
