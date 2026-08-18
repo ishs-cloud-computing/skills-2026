@@ -30,7 +30,7 @@ pwsh -ExecutionPolicy Bypass -File .\bootstrap.ps1
 2. 본 PC에서 `aws configure` 로 발급받은 키를 등록한다 (Access Key ID / Secret / 리전 / 출력형식 `json`).
 3. `aws sts get-caller-identity` 로 등록을 확인한다.
 
-**③ 저장소 클론**
+**③ 저장소 클론(② 와 병행)**
 
 ```powershell
 git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-2026
