@@ -6,15 +6,34 @@
 
 ## 0. 도착 직후
 
-터미널 작업 전에 IAM 부터 끝낸다: SSO 대신 대회 당일 배부받는 IAM 사용자 액세스 키를 쓴다.
+**① 도구 설치 — [lab-bootstrap](https://github.com/ishs-cloud-computing/lab-bootstrap)** (Git·AWS CLI·SSM 플러그인·Helm·eksctl·kubectl·Terraform·k9s 일괄 설치)
+
+```powershell
+# 요구 사항: PowerShell 7 + Git (기본 Windows PowerShell 에서 실행)
+winget install --id Microsoft.PowerShell -e --source winget --accept-package-agreements --accept-source-agreements
+winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+```
+
+```powershell
+# 새 터미널에서 설치 실행
+git clone https://github.com/ishs-cloud-computing/lab-bootstrap.git
+cd lab-bootstrap
+pwsh -ExecutionPolicy Bypass -File .\bootstrap.ps1
+# GitHub 막히면 미러: git clone https://gitlab.com/ishs-cloud/lab-bootstrap.git
+```
+
+설치 후 **새 터미널을 연다** (PATH 반영). 재시동 시 파일이 초기화되므로 재부팅 때마다 다시 실행한다.
+
+**② IAM 키 셋업** — SSO 대신 대회 당일 배부받는 IAM 사용자 액세스 키를 쓴다.
 
 1. 배부받은 IAM 사용자로 콘솔 로그인 → 액세스 키 발급. 절차는 [IAM 액세스 키 발급 가이드](https://sungbin-park.tistory.com/142) 참고.
 2. 본 PC에서 `aws configure` 로 발급받은 키를 등록한다 (Access Key ID / Secret / 리전 / 출력형식 `json`).
 3. `aws sts get-caller-identity` 로 등록을 확인한다.
 
+**③ 저장소 클론**
+
 ```powershell
-git clone <저장소> ; cd skills-2026
-mise install
+git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-2026
 ```
 
 - 세트 번호를 확인한다. 종이 과제지 표지·모듈 구성으로 판별한다.
@@ -46,21 +65,22 @@ mise install
 
 ### 2과제 모듈 카탈로그 13개
 
-| # | 모듈 | 필수 서비스 | 구현 있는 세트 |
-|---|---|---|---|
-| 1 | NoSQL | DynamoDB or DocumentDB | set-07 m1, set-08 m1 |
-| 2 | CDN | CloudFront | set-07 m2 |
-| 3 | EKS Scaling | EKS | set-05 m1, set-07 m3, set-08 m4 |
-| 4 | Real-time data analytics | VPC, EC2, ELB, Managed Flink | set-02 m2 |
-| 5 | VPC Lattice | VPC | set-05 m2, set-08 m2 |
-| 6 | Workflow | S3, Lambda, DynamoDB, Step Functions | set-02 m1 |
-| 7 | Cloud event handling | VPC, EC2 | set-02 m3, set-08 m3 |
-| 8 | RDS Connection | RDS, VPC | **없음** |
-| 9 | VPN | Client VPN, VPC, EC2 | **없음** |
-| 10 | Keycloak | VPC, EC2, IAM, Keycloak | **없음** |
-| 11 | Container logging | VPC, Loki, Grafana, EKS, EC2 | set-05 m3, set-07 m4 |
-| 12 | REST API Implement | Lambda | set-05 m4 |
-| 13 | MSK | MSK, VPC | set-02 m4 |
+
+| #  | 모듈                     | 필수 서비스                          | 구현 있는 세트                  |
+| -- | ------------------------ | ------------------------------------ | ------------------------------- |
+| 1  | NoSQL                    | DynamoDB or DocumentDB               | set-07 m1, set-08 m1            |
+| 2  | CDN                      | CloudFront                           | set-07 m2                       |
+| 3  | EKS Scaling              | EKS                                  | set-05 m1, set-07 m3, set-08 m4 |
+| 4  | Real-time data analytics | VPC, EC2, ELB, Managed Flink         | set-02 m2                       |
+| 5  | VPC Lattice              | VPC                                  | set-05 m2, set-08 m2            |
+| 6  | Workflow                 | S3, Lambda, DynamoDB, Step Functions | set-02 m1                       |
+| 7  | Cloud event handling     | VPC, EC2                             | set-02 m3, set-08 m3            |
+| 8  | RDS Connection           | RDS, VPC                             | **없음**                        |
+| 9  | VPN                      | Client VPN, VPC, EC2                 | **없음**                        |
+| 10 | Keycloak                 | VPC, EC2, IAM, Keycloak              | **없음**                        |
+| 11 | Container logging        | VPC, Loki, Grafana, EKS, EC2         | set-05 m3, set-07 m4            |
+| 12 | REST API Implement       | Lambda                               | set-05 m4                       |
+| 13 | MSK                      | MSK, VPC                             | set-02 m4                       |
 
 - 구현이 있는 모듈이면 **그 세트 디렉토리를 통째로 복사**하고 이름·리전만 교체한다. 처음부터 쓰지 않는다.
 - 8·9·10 은 어느 세트에도 없다. 이게 걸리면 맨몸이므로 **시간을 여기에 먼저 배분**한다.
