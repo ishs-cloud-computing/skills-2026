@@ -178,6 +178,12 @@ aws ssm start-session --target (terraform output -raw bastion_instance_id)
 
 ```bash
 # ---- bastion 최초 1회 ----
+# SSM 세션은 ssm-user 의 sh 로 떨어진다 → ec2-user 의 bash 로그인 셸로 전환 (.bashrc/.env 자동 로드)
+sudo su - ec2-user
+
+kubectl version --client   # user_data 가 설치해 둠. 안 나오면 아래로 직접 설치
+# sudo curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo chmod +x /usr/local/bin/kubectl
+
 aws --version        # 2.32.0 이상. 미달이면 user_data 갱신이 실패한 것 — 아래로 직접 갱신한다
 # curl -sL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
 # unzip -q -o /tmp/awscli.zip -d /tmp && sudo /tmp/aws/install --update && hash -r
