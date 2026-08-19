@@ -6,6 +6,15 @@
 
 ## 0. 도착 직후
 
+①~④ 는 직렬이 아니다. `bootstrap.ps1` 이 도는 동안 손이 비므로 **두 트랙으로 병행**한다.
+
+| 터미널 트랙 | 브라우저 트랙 (bootstrap 도는 동안) |
+| --- | --- |
+| ① winget → `bootstrap.ps1` 실행 | ② 콘솔 로그인 → 액세스 키 발급 |
+| ③ 저장소 클론 (Git 은 ① 초반에 이미 설치됨) | ④ CloudShell 탭 그룹 · 즐겨찾기 세팅 |
+
+합류점: `aws configure` 는 ①(AWS CLI 설치)과 ②(키 발급)가 **둘 다 끝난 뒤** 새 터미널에서 한다.
+
 **① 도구 설치 — [lab-bootstrap](https://github.com/ishs-cloud-computing/lab-bootstrap)** (Git·AWS CLI·SSM 플러그인·Helm·eksctl·kubectl·Terraform·k9s 일괄 설치)
 
 ```powershell
@@ -24,13 +33,13 @@ pwsh -ExecutionPolicy Bypass -File .\bootstrap.ps1
 
 설치 후 **새 터미널을 연다** (PATH 반영). 재시동 시 파일이 초기화되므로 재부팅 때마다 다시 실행한다.
 
-**② IAM 키 셋업** — SSO 대신 대회 당일 배부받는 IAM 사용자 액세스 키를 쓴다.
+**② IAM 키 셋업** — SSO 대신 대회 당일 배부받는 IAM 사용자 액세스 키를 쓴다. 발급은 브라우저만 있으면 되므로 bootstrap 이 도는 동안 한다.
 
 1. 배부받은 IAM 사용자로 콘솔 로그인 → 액세스 키 발급. 절차는 [IAM 액세스 키 발급 가이드](https://sungbin-park.tistory.com/142) 참고.
-2. 본 PC에서 `aws configure` 로 발급받은 키를 등록한다 (Access Key ID / Secret / 리전 / 출력형식 `json`).
+2. (① 완료 후) 본 PC에서 `aws configure` 로 발급받은 키를 등록한다 (Access Key ID / Secret / 리전 / 출력형식 `json`).
 3. `aws sts get-caller-identity` 로 등록을 확인한다.
 
-**③ 저장소 클론(② 와 병행)**
+**③ 저장소 클론(bootstrap 과 병행 — Git 은 ① 초반에 이미 설치됨)**
 
 ```powershell
 git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-2026
@@ -39,6 +48,16 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 - 세트 번호를 확인한다. 종이 과제지 표지·모듈 구성으로 판별한다.
 - `.env.ps1`(본 PC)·`.env`(CloudShell) 를 재생성한다. 재부팅·CloudShell 세션 초기화 때마다 다시 만든다.
 - CloudShell 접속을 **가장 먼저** 확인한다. 여기가 막히면 채점 경로 전체가 막힌다.
+
+**④ 브라우저 작업공간 — 모듈별 CloudShell 탭 그룹 (② 에 이어 브라우저 트랙에서)**
+
+2과제는 모듈마다 리전이 다르다. 리전을 착각한 탭에서 명령을 치는 사고를 탭 그룹 번호로 막는다.
+
+1. 모듈별 리전의 CloudShell 을 각각 새 탭으로 연다 (`<리전>.console.aws.amazon.com/cloudshell/home?region=<리전>`).
+2. 탭 우클릭 → **그룹에 탭 추가** → **새 그룹** → 그룹 이름을 모듈 번호(`1`~`4`)로 붙인다. 색은 모듈마다 다르게.
+3. 이후 그 모듈 작업·채점은 반드시 해당 번호 그룹의 탭에서만 한다. 탭을 새로 열면 같은 그룹에 넣는다.
+4. 콘솔 상단 즐겨찾기 바에 자주 쓰는 서비스(VPC·EC2·S3·IAM·RDS·CloudFormation·Secrets Manager·CloudWatch·ECR·WAF·EKS)를 별표로 고정한다. 검색 왕복을 줄인다.
+
 - 위 IAM 등록까지 끝난 뒤에 종이 과제지를 펼치고 1절로 넘어간다.
 
 ## 1. 종이 과제지 대조 — 형광펜 2색 (15분 이내)
@@ -90,6 +109,17 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 필수 7개(VPC·Container·Database·Static hosting·ECR·로드밸런서·Application)는 이미 다 들어가 있다.
 추가분은 **아직 안 쓰인 옵션 5개**에서 나온다 — KMS / WAF / Security(IAM·Pod Identity·IRSA·OIDC) / Lambda GET API / Observability.
 출제지침이 "모니터링 도구 설치" 류를 예시로 들므로 Observability 가 가장 유력하다.
+
+옵션 5개는 전부 **[`shared/addons/`](shared/addons/README.md) 부착 키트**로 대응한다 —
+스니펫 복사 → tfvars 값 주입 → plan 으로 기존 diff 없음 확인 → apply. 기존 문항은 건드리지 않는다.
+
+| 옵션 | 부착 키트 | 비고 |
+| --- | --- | --- |
+| KMS | `shared/addons/kms/` | RDS·EBS·ECR·EKS 는 생성 후 암호화 변경 불가 — 대상 판별 먼저 |
+| WAF | `shared/addons/waf/` | ALB 는 regional, CloudFront 는 us-east-1 alias 필수 |
+| Security | `shared/addons/irsa/` | 채점이 role-arn annotation 읽으면 IRSA, 아니면 Pod Identity |
+| Lambda GET API | set-07 task-1 `lambda.tf` 복사 | set-05 task-2 module-4 (REST API) 도 참고 |
+| Observability | `shared/addons/observability/` | Container Insights 는 addon 한 줄, 도구형은 set-07 monitoring 복사 |
 
 금지선을 넘는 요구는 오독이다. 1과제에는 **인프라 스케일링 문제가 출제되지 않고**, 3rd-party Addon(Istio·Cilium·Calico·Crossplane·Nginx)은 불가하며, Helm 은 채점요소가 될 수 없다.
 
