@@ -2,7 +2,6 @@
 
 [README.md](README.md) 의 본 PC 단계(0·1·3·7·9·10)를 bash 로 옮긴 것.
 원격 단계(2 일반 CloudShell · 4·5·6·8 bastion · 9-2 VPC CloudShell)는 README.md 와 동일.
-설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
 주의/함정·설계 이력은 [NOTES.md](NOTES.md).
 
 ### 0) [본 PC] 도구 준비 + 콘솔 자격증명 로그인 + 사전 변수
@@ -100,7 +99,8 @@ aws eks describe-cluster --name wsc2026-eks-cluster \
 bastion 접속만 bash 로:
 
 ```bash
-aws ssm start-session --target "$(terraform output -raw bastion_instance_id)"   # cwd = terraform
+cd ../terraform   # step 3 이 eksctl 에서 끝남
+aws ssm start-session --target "$(terraform output -raw bastion_instance_id)"
 ```
 
 ### 7) [본 PC] Terraform 2차

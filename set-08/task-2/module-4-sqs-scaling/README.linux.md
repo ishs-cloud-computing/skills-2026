@@ -123,7 +123,11 @@ Fargate Node 2개(keda/karpenter용)가 나오면 4단계로 진행한다.
 
 ## 3. [CloudShell — 2단계 eksctl 생성 대기 중 병렬] worker 이미지 build/push
 
-[README.md](README.md) 3단계를 수행한다.
+zip 묶기만 bash 로 (README.md 3단계의 `Compress-Archive` 대체), 이후 업로드·빌드는 [README.md](README.md) 3단계와 동일:
+
+```bash
+zip -j m4.zip app/Dockerfile ../provided/module-4/worker.py .env
+```
 
 ## 4. helm — Karpenter·KEDA (버전 미핀: 최신 안정)
 

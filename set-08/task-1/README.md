@@ -60,5 +60,5 @@ BIBUNHO=<비번호> bash mark.sh
 ## 정리
 
 ```bash
-cd terraform && terraform destroy
+terraform -chdir=set-08/task-1/terraform destroy   # 저장소 루트 기준
 ```

@@ -148,7 +148,7 @@ aws sts get-caller-identity --query Arn --output text   # CloudShell 에서 ARN 
 ```powershell
 aws eks create-access-entry --cluster-name o11y-cluster --principal-arn <CLOUDSHELL_IAM_ARN> --region ap-northeast-1
 aws eks associate-access-policy --cluster-name o11y-cluster --principal-arn <CLOUDSHELL_IAM_ARN> `
-  --policy-arn arn:aws:eks:aws:cluster-access-policy/AmazonEKSClusterAdminPolicy `
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy `
   --access-scope type=cluster --region ap-northeast-1
 ```
 

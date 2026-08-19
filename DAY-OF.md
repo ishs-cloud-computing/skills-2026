@@ -2,7 +2,9 @@
 
 과제지는 **종이로 배부된다.** 파일 대조(diff)는 불가능하고 눈으로 훑어야 한다.
 재시동하면 파일이 초기화되고, AI 코딩 보조는 없으며(AWS 웹 Q 만 허용), 추가 시간도 없다.
-이 문서는 그 상황에서 위에서 아래로 실행한다. 세트별 값은 각 `set-XX/task-Y/README.md` 의 **값 대조표**를 쓴다.
+이 문서는 그 상황에서 위에서 아래로 실행한다. 세트별 값은 [7절 **값 대조표**](#7-값-대조표)를 쓴다.
+
+런북 코드블록은 붙여넣기 전에 **한 줄씩 칠지 블록째 칠지 먼저 판단**한다 — 앞 명령의 출력·성공 여부에 뒤가 걸리는 블록(로그인·apply·삭제·롤아웃)은 한 줄씩, 단순 설치·조회는 블록째. PowerShell 은 앞 줄이 실패해도 뒤 줄을 계속 실행한다.
 
 ## 0. 도착 직후
 
@@ -21,10 +23,15 @@
 # 요구 사항: PowerShell 7 + Git (기본 Windows PowerShell 에서 실행)
 winget install --id Microsoft.PowerShell -e --source winget --accept-package-agreements --accept-source-agreements
 winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+
+# 스크립트 차단 해제 (기본 Restricted 는 프로필 스크립트도 막음) + 새 탭이 자동으로 pwsh 로 넘어가도록 프로필 수정
+Set-ExecutionPolicy Bypass -Scope CurrentUser -Force
+New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null
+Add-Content $PROFILE 'if (Get-Command pwsh -ErrorAction SilentlyContinue) { pwsh -ExecutionPolicy Bypass; exit }'
 ```
 
 ```powershell
-# 새 터미널에서 설치 실행
+# 새 탭 열면 프로필이 pwsh 로 전환됨 — 그 탭에서 설치 실행
 git clone https://github.com/ishs-cloud-computing/lab-bootstrap.git
 cd lab-bootstrap
 pwsh -ExecutionPolicy Bypass -File .\bootstrap.ps1
@@ -64,6 +71,7 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 
 3. 이후 그 모듈 작업·채점은 반드시 해당 번호 그룹의 탭에서만 한다. 탭을 새로 열면 같은 그룹에 넣는다.
 4. 콘솔 상단 즐겨찾기 바에 자주 쓰는 서비스(VPC·EC2·S3·IAM·RDS·CloudFormation·Secrets Manager·CloudWatch·ECR·WAF·EKS)를 별표로 고정한다. 검색 왕복을 줄인다.
+5. **1과제는 VPC apply 가 끝나는 대로 그 리전 CloudShell 에 VPC environment 를 무조건 만든다** — 프라이빗 리소스(RDS·EKS 프라이빗 엔드포인트) 접근용. bastion 대체라 불필요 EC2 감점을 피한다. 생성: CloudShell 좌측 **+** → **Create VPC environment** → VPC·프라이빗 서브넷·SG 선택. 프라이빗 서브넷이 NAT 를 못 타면 AWS API 호출도 안 나가니 라우팅을 먼저 확인한다.
 
 - 위 IAM 등록까지 끝난 뒤에 종이 과제지를 펼치고 1절로 넘어간다.
 
@@ -71,7 +79,7 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 
 **노랑 = 준비본과 값이 다름. 분홍 = 준비본에 없는 신규 문항.**
 
-1. 해당 세트 README 의 **값 대조표**를 화면에 띄운다.
+1. [7절 **값 대조표**](#7-값-대조표)에서 해당 세트 표를 화면에 띄운다.
 2. 종이 과제지를 위에서 아래로 읽으며 표와 1:1 대조한다.
 3. 값이 다르면 종이에 **노랑**, 표에 없는 요구사항이면 **분홍**.
 4. 채점지가 같이 배부되면 채점지도 같은 방식으로 훑는다. 안 주면 준비본 `mark.md` 기준으로 간다.
@@ -79,6 +87,7 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 대조가 끝나면:
 
 - **노랑** → `terraform.tfvars` 값 교체. 값 대조표에서 ⚠ 가 붙은 축은 tfvars 한 줄로 끝나지 않는다. 표의 "고칠 곳" 에 적힌 파일을 같이 고친다.
+- 리전·prefix 처럼 여러 파일에 흩어진 값은 VS Code 전체 치환으로 잡는다: `code set-XX` 로 열고 **Ctrl+Shift+H**(치환) 또는 **Ctrl+Shift+F**(검색만) → 결과 목록에서 바꾸면 안 되는 라인은 hover 후 **X 로 제외**, 라인별 치환 아이콘으로 개별 적용도 가능 → 남은 것 일괄 치환. 치환 전 결과 목록을 한 번 훑어 `provided/` 가 걸려 있지 않은지 확인한다.
 - **분홍** → 별도 목록으로 빼서 2절로 넘긴다. **기존 문항·기존 모듈은 건드리지 않는다.**
 
 당일 변동은 기존 문제 교체가 아니라 **문항 추가**다. 기존 4모듈을 재작성하려 들면 시간이 날아간다.
@@ -201,3 +210,120 @@ docker push "${ECR}:v2"
 - 과제지가 요구하지 않은 리소스를 지운다. 특히 **작업용 bastion** — 불필요 리소스는 감점이고, 3과제는 EC2 수가 적을수록 고득점이다.
 - bastion 을 지우기 전에 CloudShell 경로를 **먼저 검증**한다. 지운 뒤에 권한이 없다는 걸 알면 손쓸 방법이 없다.
 - 채점 중에는 리소스를 새로 만들거나 시작할 수 없다. 채점 때 쓸 것은 그 시점에 이미 running 이어야 한다.
+
+## 7. 값 대조표
+
+1절 종이 대조에서 쓰는 표. 각 세트 README 에는 여기로 오는 링크만 남겼다.
+**set-05(task-1·2)·set-08 task-1·set-09 task-1 은 대조표 미작성** — 해당 세트가 걸리면 그 README 의 변수 목록(`variables.tf`)으로 직접 대조한다.
+
+### task-1
+
+#### set-02
+
+| 축 | 준비본 값 | 다르면 고칠 곳 |
+|---|---|---|
+| 리전 | `ap-northeast-2` | `terraform/terraform.tfvars: region` |
+| 비번호 | `<비번호>` | `terraform.tfvars: player_number` |
+| VPC 이름·CIDR | `wskorea26-vpc` · `172.16.0.0/16` | `terraform.tfvars: vpc_cidr` / `variables.tf: vpc_name` |
+| EKS 클러스터 | `wskorea26-cluster` (네임스페이스 `wskorea26`) | `terraform.tfvars: cluster_name` ⚠ |
+| DynamoDB 테이블 | `wskorea26-data-table` | `terraform.tfvars: table_name` |
+| ECR | `wskorea26-book-repo` | `variables.tf: ecr_repo_name` |
+| Lambda | `wskorea26-book-lambda` · `python3.14` | `variables.tf: lambda_function_name`·`lambda_runtime` |
+| S3 버킷 | `wskorea26-concert-bucket-<비번호>` | `variables.tf: bucket_name_prefix` |
+| CloudFront | `wskorea26-concert-cf` · 헤더 `X-Origin-Verify` | `variables.tf: cloudfront_name`·`origin_verify_header` |
+| ALB | `wskorea26-book-alb` / `wskorea26-grafana-alb` | `variables.tf: book_alb_name`·`grafana_alb_name` |
+| 포트 | app `8080` / grafana `3000` | `variables.tf: container_port`·`grafana_port` |
+| 로그 그룹 | `/wskorea26/eks/pod-logs` | `variables.tf: pod_log_group_name` |
+
+⚠ **이름 접두어 `wskorea26` 는 tfvars 한 줄로 안 끝난다.** `eksctl/cluster.yaml` 과 `k8s/**` 전부에 리터럴로 박혀 있다. 접두어가 바뀌면 두 디렉토리를 전부 치환한다.
+
+#### set-03
+
+| 축 | 준비본 값 | 다르면 고칠 곳 |
+|---|---|---|
+| 리전 | `ap-northeast-2` | `terraform/variables.tf: region` |
+| 이름 접두어 | `wsc2026` | `variables.tf: name_prefix` ⚠ |
+| 비번호·버킷 접미 | `<비번호>` · `bucket_suffix` | `terraform.tfvars: player_number`·`bucket_suffix` |
+| EKS 클러스터 | `wsc2026-eks-cluster` · `1.35` | `variables.tf: cluster_name`·`cluster_version` |
+| VPC 이름·CIDR | `wsc2026-skills-vpc` · `192.168.0.0/16` | `variables.tf: vpc_name`·`vpc_cidr` |
+| DynamoDB 테이블 | `wsc2026-book-table` | `variables.tf: table_name` |
+| ECR | `wsc2026-book-ecr` | `variables.tf: ecr_name` |
+| Lambda | `wsc2026-book-get-function` | `variables.tf: lambda_function_name` |
+| CDN 사용 | `false` | `variables.tf: enable_cdn` |
+| bastion | `true` · `t3.small` | `variables.tf: enable_bastion`·`bastion_instance_type` |
+
+⚠ **접두어가 바뀌면 `name_prefix` 만으로 안 끝난다** (NOTES.md 참조). 서브넷 맵의 **키가 리터럴** `wsc2026-...` 이고, `eksctl/cluster.yaml`·`k8s/**` 도 전부 리터럴이다.
+
+#### set-07
+
+| 축 | 준비본 값 | 다르면 고칠 곳 |
+|---|---|---|
+| 리전 | `ap-northeast-2` (CloudFront·WAF·KMS 레플리카는 `us-east-1`) | `terraform/variables.tf: region` |
+| 비번호 | `<비번호>` | `variables.tf: player_number` |
+| EKS 클러스터 | `unicorn-eks-cluster` · `1.35` | `variables.tf: cluster_name`·`cluster_version` |
+| VPC CIDR | `10.97.0.0/16` | `variables.tf: vpc_cidr` |
+| 서브넷 이름 | `unicorn-subnet-{pub,priv}-{a,b,c}` (AZ별 1개, 총 6개) | `variables.tf: subnets` |
+| 노드 타입 | `t3.medium` | `variables.tf: node_instance_type` |
+| 감사 Role External ID | `unicorn-audit-2026` | `variables.tf: audit_external_id_prefix` |
+| Grafana 관리자 | 빈 값(주입) | `variables.tf: grafana_admin_user`·`grafana_admin_password` |
+| WAF XSS 룰 | `variables.tf: waf_xss_rules` 목록 | 문항이 추가되면 이 목록에 추가 |
+
+⚠ **이름 접두어 `unicorn` 은 tfvars 밖에도 있다.** `eksctl/cluster.yaml` 과 `k8s/**` 에 리터럴로 박혀 있으니 접두어가 바뀌면 같이 친다. IAM Role 이름은 과제지 지정값과 **정확히** 일치해야 한다.
+
+### task-2
+
+#### set-02
+
+| 모듈 | 리전 | 준비본 이름·값 | CIDR |
+|---|---|---|---|
+| module-1-workflow | `ap-southeast-1` | 버킷 `wsc2026-student-score-bucket-<비번호>` / 테이블 `wsc2026-student-score` / 함수 `wsc2026-student-score-function`·`-trigger` / 상태머신 `wsc2026-student-score-workflow` / `python3.12` | — |
+| module-2-analytics | `ap-northeast-2` | `analytics-vpc` / EC2 `wsc2026-analytics-ec2`(`t3.small`, 앱 포트 `5000`) / ALB `wsc2026-analytics-alb` / 스트림 `wsc2026-order-stream` / Flink `wsc2026-analytics-flink`(`ZEPPELIN-FLINK-3_0`) / Glue `wsc2026_analytics_db` | `10.20.0.0/16` |
+| module-3-event | `eu-west-1` | `event-vpc` / EC2 `wsc2026-event-ec2`(`t3.micro`) / SG `wsc2026-event-sg` / Trail `wsc2026-event-trail` / SNS `wsc2026-event-alert` / Config 룰 `wsc2026-sg-ssh-rule`·`wsc2026-required-tags-rule` / 필수 태그 키 `Project` | `172.16.0.0/16` |
+| module-4-msk | `ap-northeast-1` | `msk-vpc` / MSK `wsc2026-msk-cluster`(Kafka `3.6.0`, `kafka.t3.small`) / Producer `wsc2026-sensor-producer` / 테이블 `wsc2026-sensor-data` / 함수 `wsc2026-sensor-consumer`·`-alert-consumer` | `192.168.0.0/16` |
+
+각 모듈 `terraform/terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다.
+
+⚠ **module-4 producer 인증 모드는 tfvars 가 아니라 당일 판정 대상이다.** 지급 바이너리가 IAM 인증을 못 하면 `terraform apply -var "producer_auth_mode=tls"` 로 내려간다 (`module-4-msk/select-auth-mode.ps1`).
+
+#### set-07
+
+| 모듈 | 리전 | 준비본 이름·값 | CIDR |
+|---|---|---|---|
+| module-1-nosql | `ap-southeast-1` | 테이블 `bigbae-nosql-reservation-table`·`bigbae-nosql-audit-table` / GSI `gsi-user-reservations` / Lambda `bigbae-nosql-reservation-audit` / EC2 `bigbae-nosql-app-ec2`(`t3.small`) | `10.0.0.0/16` (서브넷 `10.0.0.0/24`) |
+| module-2-cdn-function | `us-east-1` | 버킷 접두 `skillsphone-landing-ab-` / KVS `skillsphone-cdn-ab-config` / Function `-req-fn`·`-res-fn` / 배포 `skillsphone-cdn-ab-distribution` / 쿠키 `x-sp-ab` / 가중치 `0.3` / 경로 `/version-a/index.html`·`/version-b/index.html` | — |
+| module-3-eks-scaling | `ap-northeast-2` | 클러스터 `skm-eks-cluster` / SQS `skm-order-queue` / ECR `skm-order-processor` / 접두 `skm-eks` | `10.13.0.0/16` |
+| module-4-container-logging | `ap-northeast-1` | 클러스터 `o11y-cluster` / ECR `o11y-log-generator` / ALB `o11y-app-alb`·`o11y-grafana-alb` / 포트 `8080`·`3000` / 헬스 `/healthz`·`/api/health` | `10.14.0.0/16` |
+
+⚠ **module-2**: 쿠키명·헤더명·KVS 키명이 CloudFront Function 의 **JS 안 리터럴**이라 변수화돼 있지 않다. 이름이 바뀌면 함수 코드를 직접 고친다.
+
+⚠ **module-4**: Grafana 패널의 Loki 라인 필터 `"log generated"` 는 **지급 `app.py` 의 msg 리터럴**이다. 당일 앱이 바뀌어 msg 가 달라지면 필터도 같이 고친다.
+
+#### set-08
+
+| 모듈 | 리전 | 준비본 이름·값 | CIDR |
+|---|---|---|---|
+| module-1-nosql | `ap-northeast-2` (`2a`) | VPC `skills-nosql-vpc` / DocDB 클러스터 `skills-nosql-docdb-cluster`·인스턴스 `skills-nosql-docdb-instance-1`(`db.t3.medium`, 포트 `27017`, 백업 `1`일) / Secret `skills-nosql-docdb-secret` / KMS `alias/skills-nosql-docdb` / EC2 `skills-nosql-client-ec2`(`t3.micro`, 앱 `8080`) | `10.63.0.0/16` |
+| module-2-lattice | `ap-northeast-1` (`1a`) | Client VPC `skills-lattice-client-vpc` / Service VPC `skills-lattice-service-vpc` / EC2 `skills-lattice-client-ec2`·`skills-lattice-service-ec2` / SN `skills-lattice-sn` / Service `skills-lattice-order-service` / TG `skills-lattice-order-tg` / Listener `skills-lattice-http-listener`(`80` → `8080`) | client `10.61.0.0/16` · service `10.62.0.0/16` |
+| module-3-event-handling | `ap-southeast-1` (`1a`) | VPC `skills-ceh-vpc` / EC2 `skills-ceh-ec2`(`t3.micro`) / 보호 SG `skills-ceh-protected-sg` / SNS `skills-ceh-alert-topic` / Lambda `skills-ceh-remediate-fn`(timeout `30`) / Trail `skills-ceh-cloudtrail` / 룰 `skills-ceh-sg-change-rule` | `10.73.0.0/16` |
+| module-4-sqs-scaling | `us-west-2` | 클러스터 `skills-sqs-cluster` / SQS `skills-sqs-queue`(visibility `30`) / ECR `skills-sqs-worker` / 접두 `skills-sqs` | `10.64.0.0/16` |
+
+4모듈 모두 `terraform.tfvars` 가 비어 있고 기본값이 과제지 값이다. **다른 값만 tfvars 에 적어 덮는다.**
+
+⚠ **module-4 `cluster_name` 을 바꾸면 tfvars 로 안 끝난다.** `k8s/10-karpenter-nodepool.yaml` 의 `subnetSelectorTerms`(`karpenter.sh/discovery`)·`securityGroupSelectorTerms`(`aws:eks:cluster-name`) 태그 값과 `eksctl/cluster.yaml` 의 정책 ARN·accessEntry, EC2NodeClass `role` 이 이름을 리터럴로 재조립한다. 놓치면 Karpenter 가 서브넷·SG 를 못 찾아 노드 프로비저닝이 조용히 실패한다.
+
+⚠ **module-2 service SG 에 CIDR 을 절대 추가하지 않는다.** 과제지가 `0.0.0.0/0` 허용 시 미충족을 명시한다.
+
+### task-3
+
+| 축 | 준비본 값 | 다르면 고칠 곳 |
+|---|---|---|
+| 이름 접두어 | `skills` | `terraform/terraform.tfvars: prefix` ⚠ |
+| S3 버킷 | `wsc2026-task3-images-<비번호>` (전역 유일) | `terraform.tfvars: bucket_name` |
+| RDS 식별자 | `apdev-rds-instance` | `terraform.tfvars: db_identifier` |
+| DB 비밀번호 | 주입값 | `terraform.tfvars: db_password` |
+| WAF 보호 경로 | `/v1/user`·`/v1/product`·`/v1/stress`·`/images/*` regex | `terraform.tfvars: waf_api_path_regexes` |
+| 스캐너 UA 목록 | 저장소에 없음 — 당일 WAF 콘솔에서 직접 편집 | task-3 README STEP 12 |
+
+⚠ **`prefix` 한 줄이 모든 리소스 이름을 바꾸지만 코드 전체를 바꾸지는 않는다.** `eksctl/cluster.yaml`·`k8s/00-nodeclass.yaml`·`k8s/20-ingress.yaml`·`scripts/*.sh` 의 클러스터·ALB 이름을 같이 고친다.
+
+⚠ **로그 쿼리의 정상 경로 목록 `<NORMAL_PATHS>` 는 regex 리터럴이라 파라미터화가 안 된다.** 당일 앱 경로가 바뀌면 쿼리 본문을 손으로 치환한다.

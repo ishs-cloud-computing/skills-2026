@@ -6,23 +6,11 @@ EKS 기반 콘서트 예약 플랫폼 인프라를 **Terraform / eksctl / Kubern
 (CloudShell 단계는 공통).
 
 > **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
-> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
 
-## 값 대조표 (당일 종이 과제지 대조용)
+## 값 대조표
 
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 리전 | `ap-northeast-2` (CloudFront·WAF·KMS 레플리카는 `us-east-1`) | `terraform/variables.tf: region` |
-| 비번호 | `<비번호>` | `variables.tf: player_number` |
-| EKS 클러스터 | `unicorn-eks-cluster` · `1.35` | `variables.tf: cluster_name`·`cluster_version` |
-| VPC CIDR | `10.97.0.0/16` | `variables.tf: vpc_cidr` |
-| 서브넷 이름 | `unicorn-subnet-{pub,priv}-{a,b,c}` (AZ별 1개, 총 6개) | `variables.tf: subnets` |
-| 노드 타입 | `t3.medium` | `variables.tf: node_instance_type` |
-| 감사 Role External ID | `unicorn-audit-2026` | `variables.tf: audit_external_id_prefix` |
-| Grafana 관리자 | 빈 값(주입) | `variables.tf: grafana_admin_user`·`grafana_admin_password` |
-| WAF XSS 룰 | `variables.tf: waf_xss_rules` 목록 | 문항이 추가되면 이 목록에 추가 |
-
-⚠ **이름 접두어 `unicorn` 은 tfvars 밖에도 있다.** `eksctl/cluster.yaml` 과 `k8s/**` 에 리터럴로 박혀 있으니 접두어가 바뀌면 같이 친다. IAM Role 이름은 과제지 지정값과 **정확히** 일치해야 한다.
+> [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
 
 ## 디렉토리 구조
 
