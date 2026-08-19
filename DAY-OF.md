@@ -55,6 +55,13 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 
 1. 모듈별 리전의 CloudShell 을 각각 새 탭으로 연다 (`<리전>.console.aws.amazon.com/cloudshell/home?region=<리전>`).
 2. 탭 우클릭 → **그룹에 탭 추가** → **새 그룹** → 그룹 이름을 모듈 번호(`1`~`4`)로 붙인다. 색은 모듈마다 다르게.
+
+   ![탭 우클릭 메뉴에서 그룹에 탭 추가 → 새 그룹, 모듈 번호 1~4로 색 구분](shared/asset/tab-group-cloudshell.png)
+
+   같은 조작은 CloudShell 탭이 아닌 일반 탭에서도 동일하다.
+
+   ![Chrome 탭 우클릭 메뉴의 새 그룹에 탭 추가](shared/asset/tab-group-chrome-menu.png)
+
 3. 이후 그 모듈 작업·채점은 반드시 해당 번호 그룹의 탭에서만 한다. 탭을 새로 열면 같은 그룹에 넣는다.
 4. 콘솔 상단 즐겨찾기 바에 자주 쓰는 서비스(VPC·EC2·S3·IAM·RDS·CloudFormation·Secrets Manager·CloudWatch·ECR·WAF·EKS)를 별표로 고정한다. 검색 왕복을 줄인다.
 
