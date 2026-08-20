@@ -374,14 +374,99 @@ aws s3api list-objects-v2 --bucket "$env:BUCKET" --prefix _transfer/ --query 'Co
 > (유의사항 9) 실행 중 부하/테스트 없어야 함 — 6) 시드는 one-shot. DynamoDB seed item 은 채점이 자체 `booking_id` 로 조회하므로 무방.
 
 
-## 리소스 정리 유의사항
+## 리소스 정리 (teardown)
 
-- DynamoDB 테이블의 리소스 삭제 보호 해제
-- S3 비우기 (S3 버전 관리 관련 리소스 존재)
+destroy 를 막는 지점은 코드에 박혀 있다. 순서를 지키지 않으면 리소스가 남는다.
 
-해당 작업을 진행하지 않고 `terraform destroy` 실행 시 리소스가 완전히 삭제되지 않습니다.
+| 항목 | 근거 | 조치 |
+|---|---|---|
+| DynamoDB 삭제 보호 | `dynamodb.tf` `deletion_protection_enabled = true` | T3 에서 해제 |
+| S3 버전 관리 | `s3.tf` 버전 Enabled, `force_destroy` 없음 | T4 에서 버전·삭제마커까지 비움 |
+| Prometheus PVC | `k8s/01-storageclass.yaml` `reclaimPolicy: Delete` | T1 에서 먼저 — 클러스터를 먼저 지우면 EBS 가 고아로 남는다 |
+| App PDB | `k8s/app/pdb.yaml` | T2 에 `--disable-nodegroup-eviction` (드레인 정지 방지) |
+| ECR 이미지 | `ecr.tf` `force_delete = true` | 조치 불필요 |
 
-`eksctl delete cluster` 는 fully-private 클러스터라 API 에 못 붙어 실패할 수 있다 — `--force` 로 진행한다.
+k8s 가 Ingress·`type: LoadBalancer` 대신 TargetGroupBinding 을 쓰므로 LBC 가 만든 고아 ALB 는 없다.
+ALB 2대 모두 terraform 소유라 T5 에서 정리된다.
+
+### T1) [`unicorn-mark` CloudShell] PVC 회수 — 클러스터가 살아있을 때만
+
+```bash
+helm uninstall unicorn-monitoring -n monitoring; helm uninstall cloudwatch-exporter -n monitoring
+kubectl delete pvc --all -n monitoring --timeout=5m
+kubectl get pvc -A && kubectl get pv        # 둘 다 비어야 한다
+```
+
+> EBS 회수는 CSI 컨트롤러가 살아있을 때만 일어난다. API 에 못 붙으면 건너뛰고 T6 의 `available` 볼륨 확인으로 처리한다.
+
+### T2) [본 PC·PowerShell] EKS 클러스터
+
+```powershell
+eksctl delete cluster -f eksctl\cluster.rendered.yaml --disable-nodegroup-eviction --force --wait
+```
+
+> `--force` 는 fully-private 라 API 에 못 붙어도 CloudFormation 스택 삭제를 계속 진행시킨다.
+> `--disable-nodegroup-eviction` 은 PDB 때문에 드레인이 멈추는 걸 막는다 (eksctl 0.230.0 기준).
+
+### T3) [본 PC·PowerShell] DynamoDB 삭제 보호 해제
+
+```powershell
+aws dynamodb update-table --table-name unicorn-concert-db --no-deletion-protection-enabled
+aws dynamodb describe-table --table-name unicorn-concert-db `
+  --query "Table.[TableStatus,DeletionProtectionEnabled]" --output text   # ACTIVE False 확인
+```
+
+> state 드리프트가 생긴다. destroy 전용이라 무방하지만, 되돌려 `plan` 을 돌리면 `true` 로 복구하려는 diff 가 뜬다.
+
+### T4) [본 PC·PowerShell] S3 버킷 비우기 (버전 + 삭제마커)
+
+```powershell
+. .\.env.ps1   # 새 창이면 (task-1 에서). 없으면 아래 한 줄로 대체
+# $env:BUCKET = "unicorn-web-$(aws sts get-caller-identity --query Account --output text)"
+
+# 버전 + 삭제마커를 delete-objects 페이로드 모양 그대로 뽑아 파일로 넘긴다
+while ($true) {
+  aws s3api list-object-versions --bucket $env:BUCKET --max-items 500 --output json `
+    --query '{Objects: [Versions, DeleteMarkers][].{Key:Key,VersionId:VersionId}}' |
+    Set-Content "$env:TEMP\del.json" -Encoding utf8
+  if ((Get-Content "$env:TEMP\del.json" -Raw) -match '"Objects":\s*null') { break }
+  aws s3api delete-objects --bucket $env:BUCKET --delete "file://$env:TEMP\del.json" | Out-Null
+}
+aws s3api list-object-versions --bucket $env:BUCKET --output json   # {} 이어야 한다
+```
+
+> JSON 을 파일로 넘기는 건 PowerShell 인라인 인용부호 문제를 피하려는 것이다.
+> `delete-objects` 는 1회 1000개 제한이라 500개씩 끊어 비울 때까지 돈다.
+
+### T5) [본 PC·PowerShell] terraform destroy
+
+```powershell
+terraform -chdir=terraform destroy
+```
+
+> 20~30분. CloudFront 배포 disable→삭제에 15분 전후, 이어서 VPC Origin 전파에 5분 더 걸리고
+> 그게 끝나야 서브넷이 지워진다. 타임아웃으로 끊기면 같은 명령을 다시 돌린다.
+> KMS 키는 `kms.tf` 설정대로 7일 예약 삭제로 넘어간다 (`aws kms cancel-key-deletion` 으로 취소 가능).
+
+### T6) [본 PC·PowerShell] 잔재 확인
+
+```powershell
+aws ec2 describe-volumes --filters Name=status,Values=available --query "Volumes[].[VolumeId,Size]" --output text
+aws ec2 describe-vpcs --query "Vpcs[?Tags[?Key=='Name'&&Value=='unicorn-vpc']].VpcId" --output text
+aws iam list-roles --query "Roles[?starts_with(RoleName,'unicorn')].RoleName" --output text
+aws logs describe-log-groups --query "logGroups[?contains(logGroupName,'unicorn')].logGroupName" --output text
+aws cloudfront list-vpc-origins --query "VpcOriginList.Items[].Name" --output text
+aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName,'unicorn')].LoadBalancerName" --output text
+aws s3api list-buckets --query "Buckets[?starts_with(Name,'unicorn')].Name" --output text
+aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE DELETE_FAILED `
+  --query "StackSummaries[?contains(StackName,'unicorn')].[StackName,StackStatus]" --output text
+```
+
+> 전부 비어야 정리 완료다. `available` EBS 는 T1 을 건너뛴 경우 남는 Prometheus 볼륨이고,
+> `aws ec2 delete-volume --volume-id <id>` 로 지운다. CloudFormation 에 `DELETE_FAILED` 가 남으면
+> eksctl 이 못 지운 스택이 있다는 뜻이다.
+> `/unicorn/vpc/flowlog` 가 되살아나 있으면 Flow Log 잔여 전송이 빈 로그그룹을 다시 만든 것이니
+> `aws logs delete-log-group` 으로 한 번 더 지우면 끝난다.
 
 
 ---

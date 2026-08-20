@@ -1,7 +1,7 @@
 # 본 PC 가 Linux 일 때의 런북 (set-07 / task-1)
 
-[README.md](README.md) 의 **본 PC 단계(0·1·3·6·8)** 를 bash 로 옮긴 것.
-CloudShell 단계(2·4·5·7)는 실제 호스트가 리눅스라 README.md 와 동일하다.
+[README.md](README.md) 의 **본 PC 단계(0·1·3·6·8 + 정리 T2~T6)** 를 bash 로 옮긴 것.
+CloudShell 단계(2·4·5·7·T1)는 실제 호스트가 리눅스라 README.md 와 동일하다.
 리소스·순서·검증은 전부 같고 명령 문법만 다르다.
 
 ### 0) [본 PC] 사전 변수 · 신원 확인
@@ -164,4 +164,61 @@ source ../.env   # 새 셸이면 (task-1 에서 source .env)
 # S3 릴레이 제거 (web 버킷은 채점 대상 — mark.sh 3-1-A)
 aws s3 rm "s3://$BUCKET/_transfer/" --recursive
 aws s3api list-objects-v2 --bucket "$BUCKET" --prefix _transfer/ --query 'Contents[].Key'  # null 확인
+```
+
+---
+
+## 리소스 정리 (teardown)
+
+막히는 지점과 순서 근거는 [README.md 의 정리 섹션](README.md#리소스-정리-teardown) 표를 본다. 여기는 본 PC 단계의 bash 판이다.
+
+### T1) → README.md T1 (`unicorn-mark` CloudShell — PVC 회수)
+
+클러스터가 살아있을 때 `helm uninstall` + `kubectl delete pvc` 로 EBS 를 먼저 회수한다. 건너뛰면 T6 에서 `available` 볼륨을 직접 지운다.
+
+### T2) [본 PC] EKS 클러스터
+
+```bash
+eksctl delete cluster -f eksctl/cluster.rendered.yaml --disable-nodegroup-eviction --force --wait
+```
+
+### T3) [본 PC] DynamoDB 삭제 보호 해제
+
+```bash
+aws dynamodb update-table --table-name unicorn-concert-db --no-deletion-protection-enabled
+aws dynamodb describe-table --table-name unicorn-concert-db   --query 'Table.[TableStatus,DeletionProtectionEnabled]' --output text   # ACTIVE False 확인
+```
+
+### T4) [본 PC] S3 버킷 비우기 (버전 + 삭제마커)
+
+```bash
+source .env   # 새 셸이면 (task-1 에서). 없으면 아래 한 줄로 대체
+# BUCKET="unicorn-web-$(aws sts get-caller-identity --query Account --output text)"
+
+# 버전 + 삭제마커를 delete-objects 페이로드 모양 그대로 뽑아 파일로 넘긴다
+while :; do
+  aws s3api list-object-versions --bucket "$BUCKET" --max-items 500 --output json     --query '{Objects: [Versions, DeleteMarkers][].{Key:Key,VersionId:VersionId}}' > /tmp/del.json
+  grep -q '"Objects": null' /tmp/del.json && break
+  aws s3api delete-objects --bucket "$BUCKET" --delete file:///tmp/del.json >/dev/null
+done
+aws s3api list-object-versions --bucket "$BUCKET" --output json   # {} 이어야 한다
+```
+
+### T5) [본 PC] terraform destroy
+
+```bash
+terraform -chdir=terraform destroy
+```
+
+### T6) [본 PC] 잔재 확인
+
+```bash
+aws ec2 describe-volumes --filters Name=status,Values=available --query 'Volumes[].[VolumeId,Size]' --output text
+aws ec2 describe-vpcs --query "Vpcs[?Tags[?Key=='Name'&&Value=='unicorn-vpc']].VpcId" --output text
+aws iam list-roles --query "Roles[?starts_with(RoleName,'unicorn')].RoleName" --output text
+aws logs describe-log-groups --query "logGroups[?contains(logGroupName,'unicorn')].logGroupName" --output text
+aws cloudfront list-vpc-origins --query 'VpcOriginList.Items[].Name' --output text
+aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName,'unicorn')].LoadBalancerName" --output text
+aws s3api list-buckets --query "Buckets[?starts_with(Name,'unicorn')].Name" --output text
+aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE DELETE_FAILED   --query "StackSummaries[?contains(StackName,'unicorn')].[StackName,StackStatus]" --output text
 ```
