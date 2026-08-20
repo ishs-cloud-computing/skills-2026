@@ -14,8 +14,8 @@ resource "aws_instance" "app" {
 
   user_data = templatefile("${path.module}/userdata.sh.tpl", {
     # provided 원본을 그대로 주입 (수정 금지 — Application.md)
-    app_py       = file("${path.module}/../../provided/module2/app.py")
-    requirements = file("${path.module}/../../provided/module2/requirements.txt")
+    app_py       = file("${path.module}/../../../provided/module2/app.py")
+    requirements = file("${path.module}/../../../provided/module2/requirements.txt")
     stream_name  = aws_kinesis_stream.orders.name
     region       = var.region
     app_port     = var.app_port
