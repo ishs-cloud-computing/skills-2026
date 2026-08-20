@@ -10,7 +10,7 @@ module-2-analytics/
 ├── terraform/
 │   ├── vpc.tf security.tf iam.tf
 │   ├── ec2.tf userdata.sh.tpl        # 앱 배포 + systemd 유닛 'app'
-│   ├── alb.tf kinesis.tf flink.tf    # flink = 역할(Kinesis 읽기 전용) + CFN 스택(Studio)
+│   ├── alb.tf kinesis.tf flink.tf    # flink = Glue DB + 역할 + CFN 스택(Studio)
 │   └── bastion.tf
 └── images/                           # 런북 스크린샷 (무손실 WebP)
 
@@ -148,7 +148,7 @@ GROUP BY product_name;
 
 ### 6) [AWS 콘솔] 시연 후 노트북 중지
 
-상태가 READY 로 복귀해야 mark 2-4 통과 (**RUNNING 이면 오답**). 노트북은 Flink 기본 인메모리 카탈로그를 쓰므로 중지하면 `order_stream_base`/`order_stream` 정의가 사라진다 — 다시 시연할 때는 문단 1 부터 순서대로 실행한다. 문단 텍스트 자체는 노트에 남아 있으니 ▶ 를 다시 누르면 된다.
+상태가 READY 로 복귀해야 mark 2-4 통과 (**RUNNING 이면 오답**). CREATE TABLE/VIEW DDL 은 Glue DB 에 저장되므로 중지해도 유지된다. 이전에 `order_stream` 을 테이블로 만들었다면 뷰로 바꾸기 전에 `DROP TABLE order_stream;` 먼저 실행한다.
 
 ![시연 후 노트북 중지](images/studio-notebook-stop.webp)
 
@@ -180,7 +180,7 @@ terraform destroy
 | 2-5 | /health → {"status":"healthy"} | `userdata.sh.tpl` + TG 헬스체크 /health |
 | 2-6 | systemd `app` active + enabled (SSM) | `userdata.sh.tpl` 유닛 + `iam.tf` SSM 정책 |
 | VPC | 표의 이름/CIDR/RTB 정확 일치 | `vpc.tf` (`variables.tf` subnets·rtb 맵) |
-| IAM | 최소권한 | `iam.tf` (SSM+PutRecord), `flink.tf` (Kinesis 읽기 전용) |
+| IAM | 최소권한 | `iam.tf` (SSM+PutRecord), `flink.tf` (Kinesis 읽기+Glue) |
 
 ## 설계 근거 · 함정
 
@@ -188,7 +188,7 @@ terraform destroy
 - **task.md는 "Apache Flink 1.19"라고 쓰지만 mark 2-4는 `ZEPPELIN-FLINK-3_0`을 채점** — mark 스크립트 우선. Studio Notebook(Zeppelin)이며 Flink 애플리케이션 프로그래밍 금지 조건과도 일치.
 - **Studio Notebook은 terraform provider의 `aws_kinesisanalyticsv2_application`으로 생성 불가** (zeppelin 설정 블록 미지원, provider issue #41233) → `aws_cloudformation_stack`으로 래핑.
 - **Kinesis SQL 커넥터는 CFN에 명시 필요.** 콘솔 위저드로 만들면 커넥터가 자동 추가되지만 bare CFN엔 Flink 코어 빌트인만 남아 `Could not find any factory for identifier 'kinesis'`가 난다 → `flink.tf`의 `CustomArtifactsConfiguration`에 `flink-sql-connector-kinesis:1.15.4`(런타임 1.15 대응)를 Maven 의존성으로 주입. 커넥터 변경 시 노트북은 **새 세션**으로 다시 열어야 jar가 로드된다.
-- **노트북 카탈로그는 Glue가 아니라 Flink 기본 인메모리 카탈로그다.** `flink.tf`의 CFN 템플릿에 `CatalogConfiguration`을 넣지 않았다 — 과제지·채점지에 Glue 요구가 없고(등장 0회), 과제 쿼리 2개가 read-only SELECT라 테이블 정의를 영속화할 이유가 없다. 덕분에 Flink 역할이 Kinesis 읽기 전용으로 좁아져 과제지 6의 "최소권한"을 만족하고, IAM 전파 전 `glue:GetDatabase` 검증 실패로 나던 CFN ROLLBACK도 없어졌다. **대가는 세션 종료 시 DDL 소실** — 6단계 참조. 되돌리려면 `aws_glue_catalog_database` + Glue IAM statement + `CatalogConfiguration` 을 함께 복원해야 한다(자세한 경위는 `task-2/NOTES.md` 결정 로그).
+- **Flink 역할 Glue 권한은 카탈로그 전체(`database/*`,`table/*/*`)에 부여.** Zeppelin이 SQL 플래닝 시 `hive`/`default` DB 존재도 `glue:GetDatabase`로 탐침해서, analytics DB로만 스코프하면 `database/hive`에서 AccessDenied가 난다.
 - **`RejectedExecutionException: ShardConsumer ... [Shutting down]`은 세션 문제.** 한 세션에서 실패한 잡을 여러 번 던지면 Flink minicluster의 스레드풀이 망가진다 (Studio 인터랙티브는 `NoRestartBackoffTimeStrategy`라 한 번 실패=잡 사망). → 인터프리터 재시작으로 세션을 비우고 `parallelism.default 1`로 재실행.
 - 노트북 상태는 채점 시 **READY** — Run 상태(RUNNING)로 두면 2-4 오답. 시연 후 중지 필수.
 - **PowerShell(5.1) 주의**: JSON 인자는 `\"` 이스케이프 필수, `curl`은 Invoke-WebRequest 별칭이라 진짜 curl이 아니다 — `Invoke-RestMethod` 사용.
