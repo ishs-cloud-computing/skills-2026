@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.54"
     }
-    time = {
-      source  = "hashicorp/time"
-      version = "~> 0.13"
-    }
   }
 }
 

@@ -22,8 +22,3 @@ output "flink_app_name" {
   description = "Managed Flink Studio Notebook 이름"
   value       = var.flink_app_name
 }
-
-output "glue_db_name" {
-  description = "Studio Notebook 카탈로그 Glue DB"
-  value       = aws_glue_catalog_database.analytics.name
-}

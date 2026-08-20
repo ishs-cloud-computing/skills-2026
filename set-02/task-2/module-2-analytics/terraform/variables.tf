@@ -146,12 +146,6 @@ variable "flink_runtime" {
   default     = "ZEPPELIN-FLINK-3_0"
 }
 
-variable "glue_db_name" {
-  description = "Studio Notebook 이 테이블 DDL 을 저장할 Glue 데이터베이스 (소문자/언더스코어만 허용)"
-  type        = string
-  default     = "wsc2026_analytics_db"
-}
-
 # ----- Bastion (유의사항: 채점은 Bastion/CloudShell 에서 수행) -----
 
 variable "bastion_instance_type" {

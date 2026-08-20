@@ -6,12 +6,12 @@
 #   블록을 지원하지 않아(provider issue #41233) INTERACTIVE 생성이 실패한다.
 #   → CloudFormation 스택으로 래핑 (CFN 은 Zeppelin 설정 완전 지원, 단일 provider 유지)
 # - 생성 직후 상태가 READY. 자동 시작 설정 금지 — RUNNING 이면 2-4 오답.
+# - CatalogConfiguration 을 붙이지 않아 노트북은 Flink 기본 인메모리 카탈로그를 쓴다.
+#   과제지·채점지 어디에도 Glue 요구가 없고(등장 0회), 과제 쿼리 2개는 read-only SELECT 라
+#   테이블 정의를 영속화할 이유가 없다. Glue 를 떼면 과제지 6 "최소권한" 을 만족하는
+#   Kinesis 읽기 전용 역할이 되고, IAM 전파 전 glue:GetDatabase 검증 실패로 인한
+#   CFN ROLLBACK 도 사라진다. 대가는 세션 종료 시 DDL 소실 — README 6단계 참조.
 # ---------------------------------------------------------------------------
-
-# Studio Notebook 이 SQL 의 CREATE TABLE DDL 을 저장할 Glue 카탈로그 DB
-resource "aws_glue_catalog_database" "analytics" {
-  name = var.glue_db_name
-}
 
 data "aws_iam_policy_document" "flink_assume" {
   statement {
@@ -29,7 +29,7 @@ resource "aws_iam_role" "flink" {
 }
 
 data "aws_iam_policy_document" "flink" {
-  # Kinesis 소스 커넥터 (읽기 전용)
+  # Kinesis 소스 커넥터 (읽기 전용). 과제지 6: Managed Flink 는 스트림 접근만 필요하다
   statement {
     sid    = "ReadOrderStream"
     effect = "Allow"
@@ -43,46 +43,12 @@ data "aws_iam_policy_document" "flink" {
     ]
     resources = [aws_kinesis_stream.orders.arn]
   }
-  # Zeppelin 노트북이 Glue 카탈로그에 테이블 DDL 을 읽고/쓴다
-  statement {
-    sid    = "GlueCatalog"
-    effect = "Allow"
-    actions = [
-      "glue:GetDatabase",
-      "glue:GetDatabases",
-      "glue:GetTable",
-      "glue:GetTables",
-      "glue:CreateTable",
-      "glue:UpdateTable",
-      "glue:DeleteTable",
-      "glue:GetPartitions",
-      "glue:GetUserDefinedFunction",
-      "glue:GetUserDefinedFunctions",
-      "glue:GetConnection",
-    ]
-    # Zeppelin 은 SQL 플래닝 시 hive/default 등 다른 DB 존재 여부도 GetDatabase 로
-    # 탐침한다 → analytics DB 로만 스코프하면 database/hive 에서 AccessDenied.
-    # AWS Managed Flink Studio 문서 권장대로 카탈로그 전체 DB/테이블에 부여한다.
-    resources = [
-      "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",
-      "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:database/*",
-      "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:table/*/*",
-      "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:userDefinedFunction/*/*",
-    ]
-  }
 }
 
 resource "aws_iam_role_policy" "flink" {
   name   = "${var.flink_role_name}-policy"
   role   = aws_iam_role.flink.id
   policy = data.aws_iam_policy_document.flink.json
-}
-
-# KinesisAnalyticsV2 는 스택 생성 시 role 로 glue:GetDatabase 를 동기 호출해 검증한다.
-# 방금 붙인 inline policy 가 IAM 에 전파되기 전이면 거부 → ROLLBACK. 전파 대기.
-resource "time_sleep" "flink_policy_propagation" {
-  depends_on      = [aws_iam_role_policy.flink]
-  create_duration = "30s"
 }
 
 resource "aws_cloudformation_stack" "flink_studio" {
@@ -102,11 +68,6 @@ resource "aws_cloudformation_stack" "flink_studio" {
               SnapshotsEnabled = false
             }
             ZeppelinApplicationConfiguration = {
-              CatalogConfiguration = {
-                GlueDataCatalogConfiguration = {
-                  DatabaseARN = aws_glue_catalog_database.analytics.arn
-                }
-              }
               # 콘솔 위저드로 만들면 자동 추가되는 커넥터가 bare CFN 에는 없다.
               # Kinesis SQL 커넥터('connector'='kinesis')를 Maven 으로 주입.
               # 런타임 ZEPPELIN-FLINK-3_0 = Flink 1.15 → connector 1.15.x
@@ -127,7 +88,7 @@ resource "aws_cloudformation_stack" "flink_studio" {
     }
   })
 
-  depends_on = [time_sleep.flink_policy_propagation]
+  depends_on = [aws_iam_role_policy.flink]
 
   tags = { Name = var.flink_app_name }
 }
