@@ -172,9 +172,10 @@ aws s3api list-objects-v2 --bucket "$BUCKET" --prefix _transfer/ --query 'Conten
 
 막히는 지점과 순서 근거는 [README.md 의 정리 섹션](README.md#리소스-정리-teardown) 표를 본다. 여기는 본 PC 단계의 bash 판이다.
 
-### T1) → README.md T1 (`unicorn-mark` CloudShell — PVC 회수)
+### T1) → README.md T1 (`unicorn-mark` CloudShell — PVC 회수, **선택**)
 
-클러스터가 살아있을 때 `helm uninstall` + `kubectl delete pvc` 로 EBS 를 먼저 회수한다. 건너뛰면 T6 에서 `available` 볼륨을 직접 지운다.
+클러스터가 살아있을 때 `helm uninstall` + `kubectl delete pvc` 로 EBS 를 먼저 회수한다.
+`unicorn-mark` 환경이 종료됐으면 완전 프라이빗이라 kubectl 이 안 되니 건너뛰고, T6 에서 볼륨을 직접 지운다.
 
 ### T2) [본 PC] EKS 클러스터
 
@@ -213,7 +214,8 @@ terraform -chdir=terraform destroy
 ### T6) [본 PC] 잔재 확인
 
 ```bash
-aws ec2 describe-volumes --filters Name=status,Values=available --query 'Volumes[].[VolumeId,Size]' --output text
+# 계정에 다른 세트 리소스가 섞여 있다. 볼륨은 반드시 클러스터 태그로 좁힌다
+aws ec2 describe-volumes --filters 'Name=tag-key,Values=kubernetes.io/cluster/unicorn-eks-cluster'   --query 'Volumes[].[VolumeId,State,Size]' --output text
 aws ec2 describe-vpcs --query "Vpcs[?Tags[?Key=='Name'&&Value=='unicorn-vpc']].VpcId" --output text
 aws iam list-roles --query "Roles[?starts_with(RoleName,'unicorn')].RoleName" --output text
 aws logs describe-log-groups --query "logGroups[?contains(logGroupName,'unicorn')].logGroupName" --output text

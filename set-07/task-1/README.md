@@ -389,7 +389,7 @@ destroy 를 막는 지점은 코드에 박혀 있다. 순서를 지키지 않으
 k8s 가 Ingress·`type: LoadBalancer` 대신 TargetGroupBinding 을 쓰므로 LBC 가 만든 고아 ALB 는 없다.
 ALB 2대 모두 terraform 소유라 T5 에서 정리된다.
 
-### T1) [`unicorn-mark` CloudShell] PVC 회수 — 클러스터가 살아있을 때만
+### T1) [`unicorn-mark` CloudShell] PVC 회수 — **선택**
 
 ```bash
 helm uninstall unicorn-monitoring -n monitoring; helm uninstall cloudwatch-exporter -n monitoring
@@ -397,7 +397,11 @@ kubectl delete pvc --all -n monitoring --timeout=5m
 kubectl get pvc -A && kubectl get pv        # 둘 다 비어야 한다
 ```
 
-> EBS 회수는 CSI 컨트롤러가 살아있을 때만 일어난다. API 에 못 붙으면 건너뛰고 T6 의 `available` 볼륨 확인으로 처리한다.
+> EBS 자동 회수는 CSI 컨트롤러가 살아있을 때만 일어난다. 순서를 지킬 수 있으면 지키는 쪽이 깔끔하다.
+>
+> **`unicorn-mark` 환경이 종료됐으면 건너뛴다.** 클러스터가 `endpointPublicAccess: false` 라
+> VPC 밖에서는 kubectl 이 아예 안 된다. 환경을 되살리려면 step 4 를 다시 타야 하는데,
+> 볼륨 하나 때문에 그럴 값어치는 없다 — T6 에서 `delete-volume` 한 번이면 같은 결과다.
 
 ### T2) [본 PC·PowerShell] EKS 클러스터
 
@@ -451,7 +455,9 @@ terraform -chdir=terraform destroy
 ### T6) [본 PC·PowerShell] 잔재 확인
 
 ```powershell
-aws ec2 describe-volumes --filters Name=status,Values=available --query "Volumes[].[VolumeId,Size]" --output text
+# 계정에 다른 세트 리소스가 섞여 있다. 볼륨은 반드시 클러스터 태그로 좁힌다
+aws ec2 describe-volumes --filters "Name=tag-key,Values=kubernetes.io/cluster/unicorn-eks-cluster" `
+  --query "Volumes[].[VolumeId,State,Size]" --output text
 aws ec2 describe-vpcs --query "Vpcs[?Tags[?Key=='Name'&&Value=='unicorn-vpc']].VpcId" --output text
 aws iam list-roles --query "Roles[?starts_with(RoleName,'unicorn')].RoleName" --output text
 aws logs describe-log-groups --query "logGroups[?contains(logGroupName,'unicorn')].logGroupName" --output text
@@ -462,8 +468,9 @@ aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMP
   --query "StackSummaries[?contains(StackName,'unicorn')].[StackName,StackStatus]" --output text
 ```
 
-> 전부 비어야 정리 완료다. `available` EBS 는 T1 을 건너뛴 경우 남는 Prometheus 볼륨이고,
-> `aws ec2 delete-volume --volume-id <id>` 로 지운다. CloudFormation 에 `DELETE_FAILED` 가 남으면
+> 전부 비어야 정리 완료다. 남는 EBS 는 T1 을 건너뛴 경우의 Prometheus 볼륨이고,
+> `aws ec2 delete-volume --volume-id <id>` 로 지운다. 상태 필터(`Values=available`)만으로 훑으면
+> 다른 세트의 볼륨까지 잡히므로 쓰지 않는다. CloudFormation 에 `DELETE_FAILED` 가 남으면
 > eksctl 이 못 지운 스택이 있다는 뜻이다.
 > `/unicorn/vpc/flowlog` 가 되살아나 있으면 Flow Log 잔여 전송이 빈 로그그룹을 다시 만든 것이니
 > `aws logs delete-log-group` 으로 한 번 더 지우면 끝난다.
