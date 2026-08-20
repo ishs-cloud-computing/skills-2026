@@ -3,6 +3,8 @@
 프라이빗 EC2 의 Flask 앱(gunicorn, systemd `app`)이 ALB 뒤에서 주문을 생성해 Kinesis 로 전송, Managed Flink Studio Notebook(Zeppelin)에서 SQL 로 실시간 분석. 채점은 CloudShell 에서 `mark/mark2-2.sh`, 노트북 시연은 수동.
 본 PC 가 Linux 면 [README.linux.md](README.linux.md) 를 사용한다(콘솔·Zeppelin·CloudShell 단계는 공통).
 
+대안 구성이 [type-b/](type-b/) 에 있다 — Glue 카탈로그를 떼고 병렬도를 Kinesis 샤드 수에 맞춘 버전이다. 리소스 이름이 같아 **둘 중 하나만 apply** 한다. 이 문서(원본)가 실배포로 검증된 쪽이고, type-b 는 미검증이다.
+
 ## 디렉토리 구조
 
 ```
@@ -12,7 +14,8 @@ module-2-analytics/
 │   ├── ec2.tf userdata.sh.tpl        # 앱 배포 + systemd 유닛 'app'
 │   ├── alb.tf kinesis.tf flink.tf    # flink = Glue DB + 역할 + CFN 스택(Studio)
 │   └── bastion.tf
-└── images/                           # 런북 스크린샷 (무손실 WebP)
+├── images/                           # 런북 스크린샷 (무손실 WebP)
+└── type-b/                           # 대안 구성 (Glue 없는 인메모리 카탈로그 + 병렬도 4)
 
 # 제공 원본: task-2/provided/module2/ (수정 금지)
 # 채점: task-2/mark/mark2-2.sh (CloudShell, ap-northeast-2)

@@ -10,7 +10,7 @@
 | 모듈 | 이름 | 리전 | 미해결 |
 |------|------|------|--------|
 | 1 | workflow | ap-southeast-1 | 없음 |
-| 2 | analytics | ap-northeast-2 | 없음 |
+| 2 | analytics | ap-northeast-2 | 원본(`terraform/`) 실배포 검증 완료. 대안 `type-b/`(Glue 없는 인메모리 카탈로그 + 병렬도 4) 실배포 미검증 — 관문 둘은 CFN `CREATE_COMPLETE` 와 문단 2 `CREATE TABLE`. 리소스 이름이 같아 둘 중 하나만 apply |
 | 3 | event | eu-west-1 | 없음 |
 | 4 | msk | ap-northeast-1 | iam(기본) 실배포 검증 2026-08-16. tls(`-var` 지정) 실배포 미검증. 당일 모드는 `select-auth-mode` 판정을 따른다 |
 
@@ -37,6 +37,15 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-20 [module-2] Glue 없는 대안 구성을 type-b/ 로 분리 (원본은 그대로 유지)
+- 맥락: `flink.tf` 가 `aws_glue_catalog_database` 를 만들어 CFN 의 `ZeppelinApplicationConfiguration.CatalogConfiguration` 에 물려 쓰는데, Glue 는 **과제 요구가 아니다** — `task.md`·`mark.md`·`mark/mark2-2.sh`·`provided/module2/*`·`errata/*` 전부에서 `glue` 등장 0회. 채점 2-4 의 projection 이 `[ApplicationName, ApplicationStatus, RuntimeEnvironment]` 라 `ApplicationConfiguration` 을 읽지도 않는다. Glue 에 들어가던 것도 데이터가 아니라 `CREATE TABLE`/`CREATE VIEW` 의 DDL 스키마뿐이었다(주문 데이터는 Kinesis, 쿼리 결과는 이미 Flink 인메모리 + Zeppelin 화면 출력). 또 병렬도가 `parallelism.default 1` 로 고정돼 있는데 ON_DEMAND 스트림은 초기 4샤드라 1:1 이 아니었다
+- 채택: **원본 `terraform/` 은 손대지 않고** `type-b/terraform/` 에 전체 복사본을 두고 거기서만 바꿨다. (1) `CatalogConfiguration` 을 빼 Flink 기본 인메모리 카탈로그를 쓰게 하고 딸린 것들(Glue DB, `GlueCatalog` IAM statement, `time_sleep`, `glue_db_name`, `time` provider, Glue ARN 전용이던 `data.aws_caller_identity`)을 제거. (2) `FlinkApplicationConfiguration.ParallelismConfiguration` 으로 `Parallelism=4`, `ParallelismPerKPU=1` 을 주고 type-b README 문단 1 을 `parallelism.default 4` 로 맞췄다. 원본 대비 실제로 다른 파일은 `flink.tf`·`variables.tf`·`outputs.tf`·`versions.tf`·`data.tf` 5개뿐이고 나머지 9개는 바이트 동일
+- 근거: Glue 제거로 **이 저장소가 실측한 실패 모드 3개가 함께 사라진다.** (1) KinesisAnalyticsV2 가 스택 생성 시 role 로 `glue:GetDatabase` 를 동기 호출해 검증하는데 IAM 전파 전이면 CFN ROLLBACK — 원본의 30초 `time_sleep` 은 보장이 아니라 타이밍 땜질이다. (2) Glue IAM 을 analytics DB 로만 스코프했더니 Zeppelin 이 SQL 플래닝 때 `hive`/`default` 를 탐침해 `database/hive` 에서 AccessDenied — 카탈로그 전체 와일드카드로 넓혀 우회한 상태였고 과제지 6 "IAM Role에는 최소권한이 적용되어야 합니다" 와 충돌했다. type-b 는 Kinesis 읽기 전용이다. (3) Glue 영속성 탓에 재시연 시 stale DDL 이 충돌해 `DROP TABLE order_stream;` 선행이 필요했다. 병렬도 쪽은 Flink 공식 문서 근거 — parallelism 이 샤드보다 크면 유휴 서브태스크가 생기고 그 상태에서는 resharding 을 투명하게 처리하지 못한다
+- 기각: (1) **원본을 제자리에서 고치기** — 한 번 그렇게 커밋했다가 revert 했다. 원본은 실배포로 검증된 유일한 구성이고 type-b 의 두 변경 모두 미검증이라, 검증된 쪽을 덮으면 대회 당일 물러설 자리가 없어진다. (2) **폴더 대신 변수 플래그**(`catalog_mode = glue | memory`, module-4 의 `producer_auth_mode` 선례) — 중복은 없지만 한 파일에 두 경로가 섞여 원본이 "그대로 보존" 되지 않는다. (3) 유지 근거로 검토했다가 접은 것 둘: "인터프리터 재시작마다 DDL 재입력" 은 과장이다(Zeppelin 문단 텍스트는 노트에 저장되므로 ▶ 한 번 더가 전부), "30% 변동으로 S3 싱크 추가 대비" 도 약하다(`CREATE TABLE ... WITH ('connector'='filesystem')` 은 인메모리 카탈로그에서도 되고 Glue 는 정의의 영속화에만 관여한다)
+- 대가: **두 변경 다 미검증이고 실측 관문이 둘이다.** (1) CFN 스택이 `CREATE_COMPLETE` 되는가 — `CatalogConfiguration` 생략은 API 레퍼런스상 `Required: No` 지만 제품 문서·콘솔은 Glue 카탈로그를 Studio 의 SQL 카탈로그로 전제해 서술하고, 생략 사례를 찾지 못했다. INTERACTIVE 앱이 `ZeppelinApplicationConfiguration` 과 `FlinkApplicationConfiguration` 을 함께 받아주는지도 확인 못 했다(AWS 문서는 Studio 에 오토스케일링이 적용되지 않는다고만 밝힌다). (2) 문단 2 의 `CREATE TABLE` 이 통과하는가. 둘 다 배포 시점에 시끄럽게 실패하므로 채점 당일 조용히 틀리는 종류는 아니고, 실패하면 원본으로 돌아가면 된다. 그 외 상시 대가: type-b 는 노트북 중지 시 DDL 소실, KPU 과금 3→6(처리 4 + Studio 오버헤드 2), 공통 9개 파일이 원본과 중복이라 공통 값이 바뀌면 두 곳을 고쳐야 한다
+- 속도 기대치: 병렬도 4 는 이 과제 볼륨(주문 300건)에서 **체감 차이를 만들지 않는다.** 병목이 처리량이 아니다. 실익은 유휴 서브태스크 없는 정상 구성 쪽이지 속도가 아니다
+- 미확인: `terraform fmt` 까지만 통과했다. `validate`·`plan`·`apply` 미실행 (작업 환경에서 registry.terraform.io 가 막혀 provider 설치 불가). 본 PC 에서 관문 1·2 를 확인할 것
 
 ### 2026-08-17 [module-4] 두 경로 설명을 README 한 절로 통합 + "당일 제출은 tls" 확정 서술 철회
 - 맥락: 같은 날 앞선 결정으로 두 경로 설명이 6곳(README 최상단 표 + A/B 절, app/README, BINARY-ANALYSIS, terraform.tfvars 주석, variables.tf 주석)에 중복 서술됐다. 값 하나가 바뀔 때 고칠 자리가 6곳이라 대회 중 정정이 서로 어긋날 위험이 크다. 게다가 그 서술들이 **"대회 당일 제출은 tls 다"를 확정 사실로** 적고 있었다
