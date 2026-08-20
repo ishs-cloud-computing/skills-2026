@@ -82,7 +82,7 @@ resource "aws_iam_role_policy" "flink" {
 # 방금 붙인 inline policy 가 IAM 에 전파되기 전이면 거부 → ROLLBACK. 전파 대기.
 resource "time_sleep" "flink_policy_propagation" {
   depends_on      = [aws_iam_role_policy.flink]
-  create_duration = "30s"
+  create_duration = "90s"
 }
 
 resource "aws_cloudformation_stack" "flink_studio" {
