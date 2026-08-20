@@ -68,10 +68,12 @@ $SN = terraform output -json private_subnet_ids | ConvertFrom-Json
 # .Replace() 는 빈 값도 그대로 치환해 가드를 통과시키므로 치환 전 비어있음 검사 필수
 if (!$ACCOUNT_ID -or !$VPC_ID -or !$SN.'skm-eks-sn-priv-a' -or !$SN.'skm-eks-sn-priv-c') { throw "terraform output 값 누락" }
 cd ../eksctl
-$Y = Get-Content cluster.yaml -Raw
+# Get-Content/Set-Content 기본 인코딩은 PowerShell 버전마다 달라 cluster.yaml 의 한글 주석이
+# 깨질 수 있다(윈도우 PowerShell 5.1은 BOM 없는 파일을 시스템 ANSI로 읽는다) — 읽기·쓰기 인코딩을 명시한다.
+$Y = Get-Content cluster.yaml -Raw -Encoding UTF8
 $Y = $Y.Replace('${ACCOUNT_ID}', $ACCOUNT_ID).Replace('${VPC_ID}', $VPC_ID)
 $Y = $Y.Replace('${PRIV_SUBNET_A}', $SN.'skm-eks-sn-priv-a').Replace('${PRIV_SUBNET_C}', $SN.'skm-eks-sn-priv-c')
-$Y | Set-Content cluster.rendered.yaml
+[System.IO.File]::WriteAllText((Join-Path $PWD 'cluster.rendered.yaml'), $Y, [System.Text.UTF8Encoding]::new($false))
 if (Select-String -Pattern '\$\{' cluster.rendered.yaml) { throw "미치환 값 존재" }
 eksctl create cluster -f cluster.rendered.yaml
 ```
@@ -112,7 +114,7 @@ aws sts get-caller-identity --query Arn --output text   # CloudShell 에서 ARN 
 ```powershell
 aws eks create-access-entry --cluster-name skm-eks-cluster --principal-arn <CLOUDSHELL_IAM_ARN> --region ap-northeast-2
 aws eks associate-access-policy --cluster-name skm-eks-cluster --principal-arn <CLOUDSHELL_IAM_ARN> `
-  --policy-arn arn:aws:eks:aws:cluster-access-policy/AmazonEKSClusterAdminPolicy `
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy `
   --access-scope type=cluster --region ap-northeast-2
 ```
 

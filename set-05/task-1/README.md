@@ -27,14 +27,22 @@ app/
 
 ## 배포 순서
 
-### 1) Terraform (네트워크 + AWS 리소스)
+### 1) [본 PC·PowerShell] Terraform (네트워크 + AWS 리소스) + bastion 전송
 
-```bash
+apply 는 본 PC 에서만 한다. bastion 에는 state 대신 `outputs.json` 만 올려 `jq` 로 읽는다.
+
+```powershell
 cd terraform
 # 제공된 정적 파일을 assets/static/ 에 복사한 뒤
 terraform init
 terraform apply
-terraform output            # 아래 단계에서 사용할 값 확인
+terraform output -json > outputs.json
+
+# bastion 전송 — 제공 Go binary 를 ..\app\book 로 배치한 뒤 실행 (SSH 비밀번호 인증)
+$BASTION = "ec2-user@$(terraform output -raw bastion_public_ip)"
+ssh $BASTION "mkdir -p ~/wsc"
+scp -r ..\app ..\eksctl ..\k8s outputs.json "${BASTION}:~/wsc/"
+ssh $BASTION   # 이후 단계는 전부 bastion 에서
 ```
 
 주요 output: `account_id`, `vpc_id`, `workload_subnet_ids`, `eks_kms_key_arn`,
@@ -42,23 +50,26 @@ terraform output            # 아래 단계에서 사용할 값 확인
 
 **Bastion 작업 변수 영구화 (`~/.wsc-env`)** — 이후 모든 단계가 이 변수들을 재사용한다.
 한 번만 캡처해 파일로 박아두고 `.bashrc` 가 자동 source 하므로, **SSH 가 끊겨 재접속해도
-즉시 작업을 이어갈 수 있다**(매번 `terraform output` 다시 실행 불필요). terraform state 가
-있는 bastion 의 `terraform/` 디렉터리에서 실행한다(위 블록 직후, cwd = `terraform`):
+즉시 작업을 이어갈 수 있다**. bastion 의 `~/wsc/` 에서 실행한다(`outputs.json` 을 jq 로 읽음):
 
 ```bash
-# unquoted heredoc → $(...) 가 지금 평가되어 값이 정적으로 박힌다(이후 terraform 불필요).
+cd ~/wsc
+# envsubst 는 user_data 가 안 깔아준다 (3·6·7단계에서 사용)
+command -v envsubst >/dev/null || sudo dnf -y install gettext
+
+# unquoted heredoc → $(...) 가 지금 평가되어 값이 정적으로 박힌다.
 cat > ~/.wsc-env <<EOF
 export AWS_DEFAULT_REGION=ap-northeast-2
-export ACCOUNT_ID=$(terraform output -raw account_id)
-export VPC_ID=$(terraform output -raw vpc_id)
-export EKS_KMS_KEY_ARN=$(terraform output -raw eks_kms_key_arn)
-export WORKLOAD_SUBNET_A=$(terraform output -json workload_subnet_ids | jq -r '."wsc-workload-a"')
-export WORKLOAD_SUBNET_C=$(terraform output -json workload_subnet_ids | jq -r '."wsc-workload-c"')
-export CP_EXTRA_SG_ID=$(terraform output -raw eks_control_plane_extra_sg_id)
-export NODE_SHARED_SG_ID=$(terraform output -raw eks_shared_node_sg_id)
-export ECR=$(terraform output -raw ecr_repository_url)
-export TG=$(terraform output -raw app_target_group_arn)
-export CF=$(terraform output -raw cloudfront_domain)
+export ACCOUNT_ID=$(jq -r '.account_id.value' outputs.json)
+export VPC_ID=$(jq -r '.vpc_id.value' outputs.json)
+export EKS_KMS_KEY_ARN=$(jq -r '.eks_kms_key_arn.value' outputs.json)
+export WORKLOAD_SUBNET_A=$(jq -r '.workload_subnet_ids.value["wsc-workload-a"]' outputs.json)
+export WORKLOAD_SUBNET_C=$(jq -r '.workload_subnet_ids.value["wsc-workload-c"]' outputs.json)
+export CP_EXTRA_SG_ID=$(jq -r '.eks_control_plane_extra_sg_id.value' outputs.json)
+export NODE_SHARED_SG_ID=$(jq -r '.eks_shared_node_sg_id.value' outputs.json)
+export ECR=$(jq -r '.ecr_repository_url.value' outputs.json)
+export TG=$(jq -r '.app_target_group_arn.value' outputs.json)
+export CF=$(jq -r '.cloudfront_domain.value' outputs.json)
 EOF
 
 # 로그인/재접속 시 자동 로드(중복 없이 1회만 추가) + 현재 셸에도 즉시 적용
@@ -66,16 +77,16 @@ grep -qxF 'source ~/.wsc-env' ~/.bashrc || echo 'source ~/.wsc-env' >> ~/.bashrc
 source ~/.wsc-env
 ```
 
-> 값이 바뀌면(terraform 재적용 등) 위 블록만 다시 실행하면 `~/.wsc-env` 가 갱신된다.
+> 값이 바뀌면(terraform 재적용 등) 본 PC 에서 `outputs.json` 을 다시 만들어 scp 한 뒤 위 블록을 재실행하면 `~/.wsc-env` 가 갱신된다.
 > AL2023 의 `~/.bash_profile` 은 `~/.bashrc` 를 source 하므로 로그인 셸에서도 자동 적용된다.
 
 ### 2) 컨테이너 이미지 빌드 & ECR push (Bastion 에서)
 
 ```bash
-# 제공된 Go binary 를 app/book 로 배치
+# 제공된 Go binary 는 1) 에서 app/book 로 배치해 scp 됨
 # (빌드 시 공식 curl 소스를 받아 정적 컴파일하므로 bastion 인터넷 필요, 첫 빌드 ~1분)
 # $ECR 등은 1) 에서 ~/.wsc-env 로 영구화됨.
-cd app
+cd ~/wsc/app
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin "${ECR%/*}"
 docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile -t "$ECR:v1.0.0" --push .
 # ECR(압축) 기준 ≈7.5MB. uncompressed 표시값이 아니라 ECR 콘솔/매니페스트 압축 크기로 확인
@@ -99,7 +110,7 @@ aws ecr describe-image-scan-findings \
 `cluster.yaml` 의 placeholder 를 `~/.wsc-env`(1단계에서 영구화) 변수로 치환 후 생성:
 
 ```bash
-cd eksctl
+cd ~/wsc/eksctl
 envsubst < cluster.yaml > cluster.rendered.yaml
 
 eksctl create cluster -f cluster.rendered.yaml
@@ -248,7 +259,7 @@ aws dynamodb put-item --table-name wsc-table --region ap-northeast-2 --item '{
   "email":{"S":"kim@example.com"},"concert_name":{"S":"Seoul2025"},
   "booking_id":{"S":"6WVB5S9G"}}'
 
-# $CF 는 1) 에서 ~/.wsc-env 로 영구화됨 (없으면: CF=$(cd terraform && terraform output -raw cloudfront_domain))
+# $CF 는 1) 에서 ~/.wsc-env 로 영구화됨 (없으면: CF=$(jq -r '.cloudfront_domain.value' ~/wsc/outputs.json))
 curl -s "https://$CF/v1/book?client_id=C001"      # Lambda → 200
 curl -s -X POST "https://$CF/v1/book" -d '{"client_id":"C002","username":"Bob","email":"b@e.com","concert_name":"Busan2025"}'  # 앱 → booking_id
 curl -si "https://$CF/health"                      # 403 Restrict access to api

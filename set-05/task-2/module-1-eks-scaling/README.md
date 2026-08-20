@@ -20,19 +20,24 @@ module-1-eks-scaling/
 
 ## 배포 순서
 
-```bash
-# ===== 본컴(local) =====
+```powershell
+# ===== 본컴(local·PowerShell) =====
 # 1) Terraform — VPC / Bastion / SQS / IAM
 cd terraform
 terraform init && terraform apply -auto-approve
 terraform output -json > outputs.json          # bastion 전송용 (수 KB)
 
 # 2) bastion 으로 필요한 것만 전송 (terraform/ 는 보내지 않음 → 876MB provider 미전송)
-BASTION=ec2-user@$(terraform output -raw bastion_public_ip)
-rsync -az ../eksctl ../k8s ../../mark outputs.json "$BASTION:~/module-1/"
+$BASTION = "ec2-user@$(terraform output -raw bastion_public_ip)"
+ssh $BASTION "mkdir -p ~/module-1"
+scp -r ..\eksctl ..\k8s ..\..\mark outputs.json "${BASTION}:~/module-1/"
+ssh $BASTION
+```
 
+```bash
 # ===== 이하 bastion 에서 실행 =====
 cd ~/module-1
+command -v envsubst >/dev/null || sudo dnf -y install gettext   # user_data 가 안 깔아줌
 
 # 3) eksctl 환경변수 + 클러스터 생성 (값은 outputs.json 에서 jq 로 읽음)
 export ACCOUNT_ID=$(jq -r '.account_id.value' outputs.json)

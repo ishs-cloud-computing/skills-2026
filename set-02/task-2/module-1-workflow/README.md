@@ -32,8 +32,7 @@ terraform output -json > outputs.json
 ### 2) [본 PC·PowerShell] 리소스 검증
 
 ```powershell
-$NUM = $env:NUM
-$B = "wsc2026-student-score-bucket-$NUM"
+$B = terraform output -raw bucket_name   # cwd = terraform (1 단계에 이어짐)
 $env:AWS_DEFAULT_REGION = "ap-southeast-1"
 
 # 1-1 버킷 + 폴더 (PRE error/ input/ processed/ 만 나와야 함 — 최종 실행 후)
@@ -59,7 +58,7 @@ aws s3 rm s3://$B/error/ --recursive
 # 3-2) DynamoDB 비우기 (과제지: 채점 시작 시 테이블은 비어 있어야 함)
 $items = aws dynamodb scan --table-name wsc2026-student-score --query "Items[].{studentId:studentId,examDate:examDate}" --output json | ConvertFrom-Json
 foreach ($i in $items) {
-  $key = ($i | ConvertTo-Json -Compress) -replace '"', '\"'
+  $key = $i | ConvertTo-Json -Compress
   aws dynamodb delete-item --table-name wsc2026-student-score --key $key
 }
 
@@ -70,7 +69,7 @@ aws s3 cp ..\..\provided\module1\test.csv s3://$B/input/test.csv
 aws stepfunctions list-executions --state-machine-arn $SM_ARN --query "executions[].[status,startDate]" --output text
 
 # 3-5) 결과 확인 = mark 1-5-A/B 그대로
-aws dynamodb get-item --table-name wsc2026-student-score --key '{\"studentId\":{\"S\":\"STU1020\"},\"examDate\":{\"S\":\"2026-05-30\"}}' --query "Item.[studentId.S,average.N,grade.S]" --output text   # STU1020 96.6 A
+aws dynamodb get-item --table-name wsc2026-student-score --key '{"studentId":{"S":"STU1020"},"examDate":{"S":"2026-05-30"}}' --query "Item.[studentId.S,average.N,grade.S]" --output text   # STU1020 96.6 A
 aws s3 ls s3://$B/processed/   # test.csv 만
 aws s3 ls s3://$B/error/       # error_*_STU2001/STU2002/STU2004/unknown.json 4개만
 ```
@@ -110,7 +109,7 @@ terraform destroy
 - **처리 Lambda 이름 `wsc2026-student-score-function`은 task.md에 없고 mark 1-3에만 등장** — 이름 변경 금지.
 - **S3 폴더 마커는 `input/` 하나만 생성.** 채점 시 processed/·error/에는 실제 객체가 있어 PRE가 뜨고, 마커를 만들면 1-5-A/B 목록에 잉여 0바이트 라인이 출력돼 오답. input/은 워크플로우가 파일을 옮겨가 비므로 마커 필요.
 - **평균은 Decimal 나눗셈** (`Decimal("483")/Decimal("5")` = 정확히 96.6). float는 96.60000000000001이 되고 boto3가 float 저장을 거부한다.
-- **PowerShell(5.1)에서 JSON 인자는 `\"` 이스케이프 필수** — 그냥 작은따옴표로 감싸면 내부 큰따옴표가 벗겨져 aws cli 파싱 오류가 난다.
+- **PowerShell 7.3+ 에서 JSON 인자는 작은따옴표로만 감싼다** — 따옴표가 그대로 전달된다. PS 5.1 식 `\"` 이스케이프를 하면 백슬래시가 그대로 들어가 aws cli 파싱 오류가 난다.
 - 트리거 suffix가 `.csv`라 Lambda가 error/에 쓰는 `.json`으로는 재귀 트리거되지 않는다.
 - Step Functions의 Copy+Delete는 API가 2개라 상태도 2개(`MoveToProcessed`→`DeleteInputProcessed`)로 분리 — 채점은 [name,type]과 S3/DDB 최종 상태만 본다.
 - 처리 Lambda는 State Machine에서 ARN 직접 호출 — 출력이 `$.result`에 그대로 실려 `.Payload` 언랩 불필요.

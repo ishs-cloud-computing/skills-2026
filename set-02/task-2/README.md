@@ -9,6 +9,13 @@
 | [module-3-event](module-3-event/) | 정책 위반 자동 복구·알림 | eu-west-1 | EventBridge + Lambda + CloudTrail + Config + SNS | CloudShell |
 | [module-4-msk](module-4-msk/) | MSK 센서 스트리밍 | ap-northeast-1 | VPC + MSK + EC2 + Lambda + DynamoDB + S3 | bastion 또는 CloudShell |
 
+> **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+
+## 값 대조표
+
+> [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
+
 ## 배포 순서 — 오래 걸리는 것부터, 터미널 병렬
 
 모듈은 서로 의존하지 않는다. **PowerShell 터미널 4개를 열어 모듈별로 하나씩 붙이고, apply 가 오래 걸리는 순서로 착수한다.** module-4 를 먼저 걸어두고 그 30여 분 동안 나머지 셋을 끝내는 게 전체 소요를 지배한다. 순차로 돌리면 합이 50분을 넘지만, 병렬이면 module-4 의 35분이 곧 총 소요다.
@@ -59,6 +66,6 @@ Windows 에서 올린 스크립트는 CRLF 가 섞여 bash 가 깨지므로 실�
 - 리소스 이름은 과제지에 명시된 값과 **정확히 일치**(이름 일치 채점 항목 다수). 과제지 원문 오타도 그대로 따른다 — module-2 의 `wsc2026-alaytics-ec2-role` 이 그 예다.
 - 채점지(`mark/`)와 과제지(`task.md`)가 어긋나면 **채점 스크립트가 1순위**다. 수동 채점 여지가 있으면 합집합으로 만든다(module-3 이 그 경우).
 - 상태가 채점 대상인 모듈이 있다 — module-2 Flink 노트북은 시연 후 **READY** 로, module-4 alert 버킷은 `bin/app` 을 지운 상태로 둔다.
-- PowerShell 에서 JSON 인자는 내부 따옴표를 `\"` 로 이스케이프한다. `curl` 은 별칭이므로 `Invoke-RestMethod` 를 쓴다.
+- PowerShell 7.3+ 는 네이티브 명령 인자의 따옴표를 그대로 전달한다 — JSON 인자는 작은따옴표로만 감싼다. PS 5.1 식 `\"` 이스케이프는 백슬래시가 그대로 들어가 JSON 파싱 오류. HTTP 확인은 `Invoke-RestMethod` 를 쓴다.
 
 > 설계 근거·요구사항↔구현 매핑은 각 모듈 README 하단에, 결정·실측 기록은 [NOTES.md](NOTES.md) 에 있다.

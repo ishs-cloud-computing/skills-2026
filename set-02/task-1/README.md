@@ -3,6 +3,13 @@
 CloudFront + S3(정적 웹) + EKS(book 앱) + Lambda(예매 조회) + DynamoDB + 모니터링(Grafana)을
 **Terraform / eksctl / Kubernetes manifest** 로 구성한다. 모든 리소스는 서울(`ap-northeast-2`).
 
+> **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+
+## 값 대조표
+
+> [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
+
 ## 디렉토리 구조
 
 ```
@@ -355,5 +362,3 @@ cd terraform; terraform destroy -var "player_number=$env:NUM"
   `instanceName` 등은 버전 따라 바뀔 수 있으니 사용 전 공식 문서로 확인 (작업규칙 7).
 - **curl 별칭**: PowerShell 의 `curl` 은 `Invoke-WebRequest` 별칭이므로 검증 단계는
   Windows 기본 `curl.exe` 를 명시해 호출한다.
-</content>
-</invoke>

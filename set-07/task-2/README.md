@@ -9,6 +9,13 @@
 | [module-3-eks-scaling](module-3-eks-scaling/) | EKS Scaling | ap-northeast-2 | EKS + KEDA(SQS) + Karpenter | CloudShell |
 | [module-4-container-logging](module-4-container-logging/) | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | CloudShell |
 
+> **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+
+## 값 대조표
+
+> [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
+
 ## 공통 워크플로
 
 **본 PC 는 `terraform` 과 `eksctl` 만 쓴다.** 이미지 빌드·helm·kubectl·검증·스모크·셀프 채점은 전부 CloudShell 에서 한다 —

@@ -54,7 +54,7 @@ Invoke-RestMethod -Uri "http://$ALB_DNS/health"    # status : healthy
 # 2-4 Flink READY ZEPPELIN-FLINK-3_0
 aws kinesisanalyticsv2 describe-application --application-name wsc2026-analytics-flink --query "ApplicationDetail.[ApplicationName,ApplicationStatus,RuntimeEnvironment]" --output text
 # 2-6 systemd (active / enabled)
-$CMD_ID = aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShellScript" --parameters '{\"commands\":[\"systemctl is-active app && systemctl is-enabled app\"]}' --query "Command.CommandId" --output text
+$CMD_ID = aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["systemctl is-active app && systemctl is-enabled app"]}' --query "Command.CommandId" --output text
 Start-Sleep 3
 aws ssm get-command-invocation --command-id $CMD_ID --instance-id $EC2_ID --query "StandardOutputContent" --output text
 ```
@@ -71,9 +71,10 @@ Managed Apache Flink → Studio → `wsc2026-analytics-flink` → **실행** (RE
 1..30 | ForEach-Object { Invoke-RestMethod -Method Post -Uri "http://$ALB_DNS/orders/generate" | Out-Null }
 ```
 
-bastion 에서 넣어도 된다:
+bastion 에서 넣어도 된다 (`$ALB_DNS` 는 본 PC 세션 변수라 bastion 에는 없다 — 먼저 값을 넣는다):
 
 ```bash
+ALB_DNS=<ALB DNS>   # 본 PC에서 terraform output -raw alb_dns_name 값
 for i in $(seq 1 30); do curl -s -X POST http://$ALB_DNS/orders/generate > /dev/null; done
 ```
 
@@ -191,7 +192,7 @@ terraform destroy
 - **Flink 역할 Glue 권한은 카탈로그 전체(`database/*`,`table/*/*`)에 부여.** Zeppelin이 SQL 플래닝 시 `hive`/`default` DB 존재도 `glue:GetDatabase`로 탐침해서, analytics DB로만 스코프하면 `database/hive`에서 AccessDenied가 난다.
 - **`RejectedExecutionException: ShardConsumer ... [Shutting down]`은 세션 문제.** 한 세션에서 실패한 잡을 여러 번 던지면 Flink minicluster의 스레드풀이 망가진다 (Studio 인터랙티브는 `NoRestartBackoffTimeStrategy`라 한 번 실패=잡 사망). → 인터프리터 재시작으로 세션을 비우고 `parallelism.default 1`로 재실행.
 - 노트북 상태는 채점 시 **READY** — Run 상태(RUNNING)로 두면 2-4 오답. 시연 후 중지 필수.
-- **PowerShell(5.1) 주의**: JSON 인자는 `\"` 이스케이프 필수, `curl`은 Invoke-WebRequest 별칭이라 진짜 curl이 아니다 — `Invoke-RestMethod` 사용.
+- **PowerShell 7.3+ 주의**: JSON 인자는 작은따옴표로만 감싼다 — `\"` 이스케이프하면 백슬래시가 그대로 전달돼 파싱 오류. HTTP 확인은 `Invoke-RestMethod` 사용.
 - EC2는 NAT 라우트에 `depends_on` — user_data의 pip 설치가 부팅 시 아웃바운드를 요구한다. 설치 실패 시: SSM 세션 접속 후 `cat /var/log/cloud-init-output.log` 확인, `sudo bash /var/lib/cloud/instance/scripts/part-001` 재실행.
 - systemd 유닛 이름은 정확히 `app` — env는 [Service] 레벨 (app.py가 import 시점에 STREAM_NAME/AWS_REGION 없으면 raise).
 - ALB 헬스체크 경로 `/health` — 앱이 뜨기 전 TG가 unhealthy면 2~3분 대기.
