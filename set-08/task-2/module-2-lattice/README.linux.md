@@ -34,16 +34,16 @@ source .env   # 재접속 시: module-2-lattice 디렉터리에서 `source .env`
 ### 3) 검증 (배포 후 ~1-2분 대기: user-data systemd 기동, Client Public IP 경유)
 
 ```bash
-n=0; until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-  "http://${CLIENT_IP}/health" | grep -q 200 || [ $n -ge 60 ]; do sleep 10; n=$((n+1)); done   # 상한 10분
+until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+  "http://${CLIENT_IP}/health" | grep -q 200; do sleep 10; done
 
 curl -s "http://${CLIENT_IP}/health"
 # → {"status": "ok", "app": "client"}
 
 # Lattice Target Group의 healthy 전환은 배포 완료 후에도 별도로 ~30-60초 더 걸릴 수 있어
 # /health 통과 직후 곧바로 호출하면 502/타임아웃이 날 수 있다 — 재시도 루프로 흡수
-n=0; until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-  "http://${CLIENT_IP}/v1/client/orders?id=1001" | grep -q 200 || [ $n -ge 60 ]; do sleep 10; n=$((n+1)); done   # 상한 10분
+until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+  "http://${CLIENT_IP}/v1/client/orders?id=1001" | grep -q 200; do sleep 10; done
 
 curl -s "http://${CLIENT_IP}/v1/client/orders?id=1001"
 # → {"client": "ok", "service": {"order_id": "1001", "via": "vpc-lattice"}}
@@ -54,7 +54,7 @@ aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Value
 
 # 채점 2-4: Target Status=HEALTHY 는 독립 합격 기준이다. 셀프 채점 전에 반드시 확인한다
 TG=$(aws vpc-lattice list-target-groups --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-tg`].id|[0]' --output text)
-n=0; until [ "$(aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TG" --query 'items[0].status' --output text)" = "HEALTHY" ] || [ $n -ge 60 ]; do sleep 10; n=$((n+1)); done   # 상한 10분. $TG 가 None 이면 영원히 안 돈다
+until [ "$(aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TG" --query 'items[0].status' --output text)" = "HEALTHY" ]; do sleep 10; done
 aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TG" --query 'items[].{Target:id,Port:port,Status:status}' --output table
 # → Status=HEALTHY. UNUSED/UNHEALTHY 상태로 mark2-2.sh 를 돌리면 2-5 는 통과해도 2-4 를 잃는다
 ```
@@ -81,10 +81,6 @@ terraform -chdir=terraform destroy -auto-approve
 아니라 TG 상태를 보는 버그) state 에서 떼어내야 한다.
 
 ```bash
-TG=$(aws vpc-lattice list-target-groups --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-tg`].id|[0]' --output text)   # 새 셸이면 재유도
-aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TG" --output table
-# → items 가 비어 있으면 AWS 쪽은 이미 해제된 것이다. 비어 있지 않으면 state rm 하지 마라 — 다른 원인이다
-
 terraform -chdir=terraform state rm aws_vpclattice_target_group_attachment.service
 terraform -chdir=terraform destroy -auto-approve
 ```
