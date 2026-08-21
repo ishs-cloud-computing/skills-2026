@@ -245,12 +245,21 @@ kubectl apply -f k8s/rendered/   # 파일명 알파벳 순 apply → 번호 pref
 
 `namespace/skills-sqs`에 `missing the kubectl.kubernetes.io/last-applied-configuration annotation` 경고가 뜨는 건 정상이다 — eksctl Fargate profile이 네임스페이스를 먼저 만들어서 나며, 자동 패치된다.
 
-큐가 비어 있으면 minReplicaCount 0이라 pod 0개가 정상이다 — scale-out 확인은 6단계에서 한다. apply 결과는 리소스 존재로만 확인:
+큐가 비어 있으면 minReplicaCount 0이라 pod 0개가 정상이다 — scale-out 확인은 6단계에서 한다. apply 결과는 리소스 존재와 **트리거 인증 성공** 두 가지로 확인한다:
 
 ```powershell
-kubectl get scaledobject,triggerauthentication -n skills-sqs
+kubectl get scaledobject,triggerauthentication -n skills-sqs   # ScaledObject READY 열이 True 여야 한다
 kubectl get nodepool,ec2nodeclass
+Start-Sleep -Seconds 45; kubectl get pods -n skills-sqs -l app=sqs-worker   # 큐가 비었으면 0개여야 한다
 ```
+
+**`READY=False` 이거나 파드가 1개로 남아 있으면 여기서 멈춘다.** 큐가 빈 상태의 파드 0은 트리거가 실제로 SQS 를 읽고 있다는 유일한 조기 신호다(cooldownPeriod 30초). 원인은 이벤트에 나온다:
+
+```powershell
+kubectl describe scaledobject sqs-worker-scaledobject -n skills-sqs
+```
+
+`STS: AssumeRole ... AccessDenied` 가 보이면 `k8s/30-keda-scaledobject.yaml` 트리거 metadata 의 `identityOwner: operator` 가 빠진 것이다(NOTES.md 함정 절 참조). 이대로 두면 채점 4-6 이 0점이고 4-5 도 함께 위태롭다.
 
 ## 6. 스케일 검증 (mark2-4.sh 4-6 시나리오 수동 재현)
 
@@ -306,7 +315,9 @@ kubectl get pods -n keda
 kubectl get pods -n karpenter
 kubectl get scaledobject,triggerauthentication -n skills-sqs
 kubectl get nodepool,ec2nodeclass
-# 컨트롤러 pod Running, ScaledObject/TriggerAuthentication/NodePool/EC2NodeClass 존재 확인되면 채점 시작
+kubectl get pods -n skills-sqs -l app=sqs-worker
+# 컨트롤러 pod Running, ScaledObject/TriggerAuthentication/NodePool/EC2NodeClass 존재,
+# ScaledObject READY=True, 큐가 빈 상태에서 worker pod 0개 — 여기까지 맞으면 채점 시작
 ```
 
 [CloudShell] 셀프 채점:

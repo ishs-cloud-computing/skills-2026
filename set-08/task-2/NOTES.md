@@ -47,7 +47,7 @@
 - [x] 4-1 EKS Cluster, VPC, Fargate Profile 구성 — `eksctl/cluster.yaml`: `skills-sqs-cluster`(us-west-2, public+private 엔드포인트) + `terraform/vpc.tf`(private 서브넷, karpenter.sh/discovery 태그) + Fargate profile `skills-sqs-fp-keda`·`skills-sqs-fp-karpenter`(과제지 명시 2개) + `skills-sqs-fp-kube-system`(coredns용 추가) — 실채점 통과: Cluster ACTIVE + Fargate profile 2개 ACTIVE(selector keda/karpenter), CloudShell kubectl 로 fargate 노드 8대 Ready (2026-08-04)
 - [x] 4-2 SQS Queue 및 IAM ServiceAccount 구성 — `terraform/sqs.tf`(`skills-sqs-queue`) + `eksctl/cluster.yaml` IRSA `iam.serviceAccounts`(keda-operator/karpenter/sqs-worker-sa 3개, `attachPolicyARNs`로 role-arn annotation 자동 부여) — 실채점 통과: QueueArn 출력 + VisibilityTimeout 30(기준 >=30), SA 3개 role-arn annotation 전부 비어 있지 않음 (2026-08-04)
 - [x] 4-3 KEDA/Karpenter Controller Fargate 배포 구성 — `README.md` 4단계 helm install(karpenter -n karpenter, keda -n keda) + Fargate profile 2개로 두 네임스페이스가 Fargate 노드에 스케줄 — 실채점 통과: keda 3개·karpenter 1개 Deployment Available, Pod 전부 Running, NODE 열 전부 `fargate-ip-*` (2026-08-04)
-- [x] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30) — 실채점 통과: min 0·max 6 정확, pollingInterval 15(<=15)·cooldownPeriod 30(<=30), trigger `aws-sqs-queue` queueLength "2", TriggerAuthentication 존재 (2026-08-04). 2026-08-07 정정으로 `podIdentity.provider=aws-eks` 판정 기준이 신설되어 `provider`를 `aws`→`aws-eks`로 교체 — 실채점(2026-08-04) 당시 기준에는 없던 항목이라 재검증 미실시
+- [x] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30) — 실채점 통과: min 0·max 6 정확, pollingInterval 15(<=15)·cooldownPeriod 30(<=30), trigger `aws-sqs-queue` queueLength "2", TriggerAuthentication 존재 (2026-08-04). 2026-08-07 정정으로 `podIdentity.provider=aws-eks` 판정 기준이 신설되어 `provider`를 `aws`→`aws-eks`로 교체했고, **그 교체가 4-6 을 죽였다**(2026-08-21 실채점 5.00/7.5, 이슈 #136) — `identityOwner: operator` 를 트리거 metadata 에 추가해 수정. 4-4 가 읽는 필드는 그대로이며 4-6 재검증은 미실시(클러스터 teardown 상태)
 - [x] 4-5 Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 — `k8s/10-karpenter-nodepool.yaml`(`skills-sqs-nodeclass`/`skills-sqs-nodepool`, label `skills-nodepool=event-worker`, `disruption.consolidationPolicy` 포함) — 실채점 통과: NodePool 4개 필드 + EC2NodeClass `role` 출력. 4-5 조회 시점 노드·파드 0은 정상(min 0) — 라벨 조건은 4-6 의 동일 label selector 출력으로 충족 (2026-08-04)
 - [x] 4-6 SQS 기반 Scale Out 및 처리 기능 검증 — ScaledObject queueLength 2 + max 6(12건 발송 시 6 pod) + NodePool 인스턴스 타입 t3.medium/large(500m 요청 pod 다수 스케줄 시 노드 증설 유도) — 실채점 통과: sent=12, after_60s 에 pod 6/6 + Karpenter 노드 2대 Ready(기준 180초), 메시지 12 → after_120s 0 (2026-08-04)
 
@@ -87,6 +87,8 @@
 - module-1 apply: 22 added / **~7분** (DocumentDB instance 병목, 기존 10-15분 예상은 과대)
 - module-2 apply: 24 added / ~2분
 - module-3 apply: 16 added / ~1분
+- **[실측 확인, 2026-08-21] `podIdentity.provider: aws-eks` 는 트리거 metadata `identityOwner: operator` 없이는 동작하지 않는다**: aws-eks 경로의 `identityOwner` 기본값은 `pod` 이라 KEDA operator 가 자기 IRSA 로 SQS 를 읽지 않고 **스케일 대상 SA(`sqs-worker-sa`)의 역할을 `sts:AssumeRole`** 하려 든다(KEDA v2.20.2 `pkg/scaling/resolver/scale_resolvers.go:265-273` → `pkg/scalers/aws/aws_common.go:68-76`). eksctl IRSA 역할의 신뢰 정책은 OIDC `AssumeRoleWithWebIdentity` 만 신뢰하므로 403 → ScaledObject `READY=False` → 메트릭 없음 → HPA 가 replica 를 못 구해 Deployment 가 기본값 1개로 고정된다. **가장 이른 신호는 "큐가 비었는데 파드가 0으로 안 줄어든다"** 이므로 apply 직후 이것부터 본다. `provider: aws` 로 되돌리면 채점 4-4 를 잃으므로 해법이 아니다
+- **[교훈] 채점 문자열만 맞추고 동작을 재검증하지 않으면 회귀가 조용히 남는다**: 2026-08-07 정정 반영 시 `provider` 문자열만 바꾸고 라이브 확인을 건너뛴 결과가 위 항목이다. 정정 반영 후에는 그 항목의 **채점 출력이 아니라 실동작**을 다시 본다
 - module-4 apply: 30 added / ~3분 (NAT GW 병목)
 - 공통 병목: eksctl 클러스터 생성 **19분** (삭제는 8분) — CloudShell 이미지 빌드/push(~2분)와 병렬 처리 설계(README 3단계)
 - helm karpenter+keda: ~2분 / module-4 scale out(12건→pod 6+노드 2): 60초 이내 / scale in: 큐 소진 후 ~3분
@@ -163,6 +165,7 @@
 - 내용: 0801 판정 기준은 TriggerAuthentication 의 존재만 봤으나, 0807 이 `podIdentity.provider=aws-eks이어야 합니다`를 새로 넣었다
 - 판정: **수정완료** — `k8s/30-keda-scaledobject.yaml` `provider: aws` → `aws-eks`. 아래 2026-08-01 결정(`aws` 채택)을 채점 기준 우선 원칙(CLAUDE.md 작업규칙 4)으로 번복한다
 - 확인: KEDA 공식 문서상 `aws-eks`는 deprecated 이나 제거는 v3 예정이고 최신 문서가 2.20 이라 설치 버전(helm 최신)에서 여전히 유효하다. deprecated 경고만 뜬다
+- **[2026-08-21 실측 갱신] 문자열은 유효하나 그대로 두면 동작이 깨진다** — aws-eks 경로는 `identityOwner` 기본값 `pod` 으로 워크로드 SA 역할을 assume 하려 해 STS 403 이 나고 4-6 이 0점이 된다(이슈 #136, 실채점 5.00/7.5). 트리거 metadata 에 `identityOwner: operator` 를 추가해 해결. 아래 2026-08-21 결정 로그 참조
 
 ### 2026-08-07 [module-4] 4-1/4-3/4-4/4-5 채점 조회 축소, [module-2] 2-2/2-3/2-5 변수명·출력
 - 출처: `provided/20260807_PATCH.patch`·`20260807_CHANGELOG.md` (답변일 2026-08-07)
@@ -176,6 +179,16 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-21 [module-4] aws-eks 유지 + 트리거 metadata `identityOwner: operator` (이슈 #136)
+- 맥락: 채점 4-4 는 `podIdentity.provider=aws-eks` 를 요구하는데(2026-08-07 정정) 실동작은 그 경로를 거부한다. aws-eks 는 `identityOwner` 기본값이 `pod` 이라 operator 가 `sqs-worker-sa` 역할을 `sts:AssumeRole` 하려 들고, 그 역할은 OIDC 만 신뢰하므로 403 이다. 2026-08-21 실채점 4-6 0점(5.00/7.5)
+- 채택: 트리거 metadata 에 `identityOwner: operator` 추가 — `PodIdentityOwner=false` 가 되어 KEDA 가 자기 IRSA(`skills-sqs-keda-policy`, `sqs:GetQueueAttributes` 보유)로 조회하고 AssumeRole 경로가 사라진다. 4-4 가 읽는 필드(`podIdentity.provider`, `type`, `queueLength`, min/max/pollingInterval/cooldownPeriod)는 전부 불변. **IAM 변경 불필요**
+- 기각: `provider: aws` 로 복귀 → 4-6 은 살지만 4-4 를 잃는다. 게시판 참여 마감(2026-08-13)이 지나 출제 측 질의도 불가능
+- 기각: `sqs-worker-sa` 역할 신뢰 정책에 keda-operator 역할 추가 → eksctl(CloudFormation)이 관리하는 역할을 밖에서 고치는 것이라 재생성 시 유실되고, 검증 비용도 크다
+- 기각: `podIdentity.identityOwner: keda` → 이 필드는 provider `aws` 전용이라 `aws-eks` 에서는 아무 효과가 없다(KEDA v2.20.2 `scale_resolvers.go:248-273`)
+- 대가: `identityOwner` 는 KEDA v3 에서 제거 예정. 2.20 문서·소스·AWS 공식 예제 모두에 살아 있어 대회 시점에는 문제 없다. set-07 module-3 의 2026-07-26 결정이 남긴 부채를 이 세트에서 되살리는 셈이며, 4-4 기준이 aws-eks 를 요구하는 한 회피 불가
+- 근거: KEDA v2.20.2 `pkg/scaling/resolver/scale_resolvers.go:265-273`, `pkg/scalers/aws/aws_common.go:64-76,107-111` / KEDA 2.20 aws-sqs 문서 / AWS SageMaker HyperPod 오토스케일링 문서의 동일 예시
+- 미검증: 클러스터가 teardown 상태(us-west-2 EKS 0개, `skills-sqs-queue` 없음)라 라이브 재검증 미실시. 재배포 시 README 5단계 직후 `ScaledObject READY=True` 와 큐 빈 상태 파드 0 을 먼저 확인한다
 
 ### 2026-08-17 [공통] mark.md를 정정 패치 내용으로 동기화 (기존 방침 번복)
 - 맥락: mark.md는 mark.pdf 자체가 아니라 우리가 만든 채점기준표 사본이다. 지금까지는 CLAUDE.md 규칙("provided/·task.pdf·mark.pdf는 원본 그대로 두고 정정은 NOTES.md에 기록")을 mark.md에도 유사 적용해 원문 그대로 두고 `mark/mark2-N.sh`·NOTES.md 정정 로그로만 반영했다
@@ -241,7 +254,7 @@
 - 맥락: KEDA ScaledObject가 AWS SQS 트리거 인증을 받아야 한다(과제지 6-6). set-07의 module-3 결정 로그(2026-07-26)는 `identityOwner: operator` 방식을 채택했으나 그 결정 자체가 "KEDA 3.0에서 제거 예정(deprecated)"이라는 대가를 남겼다
 - 채택: `TriggerAuthentication.spec.podIdentity.provider: aws` — keda-operator SA의 IRSA 역할을 그대로 사용하는 현재 KEDA 권장 경로. set-07이 예고한 "차기 세트에서 TriggerAuthentication 전환 검토"를 이번 세트에서 실행
 - 기각: `identityOwner: operator` 계승 → 이미 deprecated 표시된 경로를 신규 구현에 다시 쓰는 것은 불필요한 기술 부채
-- 대가: 없음 (같은 IRSA SA를 참조하는 동일한 결과)
+- 대가: 없음 (같은 IRSA SA를 참조하는 동일한 결과) — **[2026-08-21 정정] 이 전제는 `aws` 에서만 참이다.** `aws-eks` 로 바꾸면 KEDA 가 operator IRSA 가 아니라 워크로드 SA 역할을 assume 하려 들어 결과가 달라진다. 아래 2026-08-21 결정 참조
 
 ### 2026-08-01 [module-4] pollingInterval 15 유지 — minReplicaCount 0이라 0→1 활성화에 유효
 - 맥락: set-07 module-3의 2026-07-31 결정 로그는 `pollingInterval`을 삭제했다 — 그 근거는 "minReplicaCount≥1이면 0→1 전환이 없어 pollingInterval이 완전 무효"였다. 이번 ScaledObject(`sqs-worker-scaledobject`)는 `minReplicaCount: 0`으로 그 전제 자체가 다르다
