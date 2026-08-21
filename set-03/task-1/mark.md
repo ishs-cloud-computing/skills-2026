@@ -18,7 +18,8 @@
 9. 채점 시에는 별도로 제공한 채점 스크립트(mark.sh)를 실행하여 채점할 수 있습니다. 다만, 선수가 직접 입력을 원할 경우 채점기준표에 명시된 명령어 그대로 입력하여 채점할 수 있습니다.
 10. 제출 전 mark-sg의 경우 선수 임의로 구성해두도록 합니다.
 11. 모든 채점 사항은 Cloudshell에 wsc2026-skills-app-sub-a 서브넷과 사전구성한 mark-sg를 연결한 후 진행합니다.
-12. 아래 명령어를 사전입력합니다.
+12. 11-1 채점을 실행하여 생긴 파드들은 채점이 끝난 후 삭제하도록 합니다.
+13. 아래 명령어를 사전입력합니다.
 
 ```bash
 aws configure set default.region ap-northeast-2
@@ -391,11 +392,14 @@ True aws:kms
 static/index.html  static/main.jpeg
 KMS wsc2026-bucket-kms: PASS
 S3 Object KMS Check:
+ static/: PASS
  static/index.html: PASS
  static/main.jpeg: PASS
 ```
 
-> 정정 2026-08-16: 원본 예상 출력에는 ` static/: PASS` 줄이 있었으나, `aws s3api list-objects --prefix "static/"` 로는 조회되지 않는 객체다. 해당 줄은 채점 대상에서 제외한다.
+> 정정 2026-08-21: 최종 정정본이 ` static/: PASS` 줄을 그대로 유지한다 — 2026-08-16 의 "채점 제외" 판정은 번복됐다.
+> 이 줄은 0바이트 폴더 마커 객체(`static/`)를 가리키며, `terraform/s3.tf` 의 `aws_s3_object.static_marker` 가
+> 이미 생성한다. 목록 조회는 `Size>0` 필터라 마커가 안 나오고, 객체 KMS 검사 루프는 필터가 없어 나온다 — 정본과 일치한다.
 
 ### 7-1. Lambda Functions
 
@@ -563,11 +567,20 @@ Rate: PASS (403)
 **1) 명령어 입력**
 
 ```bash
+SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null)
+kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null
+kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/nonexist; sleep 0.1; done" &>/dev/null
+kubectl run latency-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/delay?ms=5000; sleep 0.2; done" &>/dev/null
+kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null
+kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null
+kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
+sleep 180
 GRAFANA_LB=$(kubectl get svc -n observability -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{end}' 2>/dev/null)
 for p in fluent-bit prometheus grafana; do kubectl get pods -n observability --no-headers --request-timeout=10s 2>/dev/null | grep -c "$p.*Running" | xargs -I{} echo "$p: {}"; done
 ```
 
-> 정정 2026-08-16: 원본 11-1 은 테스트 파드 6종 생성과 `sleep 180` 을 포함했으나, **파드 생성 단계는 11-1 채점 대상에서 제외**되고 Alert 검증용 파드 생성·`sleep` 은 11-3 에서 수동으로 진행한다. 테스트 리소스 생성으로 파드 조회 결과나 Alert 상태가 변동되어도 재채점 기준으로 쓰지 않는다.
+> 정정 2026-08-21: 최종 정정본은 테스트 파드 6종 생성 + `sleep 180` 을 **11-1 에 그대로 둔다** — 2026-08-16 의 "11-3 으로 이동" 판정은 번복됐다. `latency-gen`(`/delay?ms=5000`)도 정본에 살아 있다.
+> 유의사항 12) 에 따라 여기서 생긴 파드는 채점 종료 후 삭제한다.
 
 **2)** 실행 결과가 1 이상인지 확인합니다.
 
@@ -603,25 +616,41 @@ Dashboards:
 
 ### 11-3. Grafana Dashboard
 
-**0) 수동 실행 — Alert 검증용 테스트 파드 생성 (정정 2026-08-16)**
+**1)** 아래 명령을 수동으로 입력합니다.
 
 ```bash
 SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null)
 kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null
 kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/nonexist; sleep 0.1; done" &>/dev/null
+kubectl run latency-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/delay?ms=5000; sleep 0.2; done" &>/dev/null
 kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null
 kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null
 kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
 sleep 180
+GRAFANA_LB=$(kubectl get svc -n observability -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{end}' 2>/dev/null)
 ```
 
-> 원본 11-1 에 있던 파드 생성·`sleep` 블록이다. `latency-gen`(`/delay?ms=5000`)은 HighLatency 채점 항목 삭제와 함께 제외했다.
+> 정정 2026-08-21: 최종 정정본은 11-1 과 **동일한 파드 생성 블록을 11-3 에도 반복**한다. 11-1 을 먼저 실행했다면 여기서는 `AlreadyExists` 로 조용히 실패하고 `sleep 180` 만 다시 돈다.
 
-**1)** 출력된 Grafana URL을 통해 admin/`Skills$#$@!`에 로그인 후 wsc2026-grafana-dashboard에서 메트릭과 로그 형식이 채점지 사진과 일치하는지 확인하며, 모든 메트릭은 빈값이 없어야합니다.
+**2)** 출력된 Grafana URL을 통해 admin/`Skills$#$@!`에 로그인 후 wsc2026-grafana-dashboard에서 메트릭과 로그 형식이 채점지 사진과 일치하는지 확인하며, **모든 메트릭 및 로그는 빈값이 없어야합니다.** 다음 구성 요소가 대쉬보드에 포함되어 있는지 확인합니다.
 
-> 정정 2026-08-16: **패널 이름(Panel Name)은 채점 대상이 아니다.** 과제지 Description 의 메트릭·로그 데이터가 정확히 추출·표현되는지를 본다. Pod CPU/Memory 패널은 특정 파드 한정이 아니라 **모든 파드(All Pod)** 대상이다. Application Logs 패널에 `/v1/book` 외 로그가 섞여 있어도, 과제지·채점기준표에 명시된 로그 형식 기준으로 채점한다.
-
-Application Logs 패널 로그 형식 예시:
+- Node CPU (%) - 노드별 CPU 사용률
+- Node Memory (%) - 노드별 Memory 사용률
+- Available Nodes - 각 노드그룹별 노드 수
+- Pod CPU - 파드별 CPU 사용률
+- Pod Memory - 파드별 Memory 사용률
+- Pending Pods - Pending 상태의 Pod 개수
+- Pod Restarts - 리스타트 Pod 개수
+- App Pod CPU - 어플리케이션 파드별 CPU 사용률
+- App Pod Memory - 어플리케이션 파드별 Memory 사용률
+- App Running - 어플리케이션 파드 Running 상태의 수
+- App Restarts - 어플리케이션 파드 리스타트 수
+- App Pending - 어플리케이션 파드 Pending 상태의 수
+- Request Count - 전체 어플리케이션 요청 수
+- Response Time - 전체 어플리케이션 평균 응답 시간
+- Status Code - 어플리케이션 응답 코드별 응답 수
+- Application Logs - 어플리케이션 로그
+- Application Logs 패널 로그 형식 예시 (/v1/book을 제외한 로그가 있을 경우 오답처리):
 
 ```
 INFO {"level":"INFO","path":"/v1/book","status":"200","duration":"112.663323ms","method":"POST"}
@@ -629,10 +658,22 @@ INFO {"level":"INFO","path":"/v1/book","status":"200","duration":"112.663323ms",
 
 *(채점지 사진과 대조하여 확인)*
 
+> **`/v1/book 을 제외한 로그가 있을 경우 오답처리` 조항은 형식 기준으로 판정된다.** 채점 11-1·11-3 이 직접 띄우는
+> `error-gen`(`/nonexist`)·`latency-gen`(`/delay`)이 비-`/v1/book` 로그를 대량 만들고, 과제지 Reference02 로그 예시
+> 자체도 `"path":"/v1/book/999"` 를 WARN 예시로 쓴다. 문자 그대로 적용하면 자기모순이다.
+> 공식 답변(`errata/수정사항.txt` 2번): "현재 파일 수정이 불가하여 수정은 되지 않습니다. **로그는 과제지와
+> 채점기준표에 있는 형식으로 채점합니다.**" → 판정 기준은 `level` 접두 + 고정 키 순서 JSON 형식이다.
+> 따라서 `k8s/logging/fluent-bit.yaml` 을 `/v1/book` 전용으로 조이지 않는다 — 조이면 4XX 가 사라져
+> `HighErrorRate` 알람(11-4)과 Status Code 4XX 패널이 함께 죽는다.
+
+> 정정 2026-08-16: Pod CPU/Memory 패널은 특정 파드 한정이 아니라 **모든 파드(All Pod)** 대상이다.
+
 ### 11-4. Alert Firing
 
 **1)** Active Alerts 패널에 Edit을 선택해 나온 결과와 채점지 사진과 일치하는지 확인합니다.
+(* HighLatency Alert 구성요소는 채점과 무관합니다.)
 
 *(채점지 사진과 대조하여 확인)*
 
-> 정정 2026-08-07: **HighLatency Alert 채점 항목은 삭제됐다.** 지급 book 바이너리에 `/delay` 엔드포인트가 없어 과제지 범위 안에서는 발화가 불가능하다는 질의에 대한 답변이다. 나머지 5종(PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / PodCrashLooping)만 확인한다. 과제지 Prometheus Alert 표의 HighLatency 규칙 자체는 그대로 요구되므로 룰은 유지한다.
+> 2026-08-07 정정(HighLatency Alert 채점 제외)이 **최종 정정본 본문에 그대로 반영됐다** — 근거가 질의 답변에서 채점지 본문으로 승격됐다. 확인 대상은 나머지 5종(PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / PodCrashLooping)이다.
+> 과제지 Prometheus Alert 표는 여전히 HighLatency 규칙을 요구하므로 `k8s/monitoring/prometheus-rules.yaml` 의 룰은 유지한다. 삭제된 건 Firing 확인 항목뿐이며, **`latency-gen` 파드는 최종본 11-1·11-3 에 그대로 살아 있다**(파드와 이 항목은 무관하다).
