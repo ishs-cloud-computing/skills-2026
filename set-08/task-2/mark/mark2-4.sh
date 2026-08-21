@@ -58,8 +58,15 @@ install_kubectl() {
     echo "EKS 클러스터 버전 조회 실패 — kubectl ${kubectl_version} 로 진행합니다." >&2
   fi
   mkdir -p "$HOME/.local/bin"
-  curl -fsSL -o "$HOME/.local/bin/kubectl" "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${kubectl_arch}/kubectl"
+  # -f 만으로는 부족하다 — 404 면 0바이트 파일이 남고 chmod 는 성공해서
+  # 채점 후반 kubectl 호출이 전부 깨진 뒤에야 원인을 알게 된다.
+  if ! curl -fsSL -o "$HOME/.local/bin/kubectl" "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${kubectl_arch}/kubectl"; then
+    rm -f "$HOME/.local/bin/kubectl"
+    echo "kubectl 다운로드 실패: ${kubectl_version} (${kubectl_arch})" >&2
+    exit 2
+  fi
   chmod +x "$HOME/.local/bin/kubectl"
+  kubectl version --client >/dev/null 2>&1 || { echo "kubectl 실행 불가: ${kubectl_version}" >&2; exit 2; }
 }
 
 install_base_tools curl jq unzip

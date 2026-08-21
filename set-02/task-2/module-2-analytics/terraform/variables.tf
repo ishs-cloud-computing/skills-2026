@@ -98,10 +98,10 @@ variable "app_port" {
   default     = 5000
 }
 
-# 과제지 원문이 "wsc2026-alaytics-ec2-role" 로 오타(analytics → alaytics)지만
-# 이름 정확 일치 채점 대비로 원문 그대로 유지한다. 임의로 고치지 말 것.
+# 2026-08-21 신판이 원문 오타를 고쳤다 — 정본은 "wsc2026-analytics-ec2-role" 이다.
+# 전사본(task.md)은 신판을 따랐고 여기는 아직 구판 이름이라 어긋나 있다. 리네임은 이슈 #133.
 variable "ec2_role_name" {
-  description = "애플리케이션 EC2 IAM 역할 이름 (과제지 6. IAM — 원문 오타 유지)"
+  description = "애플리케이션 EC2 IAM 역할 이름 (과제지 6. IAM — 신판은 analytics, 리네임 #133)"
   type        = string
   default     = "wsc2026-alaytics-ec2-role"
 }
