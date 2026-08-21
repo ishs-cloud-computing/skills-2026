@@ -3,6 +3,24 @@
 기존 Web ACL 에 **룰 블록**을 추가하는 템플릿 모음. Web ACL 자체를 새로 만드는 건 `shared/addons/waf/`.
 1과제 WAF 옵션 확장(set-02/03/05/07/08/09 task-1), task-3 WAF 추가 룰, set-07 m2 CDN WAF 에 대응한다.
 
+## RUN guard
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
+aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+terraform fmt
+terraform init                # -upgrade 는 쓰지 않는다
+terraform validate
+terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
+terraform apply
+```
+
+- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+
 ## 파일
 
 - `rules.tf` — 예시 Web ACL 하나에 룰 8종을 담고 `locals.addon_wafx_enable` 토글로 켠다 + regex pattern set 2개(경로·스캐너 UA). 기존 ACL 에 붙일 땐 아래 블록만 복사하고 이 파일의 ACL 은 쓰지 않는다

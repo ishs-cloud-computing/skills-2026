@@ -4,6 +4,24 @@
 Streams → Lambda ESM 과 Gateway 엔드포인트를 새 리소스로 붙인다.
 1과제 Database 옵션(전 세트 task-1 DynamoDB), set-07 m1(Streams→Lambda), set-02 m1/m4, set-05 m4 후보에 대응.
 
+## RUN guard
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
+aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+terraform fmt
+terraform init                # -upgrade 는 쓰지 않는다
+terraform validate
+terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
+terraform apply
+```
+
+- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+
 ## 파일
 
 - `dynamodb-stream.tf` — 기존 Lambda Role 에 스트림 읽기 정책 + `aws_lambda_event_source_mapping`(batch/retry/bisect/on_failure)

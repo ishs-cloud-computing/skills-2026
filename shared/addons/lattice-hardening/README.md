@@ -4,6 +4,24 @@
 2과제 Lattice 모듈(set-05 task-2 module-2-vpc-lattice, set-08 task-2 module-2-lattice) 의 당일 추가 문항
 ("서비스에 IAM 인증 적용", "액세스 로그를 CloudWatch/S3 로", "version 헤더로 v1/v2 분기 + 가중치", "Lattice 경유 외 접근 차단") 에 대응한다.
 
+## RUN guard
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
+aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+terraform fmt
+terraform init                # -upgrade 는 쓰지 않는다
+terraform validate
+terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
+terraform apply
+```
+
+- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+
 ## 파일
 
 - `lattice-hardening.tf` — `aws_vpclattice_auth_policy` · 액세스 로그 그룹 + `aws_vpclattice_access_log_subscription`(CW 기본, S3 선택) · `aws_vpclattice_listener_rule` 2개(header `version: v1/v2`, `addon_lattice_listener_id` 가 비어 있으면 생성 안 함)

@@ -4,6 +4,24 @@ EventBridge 보안 룰 패턴 모음(루트 로그인·IAM 변경·SG 인바운�
 + SNS 직접 타깃 또는 공통 Lambda 알림 핸들러 + (선택) GuardDuty detector + (선택) AWS Config recorder·관리형 룰·SSM 자동 복구.
 2과제 이벤트 모듈(set-02 m3, set-08 m3)과 1과제 Security 옵션("보안 이벤트 감지·통지") 추가 문항에 대응한다.
 
+## RUN guard
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
+aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+terraform fmt
+terraform init                # -upgrade 는 쓰지 않는다
+terraform validate
+terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
+terraform apply
+```
+
+- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+
 ## 파일
 
 - `eventbridge.tf` — 룰 패턴 locals(키 7개) · SNS 토픽(+email, 토픽 정책) · 룰(for_each, 과제지 이름 주입) · 스케줄 룰 · 타깃

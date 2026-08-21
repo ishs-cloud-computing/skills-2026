@@ -2,6 +2,20 @@
 
 1과제 Security 옵션의 핵심은 "Pod 에 IAM 권한을 어떻게 주는가"다. 방식 판정부터 한다.
 
+## RUN guard
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 세트의 `k8s/`·`eksctl/`(또는 기존 구성)으로 복사해 병합한다. 이 addon 디렉터리 자체는 독립 `apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
+aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+kubectl config current-context
+```
+
+- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`/`delete`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+
 ## 방식 판정 (CLAUDE.md 규칙)
 
 - 기본값: **Pod Identity**.

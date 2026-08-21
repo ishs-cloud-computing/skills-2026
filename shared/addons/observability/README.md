@@ -7,6 +7,20 @@
 Prometheus·Grafana·Fluent Bit 는 이 금지 목록에 없다 (set-07 task-1 이 실제로 썼다).
 단 채점 대상은 helm 내부 상태가 아니라 결과물(k8s 오브젝트·CloudWatch 지표·대시보드)이어야 한다.
 
+## RUN guard
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 세트의 `k8s/`·`eksctl/`(또는 기존 구성)으로 복사해 병합한다. 이 addon 디렉터리 자체는 독립 `apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
+aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+kubectl config current-context
+```
+
+- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`/`delete`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+
 ## 경로 A — Container Insights (CloudWatch 계열 요구)
 
 기존 클러스터에 addon 한 줄:

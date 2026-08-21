@@ -13,7 +13,7 @@
 | KMS | `kms/` | set-07 task-1 `terraform/kms.tf` (CMK 3개·MRK·서비스별 key policy) |
 | WAF | `waf/` | set-07 task-1 `terraform/waf.tf` (CLOUDFRONT), task-3 `terraform/waf.tf` (scope-down·base64) |
 | Security (IRSA·Pod Identity·OIDC) | `irsa/` | set-08 task-2 module-4 `eksctl/cluster.yaml` (IRSA), set-07 task-1 `eksctl/cluster.yaml` (Pod Identity) |
-| Lambda GET API | 스니펫 없음 | set-07 task-1 `terraform/lambda.tf`·`lambda/`, set-05 task-2 module-4 (REST API) |
+| Lambda GET API | `lambda-get-api/` | set-07 task-1 `terraform/lambda.tf`·`lambda/`, set-05 task-2 module-4 (REST API) |
 | Observability | `observability/` | set-07 task-1 `k8s/monitoring/`·`k8s/logging/`·`terraform/cloudwatch.tf` |
 
 ## 부착 절차

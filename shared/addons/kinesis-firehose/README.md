@@ -4,6 +4,24 @@
 과 Lambda 트리거를 추가한다. 2과제 분석 모듈(set-02 task-2 module-2-analytics) 의 당일 추가 문항
 ("스트림 데이터를 S3 에 보관", "스트림 암호화·보존 기간", "Lambda 로 소비") 에 대응한다.
 
+## RUN guard
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
+aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+terraform fmt
+terraform init                # -upgrade 는 쓰지 않는다
+terraform validate
+terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
+terraform apply
+```
+
+- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+
 ## 파일
 
 - `kinesis-firehose.tf` — S3 버킷 · Firehose 서비스 역할 · 오류 로그 그룹 · `aws_kinesis_firehose_delivery_stream`(kinesis_source → extended_s3) · Lambda ESM(Kinesis) (`addon_firehose_esm_function_name` 이 비어 있으면 생성 안 함)
