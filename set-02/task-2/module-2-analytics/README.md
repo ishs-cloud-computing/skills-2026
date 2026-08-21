@@ -185,7 +185,7 @@ terraform destroy
 
 ## 설계 근거 · 함정
 
-- **EC2 역할 이름 `wsc2026-alaytics-ec2-role`은 과제지 원문 오타(alaytics)를 의도적으로 유지**한 것 — 이름 정확 일치 채점 대비. 임의로 analytics로 고치지 말 것 (`variables.tf`에도 주석 있음).
+- **EC2 역할 이름이 전사본과 구현에서 어긋나 있다 (이슈 #133).** 구판 과제지 원문 오타 `wsc2026-alaytics-ec2-role` 을 이름 정확 일치 채점 대비로 의도적으로 유지해 왔으나, 2026-08-21 신판이 원문을 `wsc2026-analytics-ec2-role` 로 고쳐 그 근거가 사라졌다. `task.md` 는 신판을 따랐고 `variables.tf`·`iam.tf` 는 아직 구판 이름이다 — 리네임은 이슈 #133 에서 처리한다. **그 전까지 `variables.tf`·`iam.tf` 의 "고치지 말 것" 주석은 무효**다. 채점 스크립트는 이 역할 이름을 읽지 않으므로 자동 채점 점수에는 영향이 없다.
 - **task.md는 "Apache Flink 1.19"라고 쓰지만 mark 2-4는 `ZEPPELIN-FLINK-3_0`을 채점** — mark 스크립트 우선. Studio Notebook(Zeppelin)이며 Flink 애플리케이션 프로그래밍 금지 조건과도 일치.
 - **Studio Notebook은 terraform provider의 `aws_kinesisanalyticsv2_application`으로 생성 불가** (zeppelin 설정 블록 미지원, provider issue #41233) → `aws_cloudformation_stack`으로 래핑.
 - **Kinesis SQL 커넥터는 CFN에 명시 필요.** 콘솔 위저드로 만들면 커넥터가 자동 추가되지만 bare CFN엔 Flink 코어 빌트인만 남아 `Could not find any factory for identifier 'kinesis'`가 난다 → `flink.tf`의 `CustomArtifactsConfiguration`에 `flink-sql-connector-kinesis:1.15.4`(런타임 1.15 대응)를 Maven 의존성으로 주입. 커넥터 변경 시 노트북은 **새 세션**으로 다시 열어야 jar가 로드된다.

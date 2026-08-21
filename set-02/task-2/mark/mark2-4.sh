@@ -41,4 +41,4 @@ aws dynamodb scan --table-name wsc2026-sensor-data --max-items 1 --query "Items[
 echo ====================
 echo "  4-5-B Producer Running"
 echo ====================
-aws dynamodb scan --table-name wsc2026-sensor-data --max-items 3 --query "Items[*].{sensorId:sensorId.S,timestamp:timestamp.S}" --output table
+aws dynamodb scan --table-name wsc2026-sensor-data --max-items 3 --query "Items[*].{sensorId:sensorId.S,timestamp:timestamp.S}" --output json
