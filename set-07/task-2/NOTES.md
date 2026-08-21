@@ -142,21 +142,46 @@
 
 ---
 ## 정정 로그
-<!-- 과제지·채점지의 오류로 구현을 바꿨으면 질의일·답변일·출처와 함께 적는다. task.pdf·mark.pdf·provided/ 원본은 고치지 않는다. -->
+<!-- 과제지·채점지의 오류로 구현을 바꿨으면 질의일·답변일·출처와 함께 적는다. -->
 
-정정 정본은 `set-07/errata/2과제.txt` 하나뿐이고, 배경·"수정없음" 판정은 `set-07/changelog.txt` 에 있다.
-원본 파일(`task.md`·`mark.md`·`mark/mark3.sh`·`mark/mark4.sh`·`provided/module-4/Dockerfile`)은 전부 그대로 두고,
-내용이 바뀐 실행 파일만 **날짜 접미사 사본**으로 추가한다
-(`mark/mark3-2026-08-01.sh`, `mark/mark4-2026-08-04.sh`, `provided/module-4/Dockerfile-2026-08-01`).
-원본과 정정본을 나란히 두면 대회 당일 또 정정이 와도 어느 답변에서 온 사본인지 파일명으로 구분된다.
-task-1 도 같은 규칙이다(`set-07/task-1/NOTES.md` 정정 로그).
+정정 정본은 `set-07/errata/2과제.txt` 이고, 배경·"수정없음" 판정은 `set-07/changelog.txt` 에 있다.
+
+**2026-08-21 부터 `task.pdf`·`mark.pdf`·`mark/mark*.sh` 는 재배포본이 정본**이며, 전사본 `task.md`·`mark.md`
+도 재배포본을 따라간다(아래 2026-08-21 절). 채점 스크립트의 날짜 접미사 사본은 재배포본에 흡수돼 사라졌다.
+
+**`provided/` 는 예전 규칙 그대로다.** 재배포된 건 과제지·채점지 PDF 뿐이고 제공파일은 재배포되지 않았다.
+원본 `provided/module-4/Dockerfile` 을 그대로 두고 정정본을 **날짜 접미사 사본**
+`provided/module-4/Dockerfile-2026-08-01` 로 나란히 둔다 — 대회 당일 또 정정이 와도 어느 답변에서 온
+사본인지 파일명으로 구분된다. task-1 도 같은 규칙이다(`set-07/task-1/NOTES.md` 정정 로그).
+
+### 2026-08-21 과제지·채점지 재배포본 수령 (출처: 출제자 재배포 PDF 2종)
+
+`changelog.txt` 첫 줄이 적어둔 "수정본이 재배포되지 않습니다"라는 전제가 깨졌다. 2과제 **과제지·채점지 PDF
+수정본**이 재배포되어 `task.pdf`·`mark.pdf` 를 교체하고 전사본·채점 스크립트를 재배포본에 맞췄다.
+
+재배포본 채점지의 명령어를 저장소 스크립트와 한 줄씩 정규화 대조한 결과 **채점 로직은 하나도 바뀌지 않았다.**
+
+| 구분 | 내용 | 구현 영향 |
+|---|-----------|-----------|
+| 채점 스크립트 | `mark1.sh`·`mark2.sh` 는 재배포본과 원래 동일. `mark3-2026-08-01.sh`·`mark4-2026-08-04.sh` 가 재배포본과 **완전 동일**이라 별도 사본을 유지할 이유가 사라져 `mark3.sh`·`mark4.sh` 를 그 내용으로 덮고 날짜 사본을 삭제했다(런북 참조 7곳도 통일) | **없음** — 스크립트 내용 자체는 그대로 |
+| 반영된 정정 | `errata/2과제.txt` **8건 전부**(공통 1·2, M2-1, M3-1·2·3, M4-1·2). 1과제와 달리 **되돌아간 정정이 없다** | **없음** — 이미 전부 판정·반영 완료 |
+| 요구사항 ↔ 구현 | **불일치 없음.** M3-1 은 `module-3-eks-scaling/k8s/30-keda-scaledobject.yaml` 의 `stabilizationWindowSeconds: 0` + NodePool `consolidateAfter: 60s`, M4-1 은 `module-4-container-logging/app/Dockerfile:10` 의 `Flask==3.1.3` 핀으로 이미 충족 | **없음** |
+| 전사본 오차 교정 | 과제지 3-2 "Managed Addon 설치를 위한 NodeGroup" → "Addon 설치를 위한 **Managed** NodeGroup"(managed nodegroup 을 요구하는 게 맞다 — 채점 3-2-A 가 `aws eks describe-nodegroup` 을 쓴다), 3-5 에 "NodePool, Class를 아래 설명에 맞게 구성" 문장 추가 | **없음** — 이미 managed nodegroup 이다 |
+
+M4-1 의 제공파일 Dockerfile 정정은 재배포 대상이 아니었다 — `provided/module-4/Dockerfile` 은 최초본
+그대로이고 `Dockerfile-2026-08-01` 이 정정본으로 남는다(위 머리말).
+
+관찰 1건 — 재배포본 채점지 4-2-A 박스가 `for n in ...; do; aws elbv2 ...; done` 으로 `do` 뒤에 세미콜론이
+붙어 있다. 유의사항 12 대로 통째로 붙여넣으면 bash 문법 오류가 난다. 다만 실제 채점은 `mark4.sh` 로
+돌리고 그쪽은 여러 줄 `do` 블록이라 정상이므로 영향 없다. 선수가 채점지 박스를 직접 붙여넣을 일이
+생기면 `do;` 의 세미콜론만 지우면 된다.
 
 ### 2026-08-04 답변 (출처: `set-07/errata/2과제.txt` 공통 2 + Module 4 - 2 + `changelog.txt`)
 
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|
 | 공통 2 | 유의사항 18 추가 — `source kubectl-connect` 오류 시 **모듈당 1회**에 한해 `rm -rf .kube/` 로 초기화 허용 | **없음**(채점 절차) — kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인. EKS 모듈(3·4) 런북 채점 절에 한 줄만 반영. 우리 쪽 대응은 그대로 access entry fallback 이다 |
-| M4-2 | 4-5-A 채점 명령의 공백문자 issue(한컴오피스가 넣은 NBSP) 수정 | **있음**(채점 스크립트) — `mark/mark4.sh:45` 의 `query_range` 와 `--data-urlencode` 사이가 NBSP(U+00A0) 라 그대로 붙여넣으면 `query_range<NBSP>--data-urlencode` 한 토큰이 되어 4-5-A 확인이 실패한다. 정정본 사본 `mark/mark4-2026-08-04.sh` 추가(NBSP → 스페이스, 그 외 동일) + module-4 런북 채점 명령을 정정본으로 교체. 쿼리 문자열 자체는 안 바뀌었으므로 **구현(Loki·OTel·대시보드)은 영향 없음** |
+| M4-2 | 4-5-A 채점 명령의 공백문자 issue(한컴오피스가 넣은 NBSP) 수정 | **있음**(채점 스크립트) — `mark/mark4.sh:45` 의 `query_range` 와 `--data-urlencode` 사이가 NBSP(U+00A0) 라 그대로 붙여넣으면 `query_range<NBSP>--data-urlencode` 한 토큰이 되어 4-5-A 확인이 실패한다. 정정본 사본 `mark/mark4-2026-08-04.sh` 추가(NBSP → 스페이스, 그 외 동일) + module-4 런북 채점 명령을 정정본으로 교체. *(2026-08-21 재배포로 `mark4.sh` 에 흡수)* 쿼리 문자열 자체는 안 바뀌었으므로 **구현(Loki·OTel·대시보드)은 영향 없음** |
 
 ### 2026-08-01 답변 (질의일 2026-07-31, 출처: `set-07/errata/2과제.txt` + `changelog.txt`)
 
@@ -166,12 +191,33 @@ task-1 도 같은 규칙이다(`set-07/task-1/NOTES.md` 정정 로그).
 | M2-1 | 과제지 5번 "Distribution Name" → "Distribution Comment" | **없음** — 표기 정정일 뿐. 구현은 처음부터 `comment = var.distribution_name`(cloudfront.tf)이고 mark2.sh 도 `.Comment` 로 distribution 을 찾는다. 변수명 개명은 tfvars 까지 파급되고 채점 이득이 0이라 하지 않음 |
 | M3-1 | "Scale in/out 채점 시 2분 대기" → "**Pod/Node level Scale in/out 모두 2분 내**로 이루어져야 함" | **있음** — 기준이 "채점 스크립트 150초 창"에서 "2분"으로 좁아졌다. ScaledObject `scaleDown.stabilizationWindowSeconds` 15 → 0 (결정 로그 참조) |
 | M3-2 | 3-3-A `57m`·`.5-eks-3385e9b`, 3-5-A `-8c66dbc4-r4fnp` 는 파란 글씨 = 채점 시 무시 | **없음** — 노드 가동시간·EKS patch version·pod 해시라 구현이 정하는 값이 아니다. 클러스터 version `1.35` 는 그대로 유지 |
-| M3-3 | 채점 스크립트 3-6-A `seq 1 24` → `seq 1 30` (scale-out 대기 30초 연장, Nitro 부팅 시간 반영) | **없음**(완화 방향) — 자가채점만 정정본 `mark/mark3-2026-08-01.sh` 사용. `mark.md` 3-6-B 블록은 PDF 전사본이라 24 그대로 둔다 |
+| M3-3 | 채점 스크립트 3-6-A `seq 1 24` → `seq 1 30` (scale-out 대기 30초 연장, Nitro 부팅 시간 반영) | **없음**(완화 방향) — 자가채점만 정정본 `mark/mark3-2026-08-01.sh` 사용. `mark.md` 3-6-B 블록은 PDF 전사본이라 24 그대로 둔다 *(2026-08-21 재배포로 무효 — `mark3.sh` 가 정정본이고 재배포본 채점지도 30 이라 `mark.md` 도 30 으로 맞췄다)* |
 | M4-1 | 지급 Dockerfile 3행(`WORKDIR /app` 다음)에 `RUN pip install --no-cache-dir Flask==3.1.3` 삽입 | **있음** — 우리 우회본과 사실상 같은 조치가 공식화됐다. `provided/module-4/Dockerfile-2026-08-01` 추가, `app/Dockerfile` 을 정정본과 동일 본문(설치 줄을 COPY 앞으로, 버전 핀)으로 맞춤 |
 
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-21 [module-3][module-4] 정정본 사본을 없애고 `markN.sh` 하나로 — 재배포본이 원본을 대체했다
+- 맥락: 원본이 재배포되지 않는다는 전제에서 "원본 보존 + 날짜 접미사 사본" 규칙이 성립했다. 2026-08-21
+  재배포본이 오면서 전제가 깨졌고, 재배포본 채점지 본문은 `mark3-2026-08-01.sh`·`mark4-2026-08-04.sh` 와
+  글자까지 같았다(정규화 대조로 확인).
+- 채택: `mark3.sh`·`mark4.sh` = 재배포본. 날짜 사본 삭제. 대회 당일 두 이름을 헷갈릴 여지를 없애는 게
+  대조 가치보다 크다 — 런북이 zip/`-Path`/자가채점 7곳에서 파일명을 부르고 있었다.
+- 기각: 사본을 남기고 `markN.sh` 만 갱신 — 같은 내용 파일이 둘이 되어 이름만 늘어난다.
+- 예외: `provided/module-4/Dockerfile-2026-08-01` 은 유지. 제공파일은 재배포되지 않았고 `provided/` 원본
+  불변 규칙(`CLAUDE.md`)이 그대로 살아 있다.
+- 대가: 최초본 대조는 git 이력(`git show <이전커밋>:set-07/task-2/mark/mark3.sh`)으로만 가능하다.
+
+### 2026-08-21 PDF·이미지를 Git LFS 추적에서 뺐다 — 재배포 때 교체가 막힌다
+- 맥락: `*.pdf` 가 LFS 라 재배포본 교체에 LFS 업로드가 필요한데, 망 정책이 검증 호스트
+  `lfs.github.com` 을 403 으로 막는 환경에서는 오브젝트 바이트는 나가도 verify 콜백이 거부돼
+  GitHub 이 `GH008` 로 push 자체를 튕긴다. 정정이 올 때마다 갈아끼워야 하는 파일이 하필 그것이다.
+- 채택: `.gitattributes` 에서 `*.pdf`·`*.jpeg` 를 `binary` 로 내렸다(24개, 7.4MB). 이력은 건드리지 않아
+  커밋 해시가 유지된다 — 옛 커밋 checkout 에만 git-lfs 가 필요하다.
+- 기각: 제공 실행 바이너리(6개, 56MB)까지 해제 — 내용이 바뀌지 않아 업로드할 일이 없고, 모든 clone 에
+  56MB 를 영구히 얹는 대가가 크다. LFS 유지.
+- 기각: `git filter-repo` 로 이력까지 제거 — `main` 포함 전 커밋 해시가 바뀌고 열린 PR 이 깨진다.
 
 ### 2026-08-17 [공통] 런북 재배치: 본 PC 는 terraform·eksctl 만, 나머지는 전부 CloudShell
 - 맥락: 기존 런북은 helm·kubectl·검증·스모크를 전부 본 PC 에서 하고 CloudShell 은 docker push 와 셀프 채점만 맡았다. 그 결과 **채점과 동일한 경로(일반 CloudShell + `aws eks update-kubeconfig` 한 줄)를 맨 마지막 단계에서야 처음 밟는다** — 여기서 막히면 k8s 채점 항목이 통째로 날아가는데 그 사실을 가장 늦게 안다. 부수적으로 본 PC 단계가 많아 README.md ↔ README.linux.md 가 거의 전문 중복이었다(module-3 linux 런북에서 CloudShell 단계를 건너뛴 사고가 실제로 이 중복 때문)

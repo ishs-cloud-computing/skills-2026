@@ -33,7 +33,7 @@ module-4-container-logging/
 └── README.md
 
 # 앱 소스: task-2/provided/module-4/app.py (제공 원본, 수정 금지 — Dockerfile 은 app/ 수정본 사용)
-# 채점: task-2/mark/mark4-2026-08-04.sh (CloudShell, ap-northeast-1)
+# 채점: task-2/mark/mark4.sh (CloudShell, ap-northeast-1)
 ```
 
 ## 배포 순서
@@ -60,7 +60,7 @@ ALB·TG 는 pod 등록(6단계) 전까지 unhealthy — 정상이다.
 cd module-4-container-logging
 $env:KUBECONFIG = "$PWD\kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
 Compress-Archive -Force -DestinationPath m4.zip `
-  -Path k8s, helm, cs-deploy.sh, app\Dockerfile, ..\provided\module-4\app.py, ..\mark\mark4-2026-08-04.sh
+  -Path k8s, helm, cs-deploy.sh, app\Dockerfile, ..\provided\module-4\app.py, ..\mark\mark4.sh
 cd terraform
 terraform init
 terraform apply -auto-approve
@@ -220,7 +220,7 @@ aws elbv2 describe-load-balancers --names o11y-grafana-alb --region ap-northeast
 
 ```bash
 cd ~/m4
-bash mark4-2026-08-04.sh   # 2026-08-04 정정본 (4-5-A 명령의 NBSP 제거). 원본은 mark4.sh
+bash mark4.sh   # 2026-08-21 재배포본 (4-5-A 명령에 NBSP 없음)
 ```
 
 ## Teardown

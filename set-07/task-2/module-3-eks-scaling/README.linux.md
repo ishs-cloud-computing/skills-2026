@@ -10,7 +10,7 @@ cd module-3-eks-scaling
 export KUBECONFIG="$PWD/kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
 rm -f m3.zip
 zip -r m3.zip k8s cs-deploy.sh
-zip -j m3.zip ../provided/module-3/* ../mark/mark3-2026-08-01.sh   # -j: 경로 없이 루트에 담는다
+zip -j m3.zip ../provided/module-3/* ../mark/mark3.sh   # -j: 경로 없이 루트에 담는다
 ```
 
 ### 1) [본 PC] Terraform
