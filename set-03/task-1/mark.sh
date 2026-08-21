@@ -13,6 +13,49 @@ check_kms() {
   if echo "$POLICY" | grep -q '"kms:\*"'; then echo "KMS ${ALIAS}: FAIL (kms:*)"; elif echo "$POLICY" | grep -q ':root"'; then echo "KMS ${ALIAS}: FAIL (root)"; else echo "KMS ${ALIAS}: PASS"; fi
 }
 
+# ── 정본과 의도적으로 다른 지점 ────────────────────────────────────────────────
+# 최종 채점지는 부하 파드 6종 생성 + `sleep 180` 을 11-1 과 11-3 **양쪽에** 둔다.
+# 11-3 실행분은 AlreadyExists 로 조용히 실패하고 sleep 만 다시 돌아, 리허설마다 6분이 나간다.
+# 그 6분은 검증이 아니라 알람 룰의 `for: 3m`(prometheus-rules.yaml:26,37,50,82)을 채우는 고정 대기일 뿐이고,
+# 11-1 의 실제 검사(observability 파드 Running 수)는 부하 파드와 무관하다.
+# 그래서 이 스크립트는 ① 파드 생성을 5-5 직후 1회로 옮기고(6-1~10-1 도는 동안 3분 시계가 흐른다)
+#                    ② `sleep 180` 대신 ALERTS{alertstate="firing"} 를 폴링해 뜨는 즉시 통과한다.
+# 결과: 대기가 사실상 0 에 수렴하고, "어떤 알람이 떴는지"라는 실질 검증이 생긴다.
+# 파드 생성을 맨 앞이 아니라 5절 뒤에 두는 이유: 5-4 가 wsc2026 네임스페이스 파드를 나열하므로
+# 앞에서 띄우면 채점자가 볼 5-4 출력과 달라진다(합격 조건은 book-deploy 필터라 PASS/FAIL 은 불변).
+# ──────────────────────────────────────────────────────────────────────────────
+
+GRAFANA_CRED='admin:Skills$#$@!'
+
+start_load_pods() {
+  local SVC_IP
+  SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null)
+  kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null
+  kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://${SVC_IP}/nonexist; sleep 0.1; done" &>/dev/null
+  kubectl run latency-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://${SVC_IP}/delay?ms=5000; sleep 0.2; done" &>/dev/null
+  kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null
+  kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null
+  kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
+}
+
+# 기대 알람 5종이 Firing 될 때까지 폴링. 정본의 `sleep 180` 을 대체한다(백스톱 4분).
+wait_for_alerts() {
+  local EXPECTED="PodHighCPU PodHighMemory PodNotReady HighErrorRate PodCrashLooping"
+  local DEADLINE=$(( $(date +%s) + 240 ))
+  local PROM_UID FIRING MISSING a
+  PROM_UID=$(curl -s -u "$GRAFANA_CRED" "http://${GRAFANA_LB}/api/datasources" 2>/dev/null     | python3 -c "import sys,json;print(next((d['uid'] for d in json.load(sys.stdin) if d['type']=='prometheus'),''))" 2>/dev/null)
+  if [ -z "$PROM_UID" ]; then echo "  prometheus datasource 조회 실패 — Grafana 에서 수동 확인"; return 1; fi
+  while :; do
+    FIRING=$(curl -s -u "$GRAFANA_CRED" --get --data-urlencode 'query=ALERTS{alertstate="firing"}'       "http://${GRAFANA_LB}/api/datasources/proxy/uid/${PROM_UID}/api/v1/query" 2>/dev/null       | python3 -c "import sys,json;print(' '.join(sorted({r['metric'].get('alertname','') for r in json.load(sys.stdin)['data']['result']})))" 2>/dev/null)
+    MISSING=""
+    for a in $EXPECTED; do echo " $FIRING " | grep -q " $a " || MISSING="$MISSING $a"; done
+    echo "  firing:[${FIRING}] 미발화:[${MISSING:- 없음}]"
+    [ -z "$MISSING" ] && { echo "  -> 기대 알람 5종 전부 Firing"; return 0; }
+    [ "$(date +%s)" -ge "$DEADLINE" ] && { echo "  -> 타임아웃(4분). 미발화:$MISSING"; return 1; }
+    sleep 15
+  done
+}
+
 echo =====1-1=====
 aws ec2 describe-vpcs --vpc-ids "$VPC_ID" --query "Vpcs[0].CidrBlock" --output text; aws ec2 describe-subnets --filters "Name=vpc-id,Values=${VPC_ID}" --query "Subnets[].{Name:Tags[?Key=='Name'].Value|[0],CIDR:CidrBlock}" --output text
 echo 
@@ -80,7 +123,6 @@ kubectl get pods -n wsc2026 -o custom-columns='NAME:.metadata.name,STATUS:.statu
 done
 echo
 
-# wsi-2026-xxx로 조회하는 오류를 발견 및 수정하였습니다.
 echo =====5-5=====
 PI_SA=$(aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026 --query 'associations[0].serviceAccount' --output text 2>/dev/null)
 PI_ROLE=$(aws eks list-pod-identity-associations --cluster-name wsc2026-eks-cluster --namespace wsc2026 --query 'associations[0].associationId' --output text 2>/dev/null)
@@ -88,6 +130,11 @@ PI_ROLE=$(aws eks list-pod-identity-associations --cluster-name wsc2026-eks-clus
 ROLE_NAME=$(aws eks describe-pod-identity-association --cluster-name wsc2026-eks-cluster --association-id "$PI_ROLE" --query 'association.roleArn' --output text 2>/dev/null|awk -F/ '{print $NF}')
 MANAGED_ACTIONS=$(aws iam list-attached-role-policies --role-name "$ROLE_NAME" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null|tr '\t' '\n'|while read arn;do VERSION=$(aws iam get-policy --policy-arn "$arn" --query 'Policy.DefaultVersionId' --output text 2>/dev/null);aws iam get-policy-version --policy-arn "$arn" --version-id "$VERSION" --query 'PolicyVersion.Document.Statement[].Action' --output text 2>/dev/null;done)
 echo "$MANAGED_ACTIONS"|grep -q dynamodb:PutItem && ! echo "$MANAGED_ACTIONS"|grep -qE '^\*$' && echo "Pod Identity Role: PASS" || echo "Pod Identity Role: FAIL"
+echo
+
+# 정본은 이 파드들을 11-1 에서 만든다. 여기서 미리 띄워 6-1~10-1 도는 동안 알람 `for: 3m` 이 흐르게 한다.
+echo "----- 부하/장애 파드 생성 (정본 11-1 상당, 조기 실행) -----"
+start_load_pods
 echo
 
 echo =====6-1=====
@@ -142,7 +189,8 @@ XSS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "https://${CF_DOMAIN}/
 echo
 
 echo =====11-1=====
-# 정정 2026-08-16: 파드 생성 단계는 11-1 채점 대상에서 제외 (11-3 에서 수동 실행)
+# 부하 파드는 5-5 직후에 이미 생성했다(정본은 여기서 만든다 — 헤더 주석 참조).
+# 이 항목의 실제 검사는 observability 파드 Running 수라 부하 파드와 무관하다.
 GRAFANA_LB=$(kubectl get svc -n observability -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.status.loadBalancer.ingress[0].hostname}{end}' 2>/dev/null)
 for p in fluent-bit prometheus grafana; do kubectl get pods -n observability --no-headers --request-timeout=10s 2>/dev/null | grep -c "$p.*Running" | xargs -I{} echo "$p: {}"; done
 echo
@@ -154,30 +202,33 @@ echo
 
 echo =====11-3=====
 echo "수동 채점: 대시보드 구성 확인"
-# 정정 2026-08-16: 원본 11-1 의 테스트 파드 생성·sleep 블록. 11-1 채점 대상에서 제외되고
-# 11-3 에서 수동 실행한다. latency-gen(/delay) 은 HighLatency 항목 삭제로 함께 제외.
-SVC_IP=$(kubectl get svc -n wsc2026 -o jsonpath='{.items[0].spec.clusterIP}' 2>/dev/null); kubectl run not-ready --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"not-ready","image":"busybox","readinessProbe":{"httpGet":{"path":"/health","port":80},"periodSeconds":3},"command":["sh","-c","sleep 3600"]}]}}' &>/dev/null; kubectl run error-gen --image=curlimages/curl --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c "while true; do curl -s -o /dev/null http://'"$SVC_IP"'/nonexist; sleep 0.1; done" &>/dev/null
-kubectl run crash-test --image=busybox --restart=Always -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"}}}' -- sh -c 'exit 1' &>/dev/null; kubectl run stress-cpu --image=busybox --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-cpu","image":"busybox","resources":{"requests":{"cpu":"250m"},"limits":{"cpu":"250m"}},"command":["sh","-c","while true; do :; done"]}]}}' &>/dev/null; kubectl run stress-mem --image=polinux/stress --restart=Never -n wsc2026 --overrides='{"spec":{"tolerations":[{"operator":"Exists"}],"nodeSelector":{"wsc2026/node":"application"},"containers":[{"name":"stress-mem","image":"polinux/stress","resources":{"requests":{"memory":"64Mi"},"limits":{"memory":"64Mi"}},"command":["stress","--vm","1","--vm-bytes","60M","--vm-keep","-t","3600"]}]}}' &>/dev/null
-sleep 180
+# 정본의 `sleep 180` 을 조건 폴링으로 대체. 이미 Firing 이면 즉시 통과한다.
+echo "----- 알람 발화 대기 (정본 sleep 180 대체) -----"
+wait_for_alerts
+echo
 echo "접속: http://${GRAFANA_LB} (admin / Skills\$#\$@!)"
 echo "대시보드: wsc2026-grafana-dashboard"
 echo ""
-echo "Node 로우: CPU/Memory 시계열, Available Nodes 숫자"
-echo "Pod 로우: CPU/Memory 시계열, Pending/Restarts 숫자"
-echo "Application Pod 로우: CPU/Memory 시계열, Running/Restarts/Pending 숫자"
-echo "Application Traffic 로우: RequestCount/ResponseTime/StatusCodes 시계열, Application Logs 패널"
+echo "아래 16개 구성 요소가 대시보드에 포함되어 있는지 확인 (최종 채점지 11-3 본문 명시)"
+echo "  Node CPU (%) / Node Memory (%) / Available Nodes"
+echo "  Pod CPU / Pod Memory / Pending Pods / Pod Restarts"
+echo "  App Pod CPU / App Pod Memory / App Running / App Restarts / App Pending"
+echo "  Request Count / Response Time / Status Code / Application Logs"
+echo "모든 메트릭 및 로그는 빈값이 없어야 한다"
 echo "색상: CPU 80%↑ 빨강, 60~80% 노랑, 60%↓ 초록 / Restart 1↑ 경고"
 echo ""
+# 정본: "Application Logs 패널 로그 형식 예시 (/v1/book을 제외한 로그가 있을 경우 오답처리)"
+# 판정은 형식 기준이다 — 공식 답변(errata/수정사항.txt 2번): "현재 파일 수정이 불가하여 수정은 되지
+# 않습니다. 로그는 과제지와 채점기준표에 있는 형식으로 채점합니다." 채점 스스로 error-gen/latency-gen 으로
+# 비-/v1/book 로그를 만들므로 문자 그대로는 자기모순이다. fluent-bit 을 /v1/book 전용으로 조이지 않는다.
 # 정정 2026-08-16: 패널 이름은 채점 대상 아님. Pod CPU/Memory 는 All Pod 기준.
-# Application Logs 에 /v1/book 외 로그가 섞여도 채점기준표 형식 기준으로 판정.
-echo "Application Logs 패널 로그 형식 예시:"
-echo 'info'
-echo '{"level":"INFO","path":"/v1/book","status":"200","duration":"112.663323ms","method":"POST"}'
+echo "Application Logs 패널 로그 형식 예시 (/v1/book 을 제외한 로그가 있을 경우 오답처리):"
+echo 'INFO {"level":"INFO","path":"/v1/book","status":"200","duration":"112.663323ms","method":"POST"}'
 echo
 
 echo =====11-4=====
 echo "수동 채점: Alert 확인"
-# 정정 2026-08-07: HighLatency Alert 채점 항목 삭제 (지급 바이너리에 /delay 부재)
+# 최종 채점지 본문 명시: "(* HighLatency Alert 구성요소는 채점과 무관합니다.)" — 5종만 확인한다.
 echo "Alerts 로우에서 아래 5개가 빨간색(Firing)으로 표시되는지 확인"
 echo "  PodHighCPU / PodHighMemory / PodNotReady / HighErrorRate / PodCrashLooping"
 echo

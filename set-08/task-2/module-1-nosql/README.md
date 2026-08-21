@@ -62,10 +62,34 @@ curl.exe -s "http://$($env:NOSQL_CLIENT_IP):8080/v1/admin/indexes"
 # → orders 4개(_id 포함)·products 3개·sessions 4개, sessions.expiresAt 에 expireAfterSeconds: 0
 
 curl.exe -s "http://$($env:NOSQL_CLIENT_IP):8080/v1/orders/O-1001"
+# → orderId=O-1001, customerId=C001, status=PENDING, warehouseId=W-A
 curl.exe -s "http://$($env:NOSQL_CLIENT_IP):8080/v1/customers/C001/orders"
+# → O-1006, O-1001, O-1004 포함 (createdAt DESC)
 curl.exe -s "http://$($env:NOSQL_CLIENT_IP):8080/v1/orders/pending?from=2026-06-01T00:00:00Z&to=2026-06-08T00:00:00Z"
+# → O-1001, O-1003, O-1006 포함 (dueAt ASC). O-1007 은 dueAt 2026-06-12 라 제외되는 게 정답
 curl.exe -s "http://$($env:NOSQL_CLIENT_IP):8080/v1/products/low-stock?warehouseId=W-A"
-# → 각각 HTTP 200 + 데이터 포함
+# → P-BLU-003, P-RED-001 포함 / P-GRN-002 미포함
+```
+
+### AWS 측 사전 점검 (채점 1-1 / 1-2)
+
+HTTP 엔드포인트만 보면 DocumentDB·KMS·Secret 의 오설정이 채점 때야 드러난다. `mark2-1.sh:47-55` 와 같은 조회를 미리 돌린다.
+
+```powershell
+aws docdb describe-db-clusters --region ap-northeast-2 --db-cluster-identifier skills-nosql-docdb-cluster --query 'DBClusters[0].{Status:Status,Encrypted:StorageEncrypted,BackupRetention:BackupRetentionPeriod,Port:Port}' --output table
+# → Status=available / Encrypted=True / BackupRetention>=1 / Port=27017
+
+aws docdb describe-db-instances --region ap-northeast-2 --db-instance-identifier skills-nosql-docdb-instance-1 --query 'DBInstances[0].{Status:DBInstanceStatus,Class:DBInstanceClass}' --output table
+# → Status=available / Class=db.t3.medium
+
+aws kms describe-key --region ap-northeast-2 --key-id alias/skills-nosql-docdb --query 'KeyMetadata.{Enabled:Enabled,KeyManager:KeyManager}' --output table
+# → Enabled=True / KeyManager=CUSTOMER   (AWS 였다면 고객관리 CMK 가 아니라는 뜻이라 1-1 미충족)
+
+aws secretsmanager get-secret-value --region ap-northeast-2 --secret-id skills-nosql-docdb-secret --query SecretString --output text | jq -r '{username, host, password_set:(.password != null and .password != "")}'
+# → password_set=true, host 는 scheme·port 없는 hostname (`://` 나 `:` 가 있으면 1-2·1-3·1-5 가 함께 깨진다)
+
+aws secretsmanager describe-secret --region ap-northeast-2 --secret-id skills-nosql-docdb-secret --query '{Name:Name,KmsKeyId:KmsKeyId}' --output table
+# → KmsKeyId 가 None 인 것은 정상이다 (AWS 관리형 키 사용, 채점 판정 문장에 없는 항목)
 ```
 
 ### [CloudShell] 셀프 채점
