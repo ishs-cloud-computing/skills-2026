@@ -29,14 +29,14 @@
 | --- | --- | --- | --- | --- | --- |
 | 제1과제 | 1 | Network Configuration | 1 | 독립 | 경기 종료후 |
 | 제1과제 | 2 | Simple Storage Service | 2 | 독립 | 경기 종료후 |
-| 제1과제 | 3 | Elastic Container Registry | 1.5 | 독립 | 경기 종료후 |
+| 제1과제 | 3 | Elastic Container Registry | 1 | 독립 | 경기 종료후 |
 | 제1과제 | 4 | NoSQL Database | 1 | 독립 | 경기 종료후 |
 | 제1과제 | 5 | Elastic Kubernetes Service | 5 | 독립 | 경기 종료후 |
 | 제1과제 | 6 | Lambda Function | 1 | 독립 | 경기 종료후 |
 | 제1과제 | 7 | Load Balancing | 2.5 | 독립 | 경기 종료후 |
 | 제1과제 | 8 | CloudFront | 6.5 | 독립 | 경기 종료후 |
 | 제1과제 | 9 | Application | 6 | 독립 | 경기 종료후 |
-| 제1과제 | 10 | Monitoring | 3.5 | 독립 | 경기 종료후 |
+| 제1과제 | 10 | Monitoring | 4 | 독립 | 경기 종료후 |
 | **합계** |  |  | **30** |  |  |
 
 ### 2-2. 채점방법 및 기준 (세부항목)
@@ -47,7 +47,7 @@
 |  |  | 2 | Routing Tables | 0.5 |
 | 2 | Simple Storage Service | 1 | S3 Bucket & Objects | 1 |
 |  |  | 2 | S3 Configuration | 1 |
-| 3 | Elastic Container Registry | 1 | ECR Repository & Image | 1.5 |
+| 3 | Elastic Container Registry | 1 | ECR Repository & Image | 1 |
 | 4 | NoSQL Database | 1 | DynamoDB Configuration | 1 |
 | 5 | Elastic Kubernetes Service | 1 | Cluster Configuration | 1 |
 |  |  | 2 | Cluster Encryption & Networking | 1 |
@@ -65,8 +65,8 @@
 |  |  | 2 | Application Operation Test - GET | 1.5 |
 |  |  | 3 | Application Operation Test - ERROR | 1.5 |
 |  |  | 4 | Application Operation Test | 1.5 |
-| 10 | Monitoring | 1 | Grafana Dashboard Check | 1.5 |
-|  |  | 2 | POD | 1.5 |
+| 10 | Monitoring | 1 | Grafana Dashboard Check | 1 |
+|  |  | 2 | POD | 1 |
 |  |  | 3 | RESTART | 1 |
 |  |  | 4 | NETWORK | 1 |
 
@@ -147,11 +147,11 @@ echo $BUCKET && aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "web/main/
 예상 출력 (정확히 일치):
 
 ```
-wskorea26-concert-bucket-<비번호>
+wskorea26-concert-bucket-<선수비번호>
 web/main/index.html web/main/main.jpeg
 ```
 
-> 정정 2026-08-07: 원본 채점지는 `<비번호>` 자리에 `103`이 고정 기재돼 있었다. `<비번호>` 부분은 채점 대상에서 제외한다.
+> 정정 2026-08-21(신판 정식 반영): 구판 채점지는 비번호 자리에 `103`이 고정 기재돼 있어 비번호가 103이 아니면 오답 처리될 수 있었다(2026-08-07 답변으로 채점 제외). 신판이 예상 출력을 `wskorea26-concert-bucket-<선수비번호>`로 바로잡았다.
 
 ##### 2-2-A · S3 Configuration (1점)
 
@@ -172,7 +172,7 @@ False
 
 #### 3. Elastic Container Registry
 
-##### 3-1-A · ECR Repository & Image (1.5점)
+##### 3-1-A · ECR Repository & Image (1점)
 
 명령어 입력:
 
@@ -452,9 +452,11 @@ curl -s -o /dev/null -w "%{http_code}\n" -X GET -H 'Content-Type: application/js
 
 > **수동 채점 항목입니다.**
 >
-> 정정 2026-08-07: 원본 채점지는 "대시보드에 접근이 가능하고, 파드의 CPU, Memory 지표를 확인할 수 있을 경우 정답"으로만 적혀 있어 과제지 요구 메트릭 범위와 어긋났다. 아래 10-0 접속 절차와 10-1~4 판정 기준이 정정본이다. **10-1-A 의 「명령어 입력」 항목은 제외**한다.
+> 정정 2026-08-21(신판 정식 반영): 구판 채점지는 10-1~4 가 각각 "Grafana 로그인 → 대시보드에 접근이 가능하고, ○○ 지표를 확인할 수 있을 경우 정답"으로 로그인 절차를 4번 반복하고 메트릭 범위도 과제지와 어긋났다(2026-08-07 답변으로 선반영). 신판이 아래 10-0 사전 준비와 10-1~4 `book app` 기준 판정을 본문에 그대로 담았다.
+>
+> 다만 신판에도 `10-1-A (명령어 입력)` 칸에 Grafana ALB DNS 조회 명령이 그대로 남아 있다. 10-0 1)과 같은 명령이므로 **중복이며 별도 채점 대상이 아니다**.
 
-##### 10-0 · Grafana 접속 (게이트, 배점 없음)
+##### 10-0 · Grafana 접속 (사전 준비, 배점 없음)
 
 1. 다음 명령으로 출력되는 경로로 Grafana 에 접속합니다.
 
@@ -470,8 +472,8 @@ aws elbv2 describe-load-balancers --names wskorea26-grafana-alb --query "LoadBal
 
 ##### 10-1-A ~ 10-4-A · Dashboard Metrics
 
-- **10-1-A** (1.5점) `book app` 파드의 CPU, Memory 지표를 확인할 수 있을 경우 정답
-- **10-2-A** (1.5점) 실행중인 `book app` Pod 개수 지표를 확인할 수 있을 경우 정답
+- **10-1-A** (1점) `book app` 파드의 CPU, Memory 지표를 확인할 수 있을 경우 정답
+- **10-2-A** (1점) 실행중인 `book app` Pod 개수 지표를 확인할 수 있을 경우 정답
 - **10-3-A** (1점) `book app` 컨테이너 재시작 횟수 지표를 확인할 수 있을 경우 정답
 - **10-4-A** (1점) `book app` 컨테이너 네트워크 수신량 지표를 확인할 수 있을 경우 정답
 

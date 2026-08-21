@@ -52,7 +52,7 @@ S3, Lambda, DynamoDB, Step Functions를 활용하여 학생 성적 데이터를 
 
 #### 2. Lambda
 
-S3에 업로드된 학생 성적 데이터를 읽고, 평균 점수와 등급을 계산한 뒤 DynamoDB에 저장하기 위한 Lambda 함수를 구성합니다. Lambda Function에 대한 세부 사항은 `lambda.md`를 참고하세요.
+S3에 업로드된 학생 성적 데이터를 읽고, 평균 점수와 등급을 계산한 뒤 DynamoDB에 저장하기 위한 Lambda 함수를 구성합니다. Lambda 함수의 이름은 `wsc2026-student-score-function`으로 명명합니다. Lambda Function에 대한 세부 사항은 `lambda.md`를 참고하세요.
 
 #### 3. DynamoDB
 
@@ -108,6 +108,7 @@ Lambda와 Step Functions가 S3, DynamoDB에 접근할 수 있도록 IAM Role과 
 
 - **Instance Name** : `wsc2026-analytics-ec2`
 - **Instance Type** : t3.small
+- 애플리케이션은 systemd 서비스로 등록되어야 하며, systemd 서비스 이름은 `app`으로 명명합니다.
 
 #### 3. Load Balancer
 
@@ -153,7 +154,7 @@ GROUP BY product_name;
 
 EC2와 Managed Flink가 Kinesis Data Stream에 접근할 수 있도록 IAM Role을 구성합니다. IAM Role에는 최소권한이 적용되어야 합니다.
 
-- **EC2 Role** : `wsc2026-alaytics-ec2-role`
+- **EC2 Role** : `wsc2026-analytics-ec2-role`
 - **Managed Flink Role** : `wsc2026-analytics-flink-role`
 
 ---
