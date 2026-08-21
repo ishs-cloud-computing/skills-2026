@@ -3,22 +3,11 @@
 위에서 아래로 실행한다. 설계 근거는 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 > **대회 당일에는 [DAY-OF.md](../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
-> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
 
-## 값 대조표 (당일 종이 과제지 대조용)
+## 값 대조표
 
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 이름 접두어 | `skills` | `terraform/terraform.tfvars: prefix` ⚠ |
-| S3 버킷 | `wsc2026-task3-images-<비번호>` (전역 유일) | `terraform.tfvars: bucket_name` |
-| RDS 식별자 | `apdev-rds-instance` | `terraform.tfvars: db_identifier` |
-| DB 비밀번호 | 주입값 | `terraform.tfvars: db_password` |
-| WAF 보호 경로 | `/v1/user`·`/v1/product`·`/v1/stress`·`/images/*` regex | `terraform.tfvars: waf_api_path_regexes` |
-| 스캐너 UA 목록 | 저장소에 없음 — 당일 WAF 콘솔에서 직접 편집 | README STEP 12 |
-
-⚠ **`prefix` 한 줄이 모든 리소스 이름을 바꾸지만 코드 전체를 바꾸지는 않는다.** `eksctl/cluster.yaml`·`k8s/00-nodeclass.yaml`·`k8s/20-ingress.yaml`·`scripts/*.sh` 의 클러스터·ALB 이름을 같이 고친다.
-
-⚠ **로그 쿼리의 정상 경로 목록 `<NORMAL_PATHS>` 는 regex 리터럴이라 파라미터화가 안 된다.** 당일 앱 경로가 바뀌면 쿼리 본문을 손으로 치환한다.
+> [DAY-OF.md 7절 값 대조표](../DAY-OF.md#7-값-대조표) 로 이동했다.
 
 ## 실행 위치
 

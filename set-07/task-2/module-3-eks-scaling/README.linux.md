@@ -49,7 +49,7 @@ else echo "STOP: terraform output 값 누락"; fi
 ```bash
 aws eks create-access-entry --cluster-name skm-eks-cluster --principal-arn <CLOUDSHELL_IAM_ARN> --region ap-northeast-2
 aws eks associate-access-policy --cluster-name skm-eks-cluster --principal-arn <CLOUDSHELL_IAM_ARN> \
-  --policy-arn arn:aws:eks:aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
   --access-scope type=cluster --region ap-northeast-2
 ```
 

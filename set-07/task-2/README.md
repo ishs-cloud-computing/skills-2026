@@ -10,20 +10,11 @@
 | [module-4-container-logging](module-4-container-logging/) | Container Logging | ap-northeast-1 | EKS + OTel + Loki + Grafana | CloudShell |
 
 > **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
-> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
 
-## 값 대조표 (당일 종이 과제지 대조용)
+## 값 대조표
 
-| 모듈 | 리전 | 준비본 이름·값 | CIDR |
-|---|---|---|---|
-| module-1-nosql | `ap-southeast-1` | 테이블 `bigbae-nosql-reservation-table`·`bigbae-nosql-audit-table` / GSI `gsi-user-reservations` / Lambda `bigbae-nosql-reservation-audit` / EC2 `bigbae-nosql-app-ec2`(`t3.small`) | `10.0.0.0/16` (서브넷 `10.0.0.0/24`) |
-| module-2-cdn-function | `us-east-1` | 버킷 접두 `skillsphone-landing-ab-` / KVS `skillsphone-cdn-ab-config` / Function `-req-fn`·`-res-fn` / 배포 `skillsphone-cdn-ab-distribution` / 쿠키 `x-sp-ab` / 가중치 `0.3` / 경로 `/version-a/index.html`·`/version-b/index.html` | — |
-| module-3-eks-scaling | `ap-northeast-2` | 클러스터 `skm-eks-cluster` / SQS `skm-order-queue` / ECR `skm-order-processor` / 접두 `skm-eks` | `10.13.0.0/16` |
-| module-4-container-logging | `ap-northeast-1` | 클러스터 `o11y-cluster` / ECR `o11y-log-generator` / ALB `o11y-app-alb`·`o11y-grafana-alb` / 포트 `8080`·`3000` / 헬스 `/healthz`·`/api/health` | `10.14.0.0/16` |
-
-⚠ **module-2**: 쿠키명·헤더명·KVS 키명이 CloudFront Function 의 **JS 안 리터럴**이라 변수화돼 있지 않다. 이름이 바뀌면 함수 코드를 직접 고친다.
-
-⚠ **module-4**: Grafana 패널의 Loki 라인 필터 `"log generated"` 는 **지급 `app.py` 의 msg 리터럴**이다. 당일 앱이 바뀌어 msg 가 달라지면 필터도 같이 고친다.
+> [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
 
 ## 공통 워크플로
 

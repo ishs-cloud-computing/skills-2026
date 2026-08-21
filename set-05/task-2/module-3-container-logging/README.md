@@ -16,7 +16,7 @@ module-3-container-logging/
 └── README.md
 
 # 앱 소스: task-2/provided/2-3/{app.py,requirements.txt,Dockerfile} (제공 배포파일, 수정 금지) — terraform 가 직접 참조
-# 채점: task-2/mark/mark3.sh (공식 채점 스크립트, Bastion 에서 실행)
+# 채점: task-2/mark/mark3.sh (공식 채점 스크립트 — kubectl·aws 가 있는 본 PC git-bash 에서 실행. 이 모듈의 EC2 는 kubectl 이 없다)
 ```
 
 ## 파이프라인
@@ -31,21 +31,27 @@ EKS(wsc-logging-cluster)
 
 ## 배포 순서
 
-```bash
+전 단계 본 PC(PowerShell 7). 채점 스크립트만 git-bash.
+
+```powershell
 # 1) Terraform — VPC / App EC2 / IAM
 cd terraform
 terraform init && terraform apply -auto-approve
 
-# 2) eksctl 클러스터
-export VPC_ID=$(terraform output -raw vpc_id)
-export PRIV_SUBNET_A=$(terraform output -json private_subnet_ids | jq -r '.["wsc-logging-sn-priv-a"]')
-export PRIV_SUBNET_C=$(terraform output -json private_subnet_ids | jq -r '.["wsc-logging-sn-priv-c"]')
-export PUB_SUBNET_A=$(terraform output -json public_subnet_ids | jq -r '.["wsc-logging-sn-pub-a"]')
-export PUB_SUBNET_C=$(terraform output -json public_subnet_ids | jq -r '.["wsc-logging-sn-pub-c"]')
-cd ../eksctl && envsubst < cluster.yaml > cluster.rendered.yaml && eksctl create cluster -f cluster.rendered.yaml
+# 2) eksctl 클러스터 (placeholder 치환 — 본 PC 에는 envsubst 가 없다)
+$outs = terraform output -json | ConvertFrom-Json
+cd ..\eksctl
+$y = Get-Content -Raw cluster.yaml
+$y = $y.Replace('${VPC_ID}', $outs.vpc_id.value)
+$y = $y.Replace('${PRIV_SUBNET_A}', $outs.private_subnet_ids.value.'wsc-logging-sn-priv-a')
+$y = $y.Replace('${PRIV_SUBNET_C}', $outs.private_subnet_ids.value.'wsc-logging-sn-priv-c')
+$y = $y.Replace('${PUB_SUBNET_A}', $outs.public_subnet_ids.value.'wsc-logging-sn-pub-a')
+$y = $y.Replace('${PUB_SUBNET_C}', $outs.public_subnet_ids.value.'wsc-logging-sn-pub-c')
+$y | Set-Content cluster.rendered.yaml
+eksctl create cluster -f cluster.rendered.yaml
 
 # 3) Loki + Grafana (helm)
-cd ../k8s
+cd ..\k8s
 kubectl apply -f 00-namespace.yaml -f 01-storageclass.yaml
 # OSS Loki 차트는 2026-03-16부로 grafana-community 저장소로 이전됨(grafana/loki 는 GEL 전용).
 helm repo add grafana https://grafana.github.io/helm-charts
@@ -54,21 +60,19 @@ helm repo update
 helm upgrade --install loki grafana-community/loki -n wsc-logging --version 18.1.1 -f loki-values.yaml
 kubectl apply -f loki-lb-service.yaml
 
-NM=<비번호>
-sed "s/__NM__/$NM/g" grafana-values.yaml > grafana-values.rendered.yaml
+$NM = '<비번호>'
+(Get-Content -Raw grafana-values.yaml).Replace('__NM__', $NM) | Set-Content grafana-values.rendered.yaml
 kubectl -n wsc-logging create configmap wsc-dashboard --from-file=dashboard.json=dashboard.json
 helm upgrade --install grafana grafana/grafana -n wsc-logging --version 10.5.15 -f grafana-values.rendered.yaml
 
 # 4) Fluent Bit → Loki 엔드포인트 연결 (Loki NLB 생성 후)
-LOKI_LB=$(kubectl get svc -n wsc-logging loki-lb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-INSTANCE_ID=$(aws ec2 describe-instances --region ap-northeast-1 \
-  --filters "Name=tag:Name,Values=wsc-log-app-bastion" \
-  --query "Reservations[0].Instances[0].InstanceId" --output text)
-aws ssm send-command --region ap-northeast-1 --instance-ids "$INSTANCE_ID" \
-  --document-name AWS-RunShellScript \
-  --parameters "{\"commands\":[\"sed -i s/__LOKI_HOST__/$LOKI_LB/ /etc/fluent-bit/fluent-bit.conf\",\"systemctl restart fluent-bit\"]}"
+$LOKI_LB = kubectl get svc -n wsc-logging loki-lb -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+$INSTANCE_ID = aws ec2 describe-instances --region ap-northeast-1 --filters "Name=tag:Name,Values=wsc-log-app-bastion" --query "Reservations[0].Instances[0].InstanceId" --output text
+aws ssm send-command --region ap-northeast-1 --instance-ids $INSTANCE_ID `
+  --document-name AWS-RunShellScript `
+  --parameters "{`"commands`":[`"sed -i s/__LOKI_HOST__/$LOKI_LB/ /etc/fluent-bit/fluent-bit.conf`",`"systemctl restart fluent-bit`"]}"
 
-# 5) 셀프 채점 — 공식 채점 스크립트 (task-2/mark/)
+# 5) 셀프 채점 — bash 스크립트라 git-bash 로 실행 (kubeconfig 는 eksctl 이 이미 로컬에 기록)
 bash ../../mark/mark3.sh
 ```
 

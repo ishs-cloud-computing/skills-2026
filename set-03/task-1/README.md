@@ -7,30 +7,15 @@ EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / 
 **본 PC·PowerShell**(terraform·eksctl) · **bastion**(SSM 접속, k8s·helm·검증) ·
 **VPC CloudShell**(제출 전 mark.sh 1회 — 채점자와 같은 경로).
 
-> 설계 근거는 [deployment.md](../../docs/src/content/docs/setlist/set-03/task-1/deployment.md),
-> 요구사항↔구현 매핑은 [mapping.md](../../docs/src/content/docs/setlist/set-03/task-1/mapping.md),
 > 주의/함정·설계 이력은 [NOTES.md](NOTES.md).
 
 
 > **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
-> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
 
-## 값 대조표 (당일 종이 과제지 대조용)
+## 값 대조표
 
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 리전 | `ap-northeast-2` | `terraform/variables.tf: region` |
-| 이름 접두어 | `wsc2026` | `variables.tf: name_prefix` ⚠ |
-| 비번호·버킷 접미 | `<비번호>` · `bucket_suffix` | `terraform.tfvars: player_number`·`bucket_suffix` |
-| EKS 클러스터 | `wsc2026-eks-cluster` · `1.35` | `variables.tf: cluster_name`·`cluster_version` |
-| VPC 이름·CIDR | `wsc2026-skills-vpc` · `192.168.0.0/16` | `variables.tf: vpc_name`·`vpc_cidr` |
-| DynamoDB 테이블 | `wsc2026-book-table` | `variables.tf: table_name` |
-| ECR | `wsc2026-book-ecr` | `variables.tf: ecr_name` |
-| Lambda | `wsc2026-book-get-function` | `variables.tf: lambda_function_name` |
-| CDN 사용 | `false` | `variables.tf: enable_cdn` |
-| bastion | `true` · `t3.small` | `variables.tf: enable_bastion`·`bastion_instance_type` |
-
-⚠ **접두어가 바뀌면 `name_prefix` 만으로 안 끝난다** (NOTES.md 참조). 서브넷 맵의 **키가 리터럴** `wsc2026-...` 이고, `eksctl/cluster.yaml`·`k8s/**` 도 전부 리터럴이다.
+> [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
 
 ## NOTICE
 
@@ -186,12 +171,19 @@ kubectl·helm·jq·AWS CLI(2.32.0+) 는 bastion_user_data.sh 가 부팅 때 설�
 홈이 유지되므로 이 블록은 1회만 실행한다.
 
 ```powershell
-# [본 PC] cwd = terraform
+# [본 PC] step 3 이 eksctl 에서 끝나므로 terraform 으로 복귀
+cd ..\terraform
 aws ssm start-session --target (terraform output -raw bastion_instance_id)
 ```
 
 ```bash
 # ---- bastion 최초 1회 ----
+# SSM 세션은 ssm-user 의 sh 로 떨어진다 → ec2-user 의 bash 로그인 셸로 전환 (.bashrc/.env 자동 로드)
+sudo su - ec2-user
+
+kubectl version --client   # user_data 가 설치해 둠. 안 나오면 아래로 직접 설치
+# sudo curl -sLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo chmod +x /usr/local/bin/kubectl
+
 aws --version        # 2.32.0 이상. 미달이면 user_data 갱신이 실패한 것 — 아래로 직접 갱신한다
 # curl -sL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
 # unzip -q -o /tmp/awscli.zip -d /tmp && sudo /tmp/aws/install --update && hash -r

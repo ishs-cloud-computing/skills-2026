@@ -15,6 +15,7 @@ module-4-rest-api/
 └── README.md
 
 (채점: task-2/mark/mark4.sh — 공식 채점 스크립트, CloudShell 에서 실행)
+```
 
 ## API 동작
 

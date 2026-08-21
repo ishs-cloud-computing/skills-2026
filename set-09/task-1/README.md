@@ -59,7 +59,7 @@ bash mark.sh <비번호>
 ## 정리
 
 ```bash
-cd terraform && terraform destroy   # CloudFront 비활성화+삭제로 수 분 소요
+terraform -chdir=set-09/task-1/terraform destroy   # CloudFront 비활성화+삭제로 수 분 소요 (저장소 루트 기준)
 ```
 
 ## 요구사항 ↔ 채점 ↔ 구현 매핑

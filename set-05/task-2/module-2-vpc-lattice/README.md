@@ -39,10 +39,11 @@ terraform init && terraform apply -auto-approve
 terraform output lattice_service_dns
 terraform output bastion_public_ip
 
-# Hub Bastion 으로 SSH(비밀번호 Skill53##) 접속 후 셀프 채점
-#   ssh ec2-user@$(terraform output -raw bastion_public_ip)
-#   aws configure set default.region ap-southeast-1
-bash ../../mark/mark2.sh
+# Hub Bastion 으로 mark2.sh 전송 후 SSH(비밀번호 Skill53##) 접속해 셀프 채점
+scp ../../mark/mark2.sh ec2-user@$(terraform output -raw bastion_public_ip):~/
+ssh ec2-user@$(terraform output -raw bastion_public_ip)
+#   (bastion) aws configure set default.region ap-southeast-1
+#   (bastion) bash ~/mark2.sh
 ```
 
 ## 요구사항 ↔ 구현 매핑 (채점지 2)
@@ -54,7 +55,7 @@ bash ../../mark/mark2.sh
 | 2-3 | Lattice SN/Service + hub·spoke VPC 연결 | `lattice.tf` |
 | 2-4 | Default Rule 가중 (v1:90/v2:10) | `lattice.tf` listener default_action |
 | 2-5 | Header Rule (v1→p10, v2→p20, weight 100) | `lattice.tf` listener_rule v1/v2 |
-| 2-6 | TG health + curl 버전 응답 | `app/version{1,2}.py` + ALB/Lattice |
+| 2-6 | TG health + curl 버전 응답 | `provided/2-2/version{1,2}.py` + ALB/Lattice |
 
 ## 주의 / 검증 포인트
 

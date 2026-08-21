@@ -10,20 +10,11 @@
 | [module-4-msk](module-4-msk/) | MSK 센서 스트리밍 | ap-northeast-1 | VPC + MSK + EC2 + Lambda + DynamoDB + S3 | bastion 또는 CloudShell |
 
 > **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
-> 아래 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
+> DAY-OF 7절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
 
-## 값 대조표 (당일 종이 과제지 대조용)
+## 값 대조표
 
-| 모듈 | 리전 | 준비본 이름·값 | CIDR |
-|---|---|---|---|
-| module-1-workflow | `ap-southeast-1` | 버킷 `wsc2026-student-score-bucket-<비번호>` / 테이블 `wsc2026-student-score` / 함수 `wsc2026-student-score-function`·`-trigger` / 상태머신 `wsc2026-student-score-workflow` / `python3.12` | — |
-| module-2-analytics | `ap-northeast-2` | `analytics-vpc` / EC2 `wsc2026-analytics-ec2`(`t3.small`, 앱 포트 `5000`) / ALB `wsc2026-analytics-alb` / 스트림 `wsc2026-order-stream` / Flink `wsc2026-analytics-flink`(`ZEPPELIN-FLINK-3_0`) / Glue `wsc2026_analytics_db` | `10.20.0.0/16` |
-| module-3-event | `eu-west-1` | `event-vpc` / EC2 `wsc2026-event-ec2`(`t3.micro`) / SG `wsc2026-event-sg` / Trail `wsc2026-event-trail` / SNS `wsc2026-event-alert` / Config 룰 `wsc2026-sg-ssh-rule`·`wsc2026-required-tags-rule` / 필수 태그 키 `Project` | `172.16.0.0/16` |
-| module-4-msk | `ap-northeast-1` | `msk-vpc` / MSK `wsc2026-msk-cluster`(Kafka `3.6.0`, `kafka.t3.small`) / Producer `wsc2026-sensor-producer` / 테이블 `wsc2026-sensor-data` / 함수 `wsc2026-sensor-consumer`·`-alert-consumer` | `192.168.0.0/16` |
-
-각 모듈 `terraform/terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다.
-
-⚠ **module-4 producer 인증 모드는 tfvars 가 아니라 당일 판정 대상이다.** 지급 바이너리가 IAM 인증을 못 하면 `terraform apply -var "producer_auth_mode=tls"` 로 내려간다 (`module-4-msk/select-auth-mode.ps1`).
+> [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
 
 ## 배포 순서 — 오래 걸리는 것부터, 터미널 병렬
 
@@ -75,6 +66,6 @@ Windows 에서 올린 스크립트는 CRLF 가 섞여 bash 가 깨지므로 실�
 - 리소스 이름은 과제지에 명시된 값과 **정확히 일치**(이름 일치 채점 항목 다수). 과제지 원문 오타도 그대로 따른다 — module-2 의 `wsc2026-alaytics-ec2-role` 이 그 예다.
 - 채점지(`mark/`)와 과제지(`task.md`)가 어긋나면 **채점 스크립트가 1순위**다. 수동 채점 여지가 있으면 합집합으로 만든다(module-3 이 그 경우).
 - 상태가 채점 대상인 모듈이 있다 — module-2 Flink 노트북은 시연 후 **READY** 로, module-4 alert 버킷은 `bin/app` 을 지운 상태로 둔다.
-- PowerShell 에서 JSON 인자는 내부 따옴표를 `\"` 로 이스케이프한다. `curl` 은 별칭이므로 `Invoke-RestMethod` 를 쓴다.
+- PowerShell 7.3+ 는 네이티브 명령 인자의 따옴표를 그대로 전달한다 — JSON 인자는 작은따옴표로만 감싼다. PS 5.1 식 `\"` 이스케이프는 백슬래시가 그대로 들어가 JSON 파싱 오류. HTTP 확인은 `Invoke-RestMethod` 를 쓴다.
 
 > 설계 근거·요구사항↔구현 매핑은 각 모듈 README 하단에, 결정·실측 기록은 [NOTES.md](NOTES.md) 에 있다.

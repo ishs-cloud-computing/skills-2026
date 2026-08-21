@@ -56,7 +56,7 @@ sleep 90; aws ec2 describe-iam-instance-profile-associations --filters "Name=ins
 # 타입 변경 → 원복 확인. 반드시 stop 룰을 먼저 비활성화 (README.md '함정' 참고)
 aws events disable-rule --name wsc2026-ec2-stop-rule
 aws ec2 stop-instances --instance-ids $INSTANCE_ID && aws ec2 wait instance-stopped --instance-ids $INSTANCE_ID
-aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID --instance-type t3.small
+aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID --instance-type Value=t3.small
 aws ec2 start-instances --instance-ids $INSTANCE_ID
 sleep 180; aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[0].Instances[0].[InstanceType,State.Name]" --output text   # t3.micro running
 aws events enable-rule --name wsc2026-ec2-stop-rule
