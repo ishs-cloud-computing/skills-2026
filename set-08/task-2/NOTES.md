@@ -116,6 +116,12 @@
 - 다만 `mark.md` 전사본에는 그 내용이 역이식된 적이 없었다 → **수정완료(전사본만)**:
   module-1 1-1~1-5 전체(`--query` 투영·`describe-secret`·`jq password_set`·`-m 10`·판정 문구),
   module-2 2-1 `--query`·2-2/2-4 판정 문구·2-5 IP 재유도, module-3 3-1~3-5 전체, 4-2·4-6
+- **2026-08-21 재대조로 추가 보완**: 위 1차 역이식에서 2-3·4-1·4-4·4-5 가 빠져 판정 문구(`2) ...`)만
+  요약 패러프레이즈로 남아 있었다. 명령어 블록은 정본과 일치했으나 기대값이 소실된 상태였다
+  (4-4 가 최대 — `Deployment name`·`selector/podLabels app=sqs-worker`·`nodeSelector` 두 라벨·
+  `env` 3종(`SQS_QUEUE_URL`/`AWS_REGION`/`PROCESSING_SECONDS`)·`scaleTargetRef.name`·
+  `TriggerAuthentication name`/`namespace` 전부 누락). 네 절의 `2)` 문구를 정본 원문으로 교체했다.
+  판정 기준 자체는 그대로이므로 `mark/mark2-*.sh`·구현은 영향없음
 - `mark/mark2-1.sh`: 변수명 `CLIENT_IP` → `NOSQL_CLIENT_EC2_PUBLIC_IP` (채점지 순번 0 전문과 정합.
   module-2 는 0807 에서 이미 같은 리네임을 받았는데 module-1 만 빠져 있었다)
 - `mark/mark2-4.sh`: kubectl 설치 버전을 `v1.35.0` 하드코딩 → **클러스터에서 유도**

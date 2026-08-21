@@ -213,7 +213,10 @@ curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${LATTICE_CLIENT_EC2_PUBLI
 #### 2-3. VPC Lattice Service Network 및 Service 구성 (배점 1.5) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) Service Network가 존재하고, Service, VPC Association, Service Association이 ACTIVE 상태인지 확인합니다.
+2) Service Network Name=skills-lattice-sn이 존재해야 합니다.
+   Service Name=skills-lattice-order-service가 존재하고 Status=ACTIVE이며 Dns가 출력되어야 합니다.
+   Client VPC Association의 Status=ACTIVE이어야 합니다.
+   Service Association의 Status=ACTIVE이어야 합니다.
 
 ```bash
 SERVICE_NETWORK_ID=$(aws vpc-lattice list-service-networks --region ap-northeast-1 --query 'items[?name==`skills-lattice-sn`].id|[0]' --output text 2>/dev/null || true)
@@ -344,7 +347,12 @@ aws logs describe-log-groups --region ap-southeast-1 --log-group-name-prefix /aw
 #### 4-1. EKS Cluster, VPC, Fargate Profile 구성 (배점 1.25) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) EKS Cluster와 Fargate Profile 2개가 ACTIVE이며(각 Namespaces에 keda/karpenter 포함), CloudShell에서 `kubectl` 접근 가능한지 확인합니다. `Version`·`Role`은 채점 대상이 아니며 EKS 버전은 풀이자 지정입니다.
+2) Cluster Name=skills-sqs-cluster, Status=ACTIVE, Endpoint 출력, VpcId 및 Subnets 출력이 있어야 합니다.
+   Fargate Profile skills-sqs-fp-keda와 skills-sqs-fp-karpenter가 Status=ACTIVE이어야 합니다.
+   skills-sqs-fp-keda Namespaces에 keda, skills-sqs-fp-karpenter Namespaces에 karpenter가 포함되어야 합니다.
+   CloudShell에서 kubectl 접근이 가능하고 Fargate Node 이름이 출력되어야 합니다.
+
+> 채점지가 `Version`·`Role`을 판정 조건으로 들지 않으므로 EKS 버전은 풀이자 지정이다.
 
 ```bash
 aws eks describe-cluster --region us-west-2 --name skills-sqs-cluster --query 'cluster.{Name:name,Status:status,Endpoint:endpoint,VpcId:resourcesVpcConfig.vpcId,Subnets:resourcesVpcConfig.subnetIds}' --output table
@@ -390,7 +398,14 @@ kubectl get pods -n karpenter -o json | jq '[.items[] | select(.metadata.name | 
 #### 4-4. Worker Application 및 KEDA ScaledObject 구성 (배점 1.25) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) Worker Deployment(`serviceAccountName=sqs-worker-sa`, `nodeSelector`, env), ScaledObject(`minReplicaCount=0`, `maxReplicaCount=6`, `pollingInterval<=15`, `cooldownPeriod<=30`, trigger `aws-sqs-queue`/`queueLength=2`), TriggerAuthentication(`podIdentity.provider=aws-eks`) 구성이 요구사항과 일치하는지 확인합니다.
+2) Deployment name=sqs-worker, serviceAccountName=sqs-worker-sa이어야 합니다.
+   selector/podLabels에 app=sqs-worker가 포함되어야 합니다.
+   nodeSelector에 karpenter.sh/nodepool=skills-sqs-nodepool, skills-nodepool=event-worker가 포함되어야 합니다.
+   env에 SQS_QUEUE_URL, AWS_REGION, PROCESSING_SECONDS가 있어야 합니다.
+   ScaledObject name=sqs-worker-scaledobject, scaleTargetRef.name=sqs-worker, minReplicaCount=0, maxReplicaCount=6, pollingInterval<=15, cooldownPeriod<=30이어야 합니다.
+   Trigger type은 aws-sqs-queue이고 queueLength=2이어야 합니다.
+   TriggerAuthentication name=sqs-worker-trigger-auth, namespace=skills-sqs가 출력되어야 합니다.
+   podIdentity.provider=aws-eks이어야 합니다.
 
 ```bash
 kubectl get deployment sqs-worker -n skills-sqs -o jsonpath='name={.metadata.name}{"\n"}serviceAccountName={.spec.template.spec.serviceAccountName}{"\n"}selector={.spec.selector.matchLabels}{"\n"}podLabels={.spec.template.metadata.labels}{"\n"}nodeSelector={.spec.template.spec.nodeSelector}{"\n"}env={.spec.template.spec.containers[0].env}{"\n"}image={.spec.template.spec.containers[0].image}{"\n"}'
@@ -401,7 +416,14 @@ kubectl get triggerauthentication sqs-worker-trigger-auth -n skills-sqs -o json 
 #### 4-5. Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 (배점 1.25) — 20260812 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) NodePool(`nodeClassRef.name=skills-sqs-nodeclass`, labels `skills-nodepool=event-worker`, `consolidationPolicy` 존재), EC2NodeClass(`role` 또는 `instanceProfile` 출력), Worker EC2 Node(`nodepool`/`skillsNodepool` 라벨, `ready=True`), Worker Pod 배치가 요구사항과 일치하는지 확인합니다. `minReplicaCount=0` 특성상 채점 시점에 Worker EC2 Node 또는 Worker Pod가 없을 수 있으며, 이 경우 4-6 Scale Out 실행 결과에서 확인된 출력을 포함해 판정할 수 있습니다.
+2) NodePool name=skills-sqs-nodepool이어야 합니다.
+   NodePool labels에 skills-nodepool=event-worker가 있어야 합니다.
+   NodePool nodeClassRef.name=skills-sqs-nodeclass이어야 합니다.
+   NodePool consolidationPolicy가 비어 있지 않아야 합니다.
+   EC2NodeClass name=skills-sqs-nodeclass이어야 하며 role 또는 instanceProfile이 출력되어야 합니다.
+   Worker EC2 Node는 nodepool=skills-sqs-nodepool, skillsNodepool=event-worker, ready=True가 출력되어야 합니다.
+   Worker Pod는 phase와 node가 출력되어야 합니다.
+   단, Worker Deployment 및 KEDA 설정의 minReplicaCount=0 특성상 채점 시점에 Worker EC2 Node 또는 Worker Pod가 없을 수 있으므로, 이 경우 동일 과제의 4-6 SQS 기반 Scale Out 실행 결과에서 확인된 Worker EC2 Node 및 Worker Pod 출력을 포함하여 판정할 수 있습니다.
 
 ```bash
 kubectl get nodepool skills-sqs-nodepool -o json | jq '{name:.metadata.name, labels:.spec.template.metadata.labels, nodeClassRef:.spec.template.spec.nodeClassRef, requirements:.spec.template.spec.requirements, consolidationPolicy:.spec.disruption.consolidationPolicy}'
