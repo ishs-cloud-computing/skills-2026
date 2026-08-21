@@ -14,11 +14,19 @@
 
 블로그·GitHub 이슈는 에러 메시지 원문으로만 검색한다. 인자 이름을 블로그에서 베끼면 프로바이더·차트 버전이 어긋난다.
 
+같은 내용을 브라우저에서 볼 때는 학습 가이드의 두 페이지를 쓴다 — 저장소를 클론하기 전이나 CloudShell 에서 유용하다.
+
+| 페이지 | 언제 |
+| --- | --- |
+| [검색 가이드](https://skills-2026-learn-module.vercel.app/reference/search-guide/) | 값의 종류로 진입하는 절차 전문 + 사이트별 검색 요령 · 훈련 드릴 |
+| [치트시트](https://skills-2026-learn-module.vercel.app/reference/cheatsheet/) | 명령 자체가 기억 안 날 때 (kubectl·eksctl·helm·aws cli·terraform) |
+
 ---
 
 ## 1. 막힌 값의 종류로 진입한다
 
 서비스 이름이 아니라 **값의 종류**로 판단한다.
+같은 표의 확장판이 학습 가이드 [검색 가이드 — 막힌 값의 종류로 진입한다](https://skills-2026-learn-module.vercel.app/reference/search-guide/#%EB%A7%89%ED%9E%8C-%EA%B0%92%EC%9D%98-%EC%A2%85%EB%A5%98%EB%A1%9C-%EC%A7%84%EC%9E%85%ED%95%9C%EB%8B%A4) 에 있다.
 
 | 막힌 것 | 저장소 안 | 로컬 명령 | 공식 문서 |
 | --- | --- | --- | --- |
@@ -32,6 +40,8 @@
 | `AccessDenied` 의 원인 | — | — | [정책 평가 로직](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html) |
 
 ## 2. 로컬 진입 명령 (인터넷이 막혔거나 느릴 때)
+
+인자가 아니라 **명령 자체**가 기억 안 나면 학습 가이드 [치트시트 — 조회·진단 (막히면 이 순서)](https://skills-2026-learn-module.vercel.app/reference/cheatsheet/#%EC%A1%B0%ED%9A%8C%EC%A7%84%EB%8B%A8-%EB%A7%89%ED%9E%88%EB%A9%B4-%EC%9D%B4-%EC%88%9C%EC%84%9C) 를 먼저 본다. 아래는 스키마를 뽑는 명령만 추린 것이다.
 
 ```bash
 export AWS_PAGER=""                      # 페이저 안 끄면 화면이 멈춘다
