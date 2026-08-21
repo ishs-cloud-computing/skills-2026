@@ -10,7 +10,7 @@
 | 모듈 | 이름 | 리전 | 미해결 |
 |------|------|------|--------|
 | 1 | workflow | ap-southeast-1 | 없음 |
-| 2 | analytics | ap-northeast-2 | EC2 Role 이름이 전사본(`analytics`) ↔ 구현(`alaytics`) 로 어긋남. 2026-08-21 신판이 원문 오타를 고쳤으나 `.tf` 리네임 미반영 — 이슈 #133 |
+| 2 | analytics | ap-northeast-2 | 없음 |
 | 3 | event | eu-west-1 | 없음 |
 | 4 | msk | ap-northeast-1 | iam(기본) 실배포 검증 2026-08-16. tls(`-var` 지정) 실배포 미검증. 당일 모드는 `select-auth-mode` 판정을 따른다 |
 
@@ -53,7 +53,7 @@
 |---|---|---|---|
 | T1 | 문제지 module-1 §2 | Lambda 함수 이름 `wsc2026-student-score-function` 을 명시 | **영향없음** — `module-1-workflow/terraform/variables.tf:28` 이 이미 이 이름. 구판 문제지엔 이름이 없고 `provided/module1/lambda.md` 로만 알 수 있었다 |
 | T2 | 문제지 module-2 §2 | "애플리케이션은 systemd 서비스로 등록, 서비스 이름은 `app`" 추가 | **영향없음** — `module-2-analytics/terraform/userdata.sh.tpl:20` 이 이미 `app.service`. 채점 2-6 이 원래 이 이름을 봤고 문제지가 뒤늦게 명문화한 것 |
-| **T3** | 문제지 module-2 §6 | `wsc2026-alaytics-ec2-role` → **`wsc2026-analytics-ec2-role`** (원문 오타 수정) | **전사본만 수정 / 구현 미반영** — 아래 별도 항목 |
+| **T3** | 문제지 module-2 §6 | `wsc2026-alaytics-ec2-role` → **`wsc2026-analytics-ec2-role`** (원문 오타 수정) | **수정완료** — 전사본(`task.md:157`) + 구현 리네임(`variables.tf`·`iam.tf`, 이슈 #133). 아래 별도 항목 |
 | M1 | 채점지 세부표 | `3-2 SNS Topic` 0.5→1, `3-4/4-1 EventBridge Rules` 2→1.5, `4-2/2-1 Lambda Functions` 1→1.5, `4-3/3-1 MSK Cluster Configuration` 2→1.5 | **수정완료** — `mark.md` 세부표. 배점 이동이 module-3·4 **내부에서만** 일어나 모듈 합은 양쪽 다 7.5 로 불변 |
 | M2 | 채점지 3-4 | `sleep 30` → `sleep 60` | **수정완료** — `mark.md` + `mark/mark2-3.sh`. SG 자동복구 람다가 도는 데 30초로는 모자란다고 본 것. 구현 변경은 없고 대기만 길어진다 |
 | M3 | 채점지 4-1 | 예상 출력 `…bucket-586639730662` → `…bucket-<비번호>` | **수정완료(채점지 전사본만)** — 구판이 출제자 계정 ID 로 보이는 값을 고정 기재해 그대로면 오답 처리될 수 있었다. 1과제 2-1-A 와 같은 계열의 수정이다 |
@@ -67,13 +67,17 @@
   두 README 에 "고치지 말 것" 주석까지 달아 뒀다. 신판이 원문을 고쳐 그 근거가 사라졌다
 - 채택: 과제지 전사본(`task.md`)은 정본을 반영해야 하므로 `analytics` 로 고쳤다. `.tf` 리네임은
   이번 커밋에서 하지 않고 **이슈 #133** 으로 넘긴다 (사용자 결정)
-- 현재 상태: **전사본 `analytics` ↔ 구현 `alaytics` 로 어긋나 있다.** 두 README 의 "고치지 말 것"
+- 당시 상태: **전사본 `analytics` ↔ 구현 `alaytics` 로 어긋나 있었다.** 두 README 의 "고치지 말 것"
   주의문은 이 사실과 이슈 번호를 가리키도록 재작성했고, `variables.tf`·`iam.tf` 의 같은 취지
-  주석은 손대지 않았으므로 **이슈가 닫히기 전까지 그 주석은 무효**로 읽어야 한다
+  주석은 손대지 않아 이슈가 닫히기 전까지 무효로 읽어야 했다 (아래 종결 항목에서 해소)
 - 위험 평가: 채점 스크립트(`mark/mark2-2.sh`, `mark.md` 2-1~2-6)는 이 역할 이름을 **조회하지 않는다**
   — 자동 채점 점수 영향 없음. 다만 문제지 §6 이 이름을 못 박는 항목이라 육안 확인 여지는 남는다
-- 리네임 시 주의: 이름 변경이라 IAM Role 이 재생성되고 인스턴스 프로파일 교체가 따라온다.
+- 리네임 시 주의: 이름 변경이라 IAM Role 과 인스턴스 프로파일이 **재생성**된다(둘 다 `name` 이
+  ForceNew). 다만 `aws_instance.iam_instance_profile` 은 ForceNew 가 아니라
+  ReplaceIamInstanceProfileAssociation 으로 in-place 교체되므로 **EC2 는 재생성되지 않는다**.
   이미 apply 한 스택이 있으면 plan 을 먼저 확인할 것
+- **종결(2026-08-21, 이슈 #133)**: 구현을 `wsc2026-analytics-ec2-role` 로 리네임하고
+  `.tf` 의 "고치지 말 것" 주석과 두 README 주의문을 걷어냈다. 전사본 ↔ 구현 일치
 
 ---
 ## 결정 로그
