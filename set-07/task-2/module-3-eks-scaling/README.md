@@ -25,7 +25,7 @@ module-3-eks-scaling/
 └── README.md
 
 # 앱 소스: task-2/provided/module-3/{app.py,Dockerfile,requirements.txt} (제공 원본, 수정 금지)
-# 채점: task-2/mark/mark3-2026-08-01.sh (CloudShell, ap-northeast-2)
+# 채점: task-2/mark/mark3.sh (CloudShell, ap-northeast-2)
 ```
 
 ## 배포 순서
@@ -40,7 +40,7 @@ CloudShell 쪽은 홈이 리전별로 갈려 있어 격리가 자동으로 된�
 cd module-3-eks-scaling
 $env:KUBECONFIG = "$PWD\kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
 Compress-Archive -Force -DestinationPath m3.zip `
-  -Path k8s, cs-deploy.sh, ..\provided\module-3\*, ..\mark\mark3-2026-08-01.sh
+  -Path k8s, cs-deploy.sh, ..\provided\module-3\*, ..\mark\mark3.sh
 ```
 
 재부팅·새 터미널에서 복구:
@@ -141,7 +141,7 @@ kubectl get pods -n keda                                      # operator·metric
 kubectl get pod -n skillsmkt -o wide                          # Karpenter 노드에서 Running (프로비저닝 ~2분)
 kubectl get deploy order-processor -n skillsmkt               # 사전 상태: 앱 Pod 1개
 kubectl get nodes -l karpenter.sh/nodepool=skm-app-nodepool   # 사전 상태: 노드 1대
-bash mark3-2026-08-01.sh   # 2026-08-01 정정본 (3-6 대기 150초). 원본은 mark3.sh
+bash mark3.sh   # 2026-08-21 재배포본 (3-6 대기 150초)
 ```
 
 ## Teardown

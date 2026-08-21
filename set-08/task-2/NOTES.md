@@ -47,11 +47,13 @@
 - [x] 4-1 EKS Cluster, VPC, Fargate Profile 구성 — `eksctl/cluster.yaml`: `skills-sqs-cluster`(us-west-2, public+private 엔드포인트) + `terraform/vpc.tf`(private 서브넷, karpenter.sh/discovery 태그) + Fargate profile `skills-sqs-fp-keda`·`skills-sqs-fp-karpenter`(과제지 명시 2개) + `skills-sqs-fp-kube-system`(coredns용 추가) — 실채점 통과: Cluster ACTIVE + Fargate profile 2개 ACTIVE(selector keda/karpenter), CloudShell kubectl 로 fargate 노드 8대 Ready (2026-08-04)
 - [x] 4-2 SQS Queue 및 IAM ServiceAccount 구성 — `terraform/sqs.tf`(`skills-sqs-queue`) + `eksctl/cluster.yaml` IRSA `iam.serviceAccounts`(keda-operator/karpenter/sqs-worker-sa 3개, `attachPolicyARNs`로 role-arn annotation 자동 부여) — 실채점 통과: QueueArn 출력 + VisibilityTimeout 30(기준 >=30), SA 3개 role-arn annotation 전부 비어 있지 않음 (2026-08-04)
 - [x] 4-3 KEDA/Karpenter Controller Fargate 배포 구성 — `README.md` 4단계 helm install(karpenter -n karpenter, keda -n keda) + Fargate profile 2개로 두 네임스페이스가 Fargate 노드에 스케줄 — 실채점 통과: keda 3개·karpenter 1개 Deployment Available, Pod 전부 Running, NODE 열 전부 `fargate-ip-*` (2026-08-04)
-- [x] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30) — 실채점 통과: min 0·max 6 정확, pollingInterval 15(<=15)·cooldownPeriod 30(<=30), trigger `aws-sqs-queue` queueLength "2", TriggerAuthentication 존재 (2026-08-04). 2026-08-07 정정으로 `podIdentity.provider=aws-eks` 판정 기준이 신설되어 `provider`를 `aws`→`aws-eks`로 교체 — 실채점(2026-08-04) 당시 기준에는 없던 항목이라 재검증 미실시
+- [x] 4-4 Worker Application 및 KEDA ScaledObject 구성 — `k8s/20-deployment.yaml`(`sqs-worker`, env 3개, nodeSelector 2개) + `k8s/30-keda-scaledobject.yaml`(`sqs-worker-scaledobject`/`sqs-worker-trigger-auth`, min 0/max 6/queueLength 2/pollingInterval 15/cooldownPeriod 30) — 실채점 통과: min 0·max 6 정확, pollingInterval 15(<=15)·cooldownPeriod 30(<=30), trigger `aws-sqs-queue` queueLength "2", TriggerAuthentication 존재 (2026-08-04). 2026-08-07 정정으로 `podIdentity.provider=aws-eks` 판정 기준이 신설되어 `provider`를 `aws`→`aws-eks`로 교체했고, **그 교체가 4-6 을 죽였다**(2026-08-21 실채점 5.00/7.5, 이슈 #136) — `identityOwner: operator` 를 트리거 metadata 에 추가해 수정. 4-4 가 읽는 필드는 그대로이며 4-6 재검증은 미실시(클러스터 teardown 상태)
 - [x] 4-5 Karpenter NodePool, EC2NodeClass 및 Worker EC2 배치 구성 — `k8s/10-karpenter-nodepool.yaml`(`skills-sqs-nodeclass`/`skills-sqs-nodepool`, label `skills-nodepool=event-worker`, `disruption.consolidationPolicy` 포함) — 실채점 통과: NodePool 4개 필드 + EC2NodeClass `role` 출력. 4-5 조회 시점 노드·파드 0은 정상(min 0) — 라벨 조건은 4-6 의 동일 label selector 출력으로 충족 (2026-08-04)
 - [x] 4-6 SQS 기반 Scale Out 및 처리 기능 검증 — ScaledObject queueLength 2 + max 6(12건 발송 시 6 pod) + NodePool 인스턴스 타입 t3.medium/large(500m 요청 pod 다수 스케줄 시 노드 증설 유도) — 실채점 통과: sent=12, after_60s 에 pod 6/6 + Karpenter 노드 2대 Ready(기준 180초), 메시지 12 → after_120s 0 (2026-08-04)
 
 ## 함정 절
+
+- **[실측 확인, 2026-08-21] module-2 `terraform destroy` 가 Lattice target attachment 에서 멈춘다 — 재시도해도 같다**: `aws_vpclattice_target_group_attachment.service` 삭제 시 `unexpected state 'UNUSED', wanted target ''. last error: TargetGroupNotInUse` 로 실패한다. **AWS 쪽은 이미 정상 해제된 상태**다(`aws vpc-lattice list-targets` 가 빈 목록). 프로바이더 waiter 가 target 이 아니라 **TG 상태**를 보는데, service association 이 먼저 지워져 TG 가 `UNUSED` 로 가면 종료 상태로 인정하지 않는 버그다. 재시도는 소용없고, `terraform state rm aws_vpclattice_target_group_attachment.service` 후 `destroy` 를 다시 돌리면 나머지가 정상 삭제된다(실측: 이후 5 resources destroyed, 잔존 리소스 0 — TG·Service·SN·VPC·EC2 전부 확인). **teardown 이 막혔다고 리소스가 남은 게 아니니 콘솔에서 수동 삭제하지 마라.**
 
 - **[실측 확인, 2026-08-04] mark2-4.sh 4-5 의 `No resources found` 2줄은 정상 출력이다 — 재배포하지 마라**: 스크립트 97·98행이 Karpenter 노드와 워커 파드를 조회하는데, 채점 시점엔 큐가 비어 있고 `minReplicaCount: 0`이라 둘 다 0이다. 배포 실패가 아니다. 판정 기준이 "min 0으로 채점 직후 Worker Pod가 없을 수 있으므로 ... 4-6 Scale Out 출력 결과를 포함해 판정할 수 있습니다"를 명시하고, 더 결정적으로 **4-6 의 117행이 4-5 의 97행과 완전히 동일한 label selector**(`karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker`)를 쓴다 — 4-6 에서 그 selector 로 노드가 잡히면 라벨 조건이 같은 결과 파일 안에서 증명된다. 이걸 메우겠다고 min 을 올리거나(과제지 6-6 위반) `consolidateAfter` 를 늘려 유휴 노드를 살려두지 마라.
 - **[실측 확인, 2026-08-04] `keda-operator` Pod `RESTARTS 1` 은 무해하다**: 생성 직후 1회 재시작한다(2026-08-02 실행엔 없던 값). 4-3 판정 기준은 Deployment Available + Pod Running 만 보므로 무관 — Running 이면 넘어가라. `ApproximateNumberOfMessages` 가 발송 60초 뒤에도 12로 보이는 것도 같은 부류다(SQS 지표 지연, 두 실행 모두 재현). 실제 처리 착수까지 약 57초로 기준 180초 대비 3배 여유다.
@@ -85,15 +87,79 @@
 - module-1 apply: 22 added / **~7분** (DocumentDB instance 병목, 기존 10-15분 예상은 과대)
 - module-2 apply: 24 added / ~2분
 - module-3 apply: 16 added / ~1분
+- **[실측 확인, 2026-08-21] `podIdentity.provider: aws-eks` 는 트리거 metadata `identityOwner: operator` 없이는 동작하지 않는다**: aws-eks 경로의 `identityOwner` 기본값은 `pod` 이라 KEDA operator 가 자기 IRSA 로 SQS 를 읽지 않고 **스케일 대상 SA(`sqs-worker-sa`)의 역할을 `sts:AssumeRole`** 하려 든다(KEDA v2.20.2 `pkg/scaling/resolver/scale_resolvers.go:265-273` → `pkg/scalers/aws/aws_common.go:68-76`). eksctl IRSA 역할의 신뢰 정책은 OIDC `AssumeRoleWithWebIdentity` 만 신뢰하므로 403 → ScaledObject `READY=False` → 메트릭 없음 → HPA 가 replica 를 못 구해 Deployment 가 기본값 1개로 고정된다. **가장 이른 신호는 "큐가 비었는데 파드가 0으로 안 줄어든다"** 이므로 apply 직후 이것부터 본다. `provider: aws` 로 되돌리면 채점 4-4 를 잃으므로 해법이 아니다
+- **[교훈] 채점 문자열만 맞추고 동작을 재검증하지 않으면 회귀가 조용히 남는다**: 2026-08-07 정정 반영 시 `provider` 문자열만 바꾸고 라이브 확인을 건너뛴 결과가 위 항목이다. 정정 반영 후에는 그 항목의 **채점 출력이 아니라 실동작**을 다시 본다
 - module-4 apply: 30 added / ~3분 (NAT GW 병목)
 - 공통 병목: eksctl 클러스터 생성 **19분** (삭제는 8분) — CloudShell 이미지 빌드/push(~2분)와 병렬 처리 설계(README 3단계)
 - helm karpenter+keda: ~2분 / module-4 scale out(12건→pod 6+노드 2): 60초 이내 / scale in: 큐 소진 후 ~3분
 - module-3 실경로 복구(CloudTrail→EventBridge→Lambda): **19.6초** (기준 180초, "수 분" 상정보다 훨씬 빠름)
 - 채점 스크립트: mark2-1/2/3 각 1~3분, **mark2-4는 ~11분**(CloudShell kubectl 설치 + 4-6의 sleep 60×3)
 
+2026-08-21 최종 정정본 반영 후 module-1·2·3 재배포 검증(실측). 4모듈은 미배포.
+
+- module-1 apply: 22 added / **~5분** (DocDB 인스턴스 3분44초). 앱 기동은 apply 완료 후 **15초 내 `/health` 200** — README 의 "재시도 루프 최대 ~10분"은 여유값이고 실측은 즉시다
+- module-2 apply: 24 added / ~2분. **TG `Status=HEALTHY` 는 apply 후 수 분 뒤 확인 시 이미 HEALTHY** 였다(워밍업 구간을 직접 관측하진 못했으나, 조기 채점 리스크는 그대로라 README 대기 루프는 유지)
+- module-3 apply: 16 added / ~1분. destroy 16개 즉시
+- module-1 destroy: DocDB 인스턴스 삭제가 3분+ (apply 보다 느리다)
+
 ---
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
+
+### 2026-08-21 [최종 정정본] 과제지·채점지 교체 — 판정 기준 변화 없음, 전사본만 역이식
+- 출처: 대회측 최종 수정본 PDF. `task.pdf`·`mark.pdf` 를 교체했다(구판 2026-06-11 → 정정본 2026-08-21 15:47, PDF 메타데이터 기준)
+- **과제지는 실질 변경 없음.** 구판 PDF 의 텍스트 레이어가 깨져 있었을 뿐이고, 요구사항 토큰을
+  집합 비교한 결과 완전히 동일했다 → `task.md` 전사본·구현 변경 없음
+- **채점지는 0801 제공본 + 0807/0809/0812 패치를 흡수한 통합본**이다. 3-1~3-5·4-1~4-6 은
+  `provided/008_chall_2nd_patched_0801.md`·`20260807_CHANGELOG.md`·`20260812_CHANGELOG.md` 와
+  내용이 같아 **신설 합격 기준이 없다** → `mark/mark2-3.sh`·`mark2-4.sh` 및 구현 전부 **영향없음**
+- 다만 `mark.md` 전사본에는 그 내용이 역이식된 적이 없었다 → **수정완료(전사본만)**:
+  module-1 1-1~1-5 전체(`--query` 투영·`describe-secret`·`jq password_set`·`-m 10`·판정 문구),
+  module-2 2-1 `--query`·2-2/2-4 판정 문구·2-5 IP 재유도, module-3 3-1~3-5 전체, 4-2·4-6
+- **2026-08-21 재대조로 추가 보완**: 위 1차 역이식에서 2-3·4-1·4-4·4-5 가 빠져 판정 문구(`2) ...`)만
+  요약 패러프레이즈로 남아 있었다. 명령어 블록은 정본과 일치했으나 기대값이 소실된 상태였다
+  (4-4 가 최대 — `Deployment name`·`selector/podLabels app=sqs-worker`·`nodeSelector` 두 라벨·
+  `env` 3종(`SQS_QUEUE_URL`/`AWS_REGION`/`PROCESSING_SECONDS`)·`scaleTargetRef.name`·
+  `TriggerAuthentication name`/`namespace` 전부 누락). 네 절의 `2)` 문구를 정본 원문으로 교체했다.
+  판정 기준 자체는 그대로이므로 `mark/mark2-*.sh`·구현은 영향없음
+- **2026-08-22 3차 재대조**: 2차에서도 **2-5·4-3** 이 빠져 있었다(PR #137 코드리뷰). 두 절의 `2)` 를
+  정본 원문으로 교체 — 2-5 는 `http_code=200이어야 합니다` + 응답 JSON 3필드, 4-3 은 4줄
+  (keda-operator availableReplicas / karpenter availableReplicas / Pod phase Running /
+  Fargate Node 실행). 이로써 1-1~4-6 전 항목의 `2)` 가 정본 원문이다. 구현 영향 없음
+- `mark/mark2-1.sh`: 변수명 `CLIENT_IP` → `NOSQL_CLIENT_EC2_PUBLIC_IP` (채점지 순번 0 전문과 정합.
+  module-2 는 0807 에서 이미 같은 리네임을 받았는데 module-1 만 빠져 있었다)
+- `mark/mark2-4.sh`: kubectl 설치 버전을 클러스터에서 유도하도록 고쳤다가 **2026-08-22 에 되돌렸다**
+  (아래 결정 로그). 최종본 순번 0 이 유일하게 새로 바뀐 지점이지만, 순번 0 은 채점자가 손으로 밟는
+  절차이지 스크립트 본문이 아니다 — 스크립트는 정본(`v1.35.0` 하드코딩) 그대로 둔다
+- 신설로 보이지만 이미 충족하던 기준들(확인 완료): `KeyManager=CUSTOMER`(`docdb.tf` 고객관리 CMK),
+  secret `host` 는 scheme·port 없는 hostname(`secrets.tf`, 위반 시 지급 앱이 하드 실패),
+  `dateFieldTypes` BSON date(적재가 지급 앱 `convert_dataset()` 경유),
+  1-5 기대 데이터 4종(정렬 순서까지 일치), `Status=HEALTHY`(`lattice.tf` TG + health check),
+  `events.amazonaws.com` invoke 권한(`eventbridge.tf` `aws_lambda_permission.events`),
+  3-5 로그 그룹(`lambda.tf` 가 terraform 으로 선생성 — 첫 invoke 전에도 출력된다),
+  4-2 IRSA annotation(`eksctl/cluster.yaml` `withOIDC` + `serviceAccounts`, helm 이 덮어쓰지 않음)
+- 런북 보강(**수정완료**): module-1 검증에 AWS 측 1-1/1-2 사전 점검 추가(지금까지 HTTP 엔드포인트만
+  봐서 DocumentDB·KMS·Secret 오설정이 채점 때야 드러났다) + 1-5 기대 데이터 명시;
+  module-2 에 **TG `Status=HEALTHY` 대기 루프** 추가 — `HEALTHY` 가 2-4 의 독립 합격 기준이 돼
+  워밍업(~30-60초) 전에 셀프 채점하면 2-5 는 통과해도 2-4 1.5점을 잃는다. service EC2 무공인IP 확인도 추가;
+  module-4 리허설 루프에 `ApproximateNumberOfMessagesDelayed`·`kubectl get nodeclaims` 추가해 채점 출력과 1:1
+- **실배포 검증(2026-08-21, 계정 600440344359)**: module-1·2·3 을 실제로 배포해 위 판정을 전부 실증했다.
+  1-1 `KeyManager=CUSTOMER`·`Encrypted=True`·`Port=27017`·`BackupRetention=1`·`Class=db.t3.medium` /
+  1-2 host 가 scheme·port 없는 hostname·`password_set=true`·**`KmsKeyId: null`** /
+  1-3 `status=ok,database=skills_retail,port=27017,tls=true` + counts 8/6/3 + **`dateFieldTypes` 5개 전부 `datetime`** /
+  1-4 요구 인덱스 8종(+`_id_`)과 `expiresAt` TTL `expireAfterSeconds: 0` /
+  1-5 네 조회 200 + 기대 데이터·**정렬 순서까지 일치**(C001 → O-1006,O-1001,O-1004 / 기간 PENDING → O-1001,O-1003,O-1006 / W-A → P-BLU-003,P-RED-001, P-GRN-002 미포함) /
+  2-1 CIDR·`available` / 2-2 `{"status":"ok","app":"client"}` 200 + service EC2 PublicIp `None` /
+  2-3 Service·VPC·Service association 전부 `ACTIVE` / 2-4 8080 인바운드가 **prefix list 단독**(IpRanges 빈 배열) + Target `HEALTHY` /
+  2-5 `{"client":"ok","service":{"order_id":"1001","via":"vpc-lattice"}}` 200 /
+  3-2 `IpPermissions: []` / 3-3 `State=Active`·`LastUpdateStatus=Successful`·python3.12·핸들러·Timeout 30·env 2종 /
+  3-4 `IsLogging=True`·Rule `ENABLED`·EventPattern 2조건·Target Lambda ARN·**Lambda policy `events.amazonaws.com`**(`AllowEventBridgeInvoke`) /
+  3-5 **로그그룹이 invoke 이전에 이미 존재**(terraform 선생성 확인) + 채점과 동일 payload invoke 결과
+  `{"status":"RESTORED","revokedPermissionCount":1,"publishStatus":"SNS_PUBLISHED"}` → Inbound `[]` 복귀.
+  검증 후 세 모듈 전부 destroy, 잔존 리소스 0(VPC·EC2·Lattice·S3·CloudTrail·SNS·KMS alias 확인)
+- 관찰(판정 아님): Secret 은 AWS 관리형 키를 쓰므로 `describe-secret` 의 `KmsKeyId` 가 `None` 으로
+  출력된다. **채점 판정 문장에 없는 참고 열이라 정상이다.** CMK 를 붙이면 `iam.tf` 에 `kms:Decrypt` 까지
+  추가해야 하는데 배점이 없어 기각. 이의신청 시 오독을 막으려고 `mark.md` 1-2 에도 같은 주석을 남겼다
 
 ### 2026-08-12 [module-4] 4-5 min 0 예외 판정 범위가 Node 까지 확대
 - 출처: `provided/20260812_CHANGELOG.md` (답변일 2026-08-12). 대응 PATCH 파일 없음
@@ -109,6 +175,7 @@
 - 내용: 0801 판정 기준은 TriggerAuthentication 의 존재만 봤으나, 0807 이 `podIdentity.provider=aws-eks이어야 합니다`를 새로 넣었다
 - 판정: **수정완료** — `k8s/30-keda-scaledobject.yaml` `provider: aws` → `aws-eks`. 아래 2026-08-01 결정(`aws` 채택)을 채점 기준 우선 원칙(CLAUDE.md 작업규칙 4)으로 번복한다
 - 확인: KEDA 공식 문서상 `aws-eks`는 deprecated 이나 제거는 v3 예정이고 최신 문서가 2.20 이라 설치 버전(helm 최신)에서 여전히 유효하다. deprecated 경고만 뜬다
+- **[2026-08-21 실측 갱신] 문자열은 유효하나 그대로 두면 동작이 깨진다** — aws-eks 경로는 `identityOwner` 기본값 `pod` 으로 워크로드 SA 역할을 assume 하려 해 STS 403 이 나고 4-6 이 0점이 된다(이슈 #136, 실채점 5.00/7.5). 트리거 metadata 에 `identityOwner: operator` 를 추가해 해결. 아래 2026-08-21 결정 로그 참조
 
 ### 2026-08-07 [module-4] 4-1/4-3/4-4/4-5 채점 조회 축소, [module-2] 2-2/2-3/2-5 변수명·출력
 - 출처: `provided/20260807_PATCH.patch`·`20260807_CHANGELOG.md` (답변일 2026-08-07)
@@ -122,6 +189,47 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-22 [module-4] `mark2-4.sh` 를 정본으로 되돌리고, 안전장치는 런북으로 옮긴다
+- 맥락: PR #137 코드리뷰가 "정본 전사 스크립트에 우리 로직(버전 유도·curl 실패 분기·실행 게이트)이
+  들어갔다"고 지적했다. set-03 의 2026-08-21 [번복] 항목과 같은 계열이다 —
+  **채점 스크립트는 정본 전사본이지 우리가 최적화할 대상이 아니다.**
+- 채택: `install_kubectl` 을 `provided/008_chall_2nd_patched_0801.md:679-693` 과 글자까지 동일하게 복원
+  (`diff` 로 확인). `v1.35.0` 하드코딩·`$HOME/.local/bin` 그대로.
+- 채택: 제거한 안전장치는 **런북**으로 이관한다. `module-4-sqs-scaling/README.md`·`README.linux.md`
+  셀프 채점 절 앞에 채점지 순번 0 과 같은 kubectl 준비 블록을 넣었다(클러스터 버전 유도 → `/tmp` 설치).
+  먼저 깔아두면 `install_kubectl` 이 early-return 하므로 스크립트는 정본 경로 그대로 돈다.
+- 기각: 현행 유지 — 실채점 경로에서는 어차피 early-return 이라 무해하지만, "정본과 다른 흐름을 만들면
+  채점자가 실제로 도는 경로를 리허설이 검증하지 못한다"는 원칙을 세트마다 다르게 적용할 이유가 없다.
+
+### 2026-08-22 [module-4] KEDA Helm 차트를 `--version 2.20.2` 로 고정
+- 맥락: 런북이 `helm install keda kedacore/keda` 를 버전 없이 돌리는데, `30-keda-scaledobject.yaml` 은
+  `podIdentity.provider: aws-eks`(채점 4-4 가 이 문자열을 직접 검사)와 `identityOwner: operator`
+  (aws-eks 경로 인증에 필수, 이슈 #136)에 의존한다. 둘 다 KEDA 가 deprecated 로 두고 **v3 에서 제거 예정**이다.
+- 근거: kedacore/charts 최신은 **2.20.2**(2.20.0 = 2026-06-01), v2.21 은 2026-09 예정.
+  대회 전에 새 차트가 나와도 미고정이면 그걸 끌어오고, major 가 바뀌면 4-4·4-6 이 함께 죽는다.
+- 채택: 두 런북 모두 `--version 2.20.2`. manifest 주석이 주장하는 "2.20 까지는 유효하다"를 런북이 강제한다.
+- 기각: `--version "~2.20"` — 2.x 안에서만 움직이지만 대회 당일 무엇이 깔릴지 재현되지 않는다.
+
+### 2026-08-22 [module-1·2] bash 런북이 PowerShell 런북과 어긋난 지점 3건 + 대기 루프 상한
+- 맥락: PR #137 코드리뷰. `README.linux.md` 는 `README.md` 와 1:1 이라고 선언해 놓고 실제로는 갈라져 있었다.
+- 채택: (1) module-1 의 "AWS 측 사전 점검(채점 1-1/1-2)" 절을 bash 런북에 미러 —
+  DocumentDB·KMS `KeyManager`·Secret `host` 오설정은 HTTP 엔드포인트만 봐선 채점 때야 드러난다.
+  (2) module-2 teardown 의 `terraform state rm` 앞에 `list-targets` 확인 줄 추가 — 확인 없이 떼면
+  destroy 가 다른 이유로 실패했을 때 살아 있는 리소스를 state 밖으로 흘린다.
+  (3) 두 런북의 대기 루프 10곳 전부에 시도 상한(`n` 카운터)을 넣었다. 특히 Lattice HEALTHY 루프는
+  `$TG` 가 `None` 이면 `items[0].status` 가 영원히 `None` 이라 아무 출력 없이 모듈 시간 예산을 태운다.
+- 기각: 지적된 1곳만 수정 — 같은 패턴이 10곳이라 한 곳만 고치면 나머지가 그대로 남는다.
+
+### 2026-08-21 [module-4] aws-eks 유지 + 트리거 metadata `identityOwner: operator` (이슈 #136)
+- 맥락: 채점 4-4 는 `podIdentity.provider=aws-eks` 를 요구하는데(2026-08-07 정정) 실동작은 그 경로를 거부한다. aws-eks 는 `identityOwner` 기본값이 `pod` 이라 operator 가 `sqs-worker-sa` 역할을 `sts:AssumeRole` 하려 들고, 그 역할은 OIDC 만 신뢰하므로 403 이다. 2026-08-21 실채점 4-6 0점(5.00/7.5)
+- 채택: 트리거 metadata 에 `identityOwner: operator` 추가 — `PodIdentityOwner=false` 가 되어 KEDA 가 자기 IRSA(`skills-sqs-keda-policy`, `sqs:GetQueueAttributes` 보유)로 조회하고 AssumeRole 경로가 사라진다. 4-4 가 읽는 필드(`podIdentity.provider`, `type`, `queueLength`, min/max/pollingInterval/cooldownPeriod)는 전부 불변. **IAM 변경 불필요**
+- 기각: `provider: aws` 로 복귀 → 4-6 은 살지만 4-4 를 잃는다. 게시판 참여 마감(2026-08-13)이 지나 출제 측 질의도 불가능
+- 기각: `sqs-worker-sa` 역할 신뢰 정책에 keda-operator 역할 추가 → eksctl(CloudFormation)이 관리하는 역할을 밖에서 고치는 것이라 재생성 시 유실되고, 검증 비용도 크다
+- 기각: `podIdentity.identityOwner: keda` → 이 필드는 provider `aws` 전용이라 `aws-eks` 에서는 아무 효과가 없다(KEDA v2.20.2 `scale_resolvers.go:248-273`)
+- 대가: `identityOwner` 는 KEDA v3 에서 제거 예정. 2.20 문서·소스·AWS 공식 예제 모두에 살아 있어 대회 시점에는 문제 없다. set-07 module-3 의 2026-07-26 결정이 남긴 부채를 이 세트에서 되살리는 셈이며, 4-4 기준이 aws-eks 를 요구하는 한 회피 불가
+- 근거: KEDA v2.20.2 `pkg/scaling/resolver/scale_resolvers.go:265-273`, `pkg/scalers/aws/aws_common.go:64-76,107-111` / KEDA 2.20 aws-sqs 문서 / AWS SageMaker HyperPod 오토스케일링 문서의 동일 예시
+- 미검증: 클러스터가 teardown 상태(us-west-2 EKS 0개, `skills-sqs-queue` 없음)라 라이브 재검증 미실시. 재배포 시 README 5단계 직후 `ScaledObject READY=True` 와 큐 빈 상태 파드 0 을 먼저 확인한다
 
 ### 2026-08-17 [공통] mark.md를 정정 패치 내용으로 동기화 (기존 방침 번복)
 - 맥락: mark.md는 mark.pdf 자체가 아니라 우리가 만든 채점기준표 사본이다. 지금까지는 CLAUDE.md 규칙("provided/·task.pdf·mark.pdf는 원본 그대로 두고 정정은 NOTES.md에 기록")을 mark.md에도 유사 적용해 원문 그대로 두고 `mark/mark2-N.sh`·NOTES.md 정정 로그로만 반영했다
@@ -187,7 +295,7 @@
 - 맥락: KEDA ScaledObject가 AWS SQS 트리거 인증을 받아야 한다(과제지 6-6). set-07의 module-3 결정 로그(2026-07-26)는 `identityOwner: operator` 방식을 채택했으나 그 결정 자체가 "KEDA 3.0에서 제거 예정(deprecated)"이라는 대가를 남겼다
 - 채택: `TriggerAuthentication.spec.podIdentity.provider: aws` — keda-operator SA의 IRSA 역할을 그대로 사용하는 현재 KEDA 권장 경로. set-07이 예고한 "차기 세트에서 TriggerAuthentication 전환 검토"를 이번 세트에서 실행
 - 기각: `identityOwner: operator` 계승 → 이미 deprecated 표시된 경로를 신규 구현에 다시 쓰는 것은 불필요한 기술 부채
-- 대가: 없음 (같은 IRSA SA를 참조하는 동일한 결과)
+- 대가: 없음 (같은 IRSA SA를 참조하는 동일한 결과) — **[2026-08-21 정정] 이 전제는 `aws` 에서만 참이다.** `aws-eks` 로 바꾸면 KEDA 가 operator IRSA 가 아니라 워크로드 SA 역할을 assume 하려 들어 결과가 달라진다. 아래 2026-08-21 결정 참조
 
 ### 2026-08-01 [module-4] pollingInterval 15 유지 — minReplicaCount 0이라 0→1 활성화에 유효
 - 맥락: set-07 module-3의 2026-07-31 결정 로그는 `pollingInterval`을 삭제했다 — 그 근거는 "minReplicaCount≥1이면 0→1 전환이 없어 pollingInterval이 완전 무효"였다. 이번 ScaledObject(`sqs-worker-scaledobject`)는 `minReplicaCount: 0`으로 그 전제 자체가 다르다

@@ -17,11 +17,6 @@ EKS 기반 콘서트 예약(Book) 플랫폼 인프라를 **Terraform / eksctl / 
 
 > [DAY-OF.md 7절 값 대조표](../../DAY-OF.md#7-값-대조표) 로 이동했다.
 
-## NOTICE
-
-채점지의 5-5 항목이 클러스터를 `wsi2026-xxxxx` 형식으로 조회하는 오류를 발견 및 임의 수정하였습니다.  
-이와 관련한 사항은 마이스터넷에 질의한 상태입니다.
-
 ## 디렉토리 구조
 
 ```
@@ -320,6 +315,11 @@ curl -s -u admin:'Skills$#$@!' "http://$GRAFANA_LB/api/search?query=wsc2026" | j
 aws logs tail /wsc2026/eks/book-app --since 10m | head -5
 ```
 
+> **필수 제출 조건** — 과제지 11절: "동작의 확인을 위해 로그 및 메트릭을 1개 이상 발생시켜야 합니다."
+> 위 `POST /booking` 1회가 액세스 로그(→ fluent-bit → `/wsc2026/eks/book-app`)와
+> `log_metric_counter_wsc2026_requests_total` 증가를 동시에 만든다. 마지막 두 명령이 그 존재를 확인하는
+> 것이므로, **둘 다 비어 있지 않은 것을 확인하기 전에는 다음 단계로 넘어가지 않는다.**
+
 ### 9) [bastion → 본 PC] 작업물 백업
 
 bastion 은 step 9-3 에서 지운다. 그 전에 `rendered/`(실제로 apply 된 결과물)와 bastion 에서 직접 고친
@@ -368,6 +368,12 @@ vim mark.sh && chmod +x mark.sh
 # 확인 후 부하 파드 정리 — stress-mem 은 1시간 뒤 Completed 로 죽는데, 남아 있으면
 # 채점자 mark.sh 의 kubectl run 이 AlreadyExists 로 조용히 실패해 PodHighMemory 가 안 뜬다
 kubectl delete pod not-ready error-gen latency-gen crash-test stress-cpu stress-mem -n wsc2026 --ignore-not-found
+
+# 정리 후 로그·메트릭 1건 재생성 (과제지 11절 필수 조건) — 파드를 지우면 트래픽이 끊긴다
+# $CF 는 step 8 의 bastion 셸 변수라 여기(새 CloudShell)엔 없다. Comment 로 다시 찾는다
+CF=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='wsc2026-cdn'].DomainName|[0]" --output text)
+curl -s -X POST "https://$CF/booking" -H 'Content-Type: application/json'   -d '{"client_id":"C900","username":"Final","email":"final@test.com","concert_name":"Seoul2025"}'
+aws logs tail /wsc2026/eks/book-app --since 2m | tail -3   # 비어 있으면 안 된다
 ```
 
 ### 9-3) [본 PC·PowerShell] 채점 전 정리 (_transfer + bastion 제거)

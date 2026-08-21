@@ -188,15 +188,32 @@ resource "aws_iam_role" "audit" {
   max_session_duration = 3600
 }
 
+locals {
+  # GSI 이름은 dynamodb.tf 의 "do not change" 블록이 정본이다. 리터럴을 복사하면
+  # 드리프트가 나므로 리소스에서 직접 읽는다(GSI 는 1개 — one() 이 그 전제를 강제한다).
+  audit_table_resources = [
+    aws_dynamodb_table.concert.arn,
+    "${aws_dynamodb_table.concert.arn}/index/${one(aws_dynamodb_table.concert.global_secondary_index).name}",
+  ]
+}
+
 data "aws_iam_policy_document" "audit" {
+  # 요구사항 11 은 액션뿐 아니라 리소스 와일드카드도 금지한다. GSI 가
+  # client-id-created-at-index 하나뿐이라 "/index/*" 대신 그 ARN 을 직접 쓴다.
+  # statement 를 액션 1개씩 쪼갠 이유: aws_iam_policy_document 는 statement 순서는
+  # 보존하지만 statement 안의 actions 는 재정렬한다. 1개면 순서가 확정돼
+  # mark.md:604 예상 출력(dynamodb:GetItem dynamodb:Query ...)과 그대로 일치한다.
   statement {
-    sid     = "DynamoRead"
-    effect  = "Allow"
-    actions = ["dynamodb:GetItem", "dynamodb:Query"]
-    resources = [
-      aws_dynamodb_table.concert.arn,
-      "${aws_dynamodb_table.concert.arn}/index/*",
-    ]
+    sid       = "DynamoGetItem"
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
+    resources = local.audit_table_resources
+  }
+  statement {
+    sid       = "DynamoQuery"
+    effect    = "Allow"
+    actions   = ["dynamodb:Query"]
+    resources = local.audit_table_resources
   }
   # 테이블이 App CMK(SSE-KMS)로 암호화되어 있어 GetItem/Query 시 복호화 필요
   statement {
@@ -205,13 +222,22 @@ data "aws_iam_policy_document" "audit" {
     actions   = ["kms:Decrypt"]
     resources = [aws_kms_key.app.arn]
   }
-  # ec2/eks Describe 는 리소스 레벨 ARN 을 지원하지 않으므로 Resource="*".
-  # (요구사항: 액션 와일드카드 금지 — 액션은 모두 명시)
+  # ec2:DescribeVpcs 는 리소스 레벨 권한을 지원하지 않아(Service Authorization Reference 의
+  # 리소스 타입 열이 비어 있다) Resource="*" 외 선택지가 없다. 요구사항 11 의 리소스 와일드카드
+  # 금지에 유일하게 걸리는 지점이며 이의신청 근거가 된다.
   statement {
-    sid       = "DescribeVpcAndCluster"
+    sid       = "DescribeVpc"
     effect    = "Allow"
-    actions   = ["ec2:DescribeVpcs", "eks:DescribeCluster"]
+    actions   = ["ec2:DescribeVpcs"]
     resources = ["*"]
+  }
+  # eks:DescribeCluster 는 cluster 를 필수 리소스 타입으로 가지므로 본 클러스터로 한정한다.
+  # (요구사항 11 "8번 EKS Cluster 에 대한 Describe 액션으로 한정")
+  statement {
+    sid       = "DescribeCluster"
+    effect    = "Allow"
+    actions   = ["eks:DescribeCluster"]
+    resources = [local.cluster_arn]
   }
 }
 

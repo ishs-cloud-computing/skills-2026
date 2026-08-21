@@ -14,7 +14,7 @@ cd module-4-container-logging
 export KUBECONFIG="$PWD/kubeconfig"   # eksctl 전용 (kubectl 은 CloudShell 에서 쓴다)
 rm -f m4.zip
 zip -r m4.zip k8s helm cs-deploy.sh
-zip -j m4.zip app/Dockerfile ../provided/module-4/app.py ../mark/mark4-2026-08-04.sh   # -j: 경로 없이 루트에
+zip -j m4.zip app/Dockerfile ../provided/module-4/app.py ../mark/mark4.sh   # -j: 경로 없이 루트에
 cd terraform
 terraform init
 terraform apply -auto-approve

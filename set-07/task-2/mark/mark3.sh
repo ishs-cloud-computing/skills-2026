@@ -42,7 +42,7 @@ for b in $(seq 1 10); do
   aws sqs send-message-batch --queue-url "$(aws sqs get-queue-url --queue-name skm-order-queue --region ap-northeast-2 --query QueueUrl --output text)" --entries "[$E]" --region ap-northeast-2 > /dev/null; done
 
 POD_PEAK=0; NODE_PEAK=0
-for i in $(seq 1 24); do
+for i in $(seq 1 30); do
   P=$(kubectl get deploy order-processor -n skillsmkt -o jsonpath='{.status.readyReplicas}' 2>/dev/null); P=${P:-0}
   N=$(kubectl get nodes -l karpenter.sh/nodepool=skm-app-nodepool --no-headers 2>/dev/null | wc -l | tr -d ' ')
   [ "$P" -gt "$POD_PEAK" ] && POD_PEAK=$P

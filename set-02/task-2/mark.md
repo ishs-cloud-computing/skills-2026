@@ -44,14 +44,14 @@
 | 제2과제 | 2-5 | Application | 5-1 | Application Health | 1 |
 | 제2과제 | 2-6 | Systemd Service | 6-1 | Systemd Service | 1.5 |
 | 제2과제 | 3-1 | CloudTrail | 1-1 | CloudTrail | 0.5 |
-| 제2과제 | 3-2 | SNS | 2-1 | SNS Topic | 0.5 |
+| 제2과제 | 3-2 | SNS | 2-1 | SNS Topic | 1 |
 | 제2과제 | 3-3 | Lambda | 3-1 | Lambda Functions | 1.5 |
-| 제2과제 | 3-4 | EventBridge | 4-1 | EventBridge Rules | 2 |
+| 제2과제 | 3-4 | EventBridge | 4-1 | EventBridge Rules | 1.5 |
 | 제2과제 | 3-4 | EventBridge | 4-2 | SG Remediation Test | 1.5 |
 | 제2과제 | 3-4 | EventBridge | 4-3 | EC2 Type Remediation Test | 1.5 |
 | 제2과제 | 4-1 | Resources | 1-1 | Resources | 1 |
-| 제2과제 | 4-2 | Lambda | 2-1 | Lambda Functions | 1 |
-| 제2과제 | 4-3 | MSK | 3-1 | MSK Cluster Configuration | 2 |
+| 제2과제 | 4-2 | Lambda | 2-1 | Lambda Functions | 1.5 |
+| 제2과제 | 4-3 | MSK | 3-1 | MSK Cluster Configuration | 1.5 |
 | 제2과제 | 4-3 | MSK | 3-2 | MSK Trigger Mapping | 1.5 |
 | 제2과제 | 4-4 | DynamoDB | 4-1 | Data Processing Result | 1 |
 | 제2과제 | 4-4 | DynamoDB | 4-2 | Producer Running | 1 |
@@ -390,7 +390,7 @@ wsc2026-required-tags-rule	ACTIVE
 1) 아래 명령어를 입력합니다.
 
 ```bash
-sleep 30; echo "EC2 State (expect running): $(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[0].Instances[0].State.Name" --output text)"; echo "SG Inbound Count (expect 0): $(aws ec2 describe-security-groups --group-ids $SG_ID --query "SecurityGroups[0].IpPermissions | length(@)" --output text)"
+sleep 60; echo "EC2 State (expect running): $(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[0].Instances[0].State.Name" --output text)"; echo "SG Inbound Count (expect 0): $(aws ec2 describe-security-groups --group-ids $SG_ID --query "SecurityGroups[0].IpPermissions | length(@)" --output text)"
 ```
 
 2) 출력값이 아래와 일치하는지 확인합니다.
@@ -444,7 +444,7 @@ aws dynamodb describe-table --table-name wsc2026-sensor-data --query "Table.[Tab
 wsc2026-sensor-data
 sensorId	timestamp
 {
-  "BucketArn": "arn:aws:s3:::wsc2026-sensor-alert-bucket-586639730662",
+  "BucketArn": "arn:aws:s3:::wsc2026-sensor-alert-bucket-<비번호>",
   "BucketRegion": "ap-northeast-1",
   "AccessPointAlias": false
 }
@@ -517,10 +517,10 @@ aws dynamodb scan --table-name wsc2026-sensor-data --max-items 1 --query "Items[
 1) 아래 명령어를 입력합니다.
 
 ```bash
-aws dynamodb scan --table-name wsc2026-sensor-data --max-items 3 --query "Items[*].{sensorId:sensorId.S,timestamp:timestamp.S}" --output table
+aws dynamodb scan --table-name wsc2026-sensor-data --max-items 3 --query "Items[*].{sensorId:sensorId.S,timestamp:timestamp.S}" --output json
 ```
 
-2) 출력값이 아래와 같은 형식(`YYYY-MM-DDTHH:mm:ss±HH:mm`)으로 출력되는지 확인합니다.
+2) 출력 결과가 JSON 형식으로 표시되고, `sensorId`와 `timestamp` 항목만 포함되어 있는지 확인합니다. `timestamp` 값은 ISO 8601 KST 형식(`YYYY-MM-DDTHH:mm:ss±HH:mm`)으로 출력될 경우 정답으로 인정합니다.
 
 ```json
 {

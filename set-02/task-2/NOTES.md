@@ -35,6 +35,51 @@
   풀리고, 안 풀리면 VPC 잔여 ENI 를 detach/delete 로 수동 정리한다(런북 Teardown 절)
 
 ---
+## 정정 로그
+<!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
+
+### 2026-08-21 [재배부] 문제지·채점기준표 신판 배부 — PDF 자체가 교체됐다
+- 출처: 재배부된 `2과제_문제.pdf`·`2과제_채점기준.pdf` (PDF CreationDate `2026-08-21`, 구판은
+  문제지 `2026-07-12` / 채점지 `2026-07-13`). 페이지 수는 양쪽 다 문제지 6p / 채점지 9p 로 동일
+- **이 저장소의 `task.pdf`·`mark.pdf` 를 신판으로 교체했다.** 규칙 10 은 "출제자는 게시된 과제
+  파일을 직접 고치지 않는다"를 전제로 원본 보존을 요구하지만 이번엔 그 전제가 깨졌다. 구판은
+  git 이력에 LFS 오브젝트로 남는다 — 구판 oid: `task 48d127ec7cdeac16…`(108,322B),
+  `mark 988773e9486cf09f…`(96,230B). 1과제도 같은 배부본이라 같은 방침으로 갔다
+- 대조 방법: 구판을 `git lfs fetch` 로 받아 `pdftotext` 의 `-layout` 과 `-raw` 두 모드로 각각
+  추출해 diff. 두 결과가 일치해 조판 리플로우에 가려진 변경이 없음을 확인했다
+- 변경은 총 7건 (문제지 3 + 채점지 4)
+
+| # | 문서 | 변경 | 판정 |
+|---|---|---|---|
+| T1 | 문제지 module-1 §2 | Lambda 함수 이름 `wsc2026-student-score-function` 을 명시 | **영향없음** — `module-1-workflow/terraform/variables.tf:28` 이 이미 이 이름. 구판 문제지엔 이름이 없고 `provided/module1/lambda.md` 로만 알 수 있었다 |
+| T2 | 문제지 module-2 §2 | "애플리케이션은 systemd 서비스로 등록, 서비스 이름은 `app`" 추가 | **영향없음** — `module-2-analytics/terraform/userdata.sh.tpl:20` 이 이미 `app.service`. 채점 2-6 이 원래 이 이름을 봤고 문제지가 뒤늦게 명문화한 것 |
+| **T3** | 문제지 module-2 §6 | `wsc2026-alaytics-ec2-role` → **`wsc2026-analytics-ec2-role`** (원문 오타 수정) | **수정완료** — 전사본(`task.md:157`) + 구현 리네임(`variables.tf`·`iam.tf`, 이슈 #133). 아래 별도 항목 |
+| M1 | 채점지 세부표 | `3-2 SNS Topic` 0.5→1, `3-4/4-1 EventBridge Rules` 2→1.5, `4-2/2-1 Lambda Functions` 1→1.5, `4-3/3-1 MSK Cluster Configuration` 2→1.5 | **수정완료** — `mark.md` 세부표. 배점 이동이 module-3·4 **내부에서만** 일어나 모듈 합은 양쪽 다 7.5 로 불변 |
+| M2 | 채점지 3-4 | `sleep 30` → `sleep 60` | **수정완료** — `mark.md` + `mark/mark2-3.sh`. SG 자동복구 람다가 도는 데 30초로는 모자란다고 본 것. 구현 변경은 없고 대기만 길어진다 |
+| M3 | 채점지 4-1 | 예상 출력 `…bucket-586639730662` → `…bucket-<비번호>` | **수정완료(채점지 전사본만)** — 구판이 출제자 계정 ID 로 보이는 값을 고정 기재해 그대로면 오답 처리될 수 있었다. 1과제 2-1-A 와 같은 계열의 수정이다 |
+| M4 | 채점지 4-5-B | `--output table` → `--output json`, 판정을 "JSON 형식 + `sensorId`·`timestamp` 만 포함 + ISO 8601 KST" 로 명문화 | **수정완료(채점지 전사본·스크립트만)** — 구현은 이미 충족. `provided/module4/Application.md:22` 가 timestamp 를 ISO 8601 KST 로 규정하고 `sensor_consumer/index.py:85` 가 producer 값을 문자열 그대로 저장한다 |
+
+- **배점 재검산**: 주요항목 4개 모듈 × 7.5 = 30, 세부표도 모듈별 7.5 / 전체 30 으로 일치한다.
+  이번 배점 변경은 총합이 아니라 **모듈 내 재분배**라서, 검증 포인트는 합계가 아니라 모듈별 합이었다
+
+### 2026-08-21 [module-2] T3 리네임은 전사본만 반영하고 구현은 이슈로 넘겼다
+- 경위: 저장소는 구판 원문 오타 `alaytics` 를 **의도적으로 유지**하고 `variables.tf:101`·`iam.tf:3`·
+  두 README 에 "고치지 말 것" 주석까지 달아 뒀다. 신판이 원문을 고쳐 그 근거가 사라졌다
+- 채택: 과제지 전사본(`task.md`)은 정본을 반영해야 하므로 `analytics` 로 고쳤다. `.tf` 리네임은
+  이번 커밋에서 하지 않고 **이슈 #133** 으로 넘긴다 (사용자 결정)
+- 당시 상태: **전사본 `analytics` ↔ 구현 `alaytics` 로 어긋나 있었다.** 두 README 의 "고치지 말 것"
+  주의문은 이 사실과 이슈 번호를 가리키도록 재작성했고, `variables.tf`·`iam.tf` 의 같은 취지
+  주석은 손대지 않아 이슈가 닫히기 전까지 무효로 읽어야 했다 (아래 종결 항목에서 해소)
+- 위험 평가: 채점 스크립트(`mark/mark2-2.sh`, `mark.md` 2-1~2-6)는 이 역할 이름을 **조회하지 않는다**
+  — 자동 채점 점수 영향 없음. 다만 문제지 §6 이 이름을 못 박는 항목이라 육안 확인 여지는 남는다
+- 리네임 시 주의: 이름 변경이라 IAM Role 과 인스턴스 프로파일이 **재생성**된다(둘 다 `name` 이
+  ForceNew). 다만 `aws_instance.iam_instance_profile` 은 ForceNew 가 아니라
+  ReplaceIamInstanceProfileAssociation 으로 in-place 교체되므로 **EC2 는 재생성되지 않는다**.
+  이미 apply 한 스택이 있으면 plan 을 먼저 확인할 것
+- **종결(2026-08-21, 이슈 #133)**: 구현을 `wsc2026-analytics-ec2-role` 로 리네임하고
+  `.tf` 의 "고치지 말 것" 주석과 두 README 주의문을 걷어냈다. 전사본 ↔ 구현 일치
+
+---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
 

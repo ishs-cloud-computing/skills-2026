@@ -185,7 +185,6 @@ terraform destroy
 
 ## 설계 근거 · 함정
 
-- **EC2 역할 이름 `wsc2026-alaytics-ec2-role`은 과제지 원문 오타(alaytics)를 의도적으로 유지**한 것 — 이름 정확 일치 채점 대비. 임의로 analytics로 고치지 말 것 (`variables.tf`에도 주석 있음).
 - **task.md는 "Apache Flink 1.19"라고 쓰지만 mark 2-4는 `ZEPPELIN-FLINK-3_0`을 채점** — mark 스크립트 우선. Studio Notebook(Zeppelin)이며 Flink 애플리케이션 프로그래밍 금지 조건과도 일치.
 - **Studio Notebook은 terraform provider의 `aws_kinesisanalyticsv2_application`으로 생성 불가** (zeppelin 설정 블록 미지원, provider issue #41233) → `aws_cloudformation_stack`으로 래핑.
 - **Kinesis SQL 커넥터는 CFN에 명시 필요.** 콘솔 위저드로 만들면 커넥터가 자동 추가되지만 bare CFN엔 Flink 코어 빌트인만 남아 `Could not find any factory for identifier 'kinesis'`가 난다 → `flink.tf`의 `CustomArtifactsConfiguration`에 `flink-sql-connector-kinesis:1.15.4`(런타임 1.15 대응)를 Maven 의존성으로 주입. 커넥터 변경 시 노트북은 **새 세션**으로 다시 열어야 jar가 로드된다.

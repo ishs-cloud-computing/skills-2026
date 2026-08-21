@@ -9,7 +9,7 @@
 - 구성: terraform(단일 리전 종합 인프라) + eksctl(private cluster, Pod Identity) + k8s(app/logging/monitoring).
   머신 3분할 — 본 PC(PS7: terraform·eksctl·시드·정리) / 일반 CloudShell(이미지 빌드) /
   `unicorn-mark` CloudShell VPC environment(helm·kubectl·채점). **작업용 bastion 없음.**
-- 미해결: 배포 실측 미수행 — apply·`mark-2026-08-10.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
+- 미해결: 배포 실측 미수행 — apply·`mark.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
 - 채점 신원은 PowerUser~Administrator 수준 **IAM 사용자**의 CloudShell 이다(2026-08-04 답변). 본 PC 가
   클러스터를 만들므로 본 PC 신원이 그 IAM 사용자와 같아야 하고, 어긋나면 access entry 로 사후 보정한다.
 - 새 필수 절차: eksctl 이 fully-private 클러스터를 public+private 로 만든 뒤 public 을 끄므로,
@@ -19,24 +19,25 @@
 <!-- mark.sh / mark/markN.sh 항목 대비 현재 구현이 어디까지 왔는지. -->
 
 정정(errata) 대비 — `set-07/errata/1과제.txt` 12건 전부 판정 완료. 근거는 정정 로그 표.
+2026-08-21 재배포본 PDF 기준으로 재확인했다(반영/미반영 목록은 아래 정정 로그 2026-08-21 절).
 
 | 정정 # | 채점항목 | 판정 | 근거 |
 |--------|---------|------|------|
 | 0 | 6-1-A | 영향없음 | `eksctl/cluster.yaml:22-25` |
-| 1 | 9-1-A | 영향없음 | `terraform/iam.tf:195,205,213` (액션 와일드카드 0) |
+| 1 | 9-1-A | 영향없음 | `terraform/iam.tf:207,213,229,237` (액션 와일드카드 0, 리소스 와일드카드는 `ec2:DescribeVpcs` 1건) |
 | 2 | 12-1-A | 수정완료(07-31) | `k8s/logging/fluent-bit.yaml:82`, `eksctl/cluster.yaml:104-107` |
 | 3 | 8-6-A, 12-2-A | 수정완료(07-31) | `terraform/waf.tf:41-54` |
 | 4 | 4-1-A, 8-3/8-4-A | 영향없음 | `terraform/dynamodb.tf:32-37`, `terraform/lambda/index.py:46` |
 | 5 | 8-2/8-3/10-1/12-1/12-2-A | 영향없음 | `terraform/cloudfront.tf:47` |
-| 6 | 9-1-A | 영향없음 | `terraform/iam.tf:218-222` (인라인) |
+| 6 | 9-1-A | 영향없음 | `terraform/iam.tf:242-246` (인라인) |
 | 7 | 12-1-A | 영향없음 | 문구 변경만 |
 | 8 | 6-3-A | 영향없음 | `k8s/app/service.yaml:11` |
 | 9 | 절차 | 영향없음 | `README.md` step 9 주석 |
-| 10 | 9-2-A | 수정완료 | `mark-2026-08-10.sh` (정정본 사본) |
+| 10 | 9-2-A | 수정완료 | `mark.sh` (재배포본 = 정정본) |
 | 11 | 12-1-A | 영향없음 | 채점 측 지침 |
-| 12 | 12-1-A | 수정완료 | `k8s/logging/fluent-bit.yaml:106`, `mark-2026-08-10.sh:123` |
+| 12 | 12-1-A | 수정완료 | `k8s/logging/fluent-bit.yaml:106`, `mark.sh:123` |
 
-배포 실측 대비 — [ ] 미실행. `bash mark-2026-08-10.sh` 결과 수신 후 항목별로 채운다.
+배포 실측 대비 — [ ] 미실행. `bash mark.sh` 결과 수신 후 항목별로 채운다.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거가 된다. -->
@@ -47,19 +48,43 @@
 
 ---
 ## 정정 로그
-<!-- 과제지·채점지의 오류/정정. task.pdf·mark.pdf 와 전사본 task.md·mark.md 는 원본 대조용으로 고치지 않는다. -->
+<!-- 과제지·채점지의 오류/정정. -->
 
-정정 정본은 `set-07/errata/1과제.txt` 하나뿐이고, 배경·"수정없음" 판정·답변과 정본이 어긋난 지점은
-`set-07/changelog.txt` 에 있다. 내용이 바뀐 실행 파일은 원본을 두고 **날짜 접미사 사본**으로 추가한다
-(`mark-2026-08-10.sh`) — task-2 와 같은 규칙이다(`set-07/task-2/NOTES.md` 정정 로그).
+정정 정본은 `set-07/errata/1과제.txt` 이고, 배경·"수정없음" 판정·답변과 정본이 어긋난 지점은
+`set-07/changelog.txt` 에 있다. **2026-08-21 부터 task-1 의 `task.pdf`·`mark.pdf`·`mark.sh` 는
+재배포본이 정본**이며, 전사본 `task.md`·`mark.md` 도 재배포본을 따라간다(아래 2026-08-21 절).
+task-2 도 같은 날 재배포돼 채점 스크립트 사본이 `mark3.sh`·`mark4.sh` 로 흡수됐다. 다만 **제공파일은
+재배포되지 않아** `provided/module-4/Dockerfile-2026-08-01` 만 날짜 접미사 사본으로 남는다
+(`set-07/task-2/NOTES.md` 정정 로그).
+
+### 2026-08-21 과제지·채점지 재배포본 수령 (출처: 출제자 재배포 PDF 2종)
+
+1과제 **과제지·채점지 PDF 수정본**이 재배포되어, `set-07/changelog.txt` 첫 줄이 적어둔
+"수정본이 재배포되지 않습니다"라는 전제가 깨졌다. 그 파일은 질의·답변 배경을 담는 문서라
+그대로 두고, 재배포 사실과 대조 결과는 여기에만 남긴다. 전사본 `task.md`·`mark.md` 와
+`mark.sh` 는 재배포본 기준으로 갱신했다.
+2과제는 재배포본이 오지 않아 `errata/2과제.txt` 가 그대로 정본이다.
+
+| 구분 | 내용 | 구현 영향 |
+|---|---|---|
+| 채점 스크립트 | 재배포본 본문이 `mark-2026-08-10.sh` 와 **완전 동일** — 별도 정정본을 유지할 이유가 사라져 `mark.sh` 를 그 내용으로 덮고 날짜 접미사 사본을 삭제했다(런북 참조도 `mark.sh` 로 통일) | **없음** — 스크립트 내용 자체는 그대로 |
+| 반영된 정정 | 2, 3, 5, 6, 7, 8, 9, 10, 11, 12 | **없음** — 이미 전부 판정·반영 완료 |
+| 미반영 정정 0 | 8번 Security 의 "Access Entry 사용, aws-auth 미사용" 지문이 **삭제되지 않고 남아 있다** | **없음** — 저장소는 이미 `eksctl/cluster.yaml` `authenticationMode: API`. 강제가 되살아나도 현재 구성이 그 강제를 만족한다 |
+| 미반영 정정 1 ★ | 11번이 "Inline Policy 를 사용하며, 와일드카드 액션 **및 리소스**는 사용해서는 안 됩니다." — 정정 6 만 반영되고 **정정 1(리소스 와일드카드 허용)이 되돌아갔다** | **있음(축소)** — `eks:DescribeCluster` 는 `cluster` 를 **필수 리소스 타입**으로 가지므로 `local.cluster_arn` 으로 한정했다(`terraform/iam.tf:234-240`, 2026-08-21 수정 · 근거 SAR `list_eks.html` Actions 표 `DescribeCluster … cluster*`). 남는 `Resource:"*"` 는 `ec2:DescribeVpcs` 한 건뿐이며(`terraform/iam.tf:226-232`), SAR `list_ec2.html` 에서 이 액션의 리소스 타입 열이 비어 있어 대체 불가다(쓸 수 있는 조건 키는 `ec2:Region` 뿐). 채점 9-1-A 는 Action 목록만 읽고 "`*` 이 없으면 득점"이므로 실채점 손실은 0. 지문 위반으로 감점될 여지는 이 한 건에만 남고, 이의신청 시 위 SAR 을 근거로 쓴다. — 주의: EC2 `Describe*` 가 **전부** 리소스 레벨 미지원인 것은 아니다(`DescribeVpcAttribute` 는 `vpc*` 지원). 액션 단위로 확인할 것 |
+| 미반영 정정 4 | 6번 Database 의 "Lambda 를 통한 예약 조회를 지원하기 위해" 문장이 남아 있다 | **없음** — 문장만 삭제 대상이었다. Lambda 는 PK `get_item`, GSI 는 4-1-A 존재 확인만 |
+| 신규 지문 | 8번 Security 가 "Book App **Pod 에 사용되는 Identity Role**" → "Book App 이 사용되는 **Pod Identity Role**" 로 Pod Identity 를 명시 | **없음** — 이미 Pod Identity. 채점 6-3-A 도 `list-pod-identity-associations` 로 확인한다 |
+
+나머지 차이는 전사본의 표현 오차 교정 수준이다(10-1 ALB 괄호 위치, 12 메트릭 문장, 13 Application 문장 등).
+채점지 쪽은 유의사항 18·19 추가, 6-3-A 예상 출력 `unicorn-book-app-svc ClusterIP`, 12-1-A 의
+`TZ=Asia/Seoul date` 기준선·"출력된 로그가 위와 같고"·"`None` 무시" — 모두 이미 반영된 정정이다.
 
 ### 2026-08-10 답변 (출처: `set-07/errata/1과제.txt` 10~12 + `changelog.txt`)
 
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|
-| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:210-215`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
+| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. *(2026-08-21 재배포로 무효 — `mark.sh` 자체가 정정본이 됐다)* 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:226-240`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
 | 11 | 12-1-A 예상 출력에 "`None` 등의 값이 출력될 경우 무시" 추가 | **없음** — `filter-log-events` 페이지네이션이 만드는 값이라 구현이 손댈 수 없다 |
-| 12 | 12-1-A 기준선 명령을 `date -u "+…Z"` → `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` | **있음** — `k8s/logging/fluent-bit.yaml` 의 `reshape.lua` 가 KST 값을 계산하면서 접미사만 `Z` 였다. `+09:00` 으로 변경(결정 로그 2026-08-15 참조). `mark-2026-08-10.sh` 의 기준선 명령도 정정본으로 교체 |
+| 12 | 12-1-A 기준선 명령을 `date -u "+…Z"` → `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` | **있음** — `k8s/logging/fluent-bit.yaml` 의 `reshape.lua` 가 KST 값을 계산하면서 접미사만 `Z` 였다. `+09:00` 으로 변경(결정 로그 2026-08-15 참조). `mark-2026-08-10.sh` 의 기준선 명령도 정정본으로 교체 *(2026-08-21 재배포로 `mark.sh` 에 흡수)* |
 
 `changelog.txt` 2026-08-10 의 `주의:` 3건은 위 표에 흡수했다. 다만 **08-04 의 "과제지 예시 형식(`Z`)에 맞출 것"과
 08-10 의 "로그 timestamp 도 `+09:00` 으로 기록할 것"이 정면 충돌**한다 — 후행·구체적인 08-10 을 채택했다(결정 로그).
@@ -69,7 +94,7 @@
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|
 | 5 | CloudFront 를 "`unicorn-svc-cf` 이름으로" → "`unicorn-svc-cf` **Comment** 를 가지도록" 생성 | **없음** — Distribution 에는 Name 필드가 없고 처음부터 `terraform/cloudfront.tf:47` `comment = "unicorn-svc-cf"` 다. 채점도 전부 `DistributionList.Items[?Comment=='unicorn-svc-cf']` 로 찾는다(`mark.sh:79,111,130`). `cloudfront.tf:110` 의 `Name` 태그는 무해한 여분이라 남긴다 |
-| 6 | 과제지 11 "와일드카드 액션은…" 앞에 "**Inline Policy 를 사용하며,**" 추가 | **없음** — `terraform/iam.tf:218-222` 가 이미 `aws_iam_role_policy`(인라인)다. 채점 9-1-A 가 `aws iam list-role-policies`(인라인 전용)만 쓰므로 고객 관리형으로 붙였으면 0점이었다 |
+| 6 | 과제지 11 "와일드카드 액션은…" 앞에 "**Inline Policy 를 사용하며,**" 추가 | **없음** — `terraform/iam.tf:242-246` 이 이미 `aws_iam_role_policy`(인라인)다. 채점 9-1-A 가 `aws iam list-role-policies`(인라인 전용)만 쓰므로 고객 관리형으로 붙였으면 0점이었다 |
 | 7 | 12-1-A "출력값 **형식**이 위와 같고" → "**출력된 로그**가 위와 같고" | **없음**(문구) — 다만 형식 엄격성이 완화됐다는 근거로 정정 12 판단에 쓰인다. 유의사항 16 에 따라 IP 등 변동값은 무시 |
 | 8 | 6-3-A 예상 출력 `unicorn-book-app-svc` → `unicorn-book-app-svc ClusterIP` | **없음** — `k8s/app/service.yaml:11` 이 이미 `type: ClusterIP`. `mark.sh:60` 이 `TYPE:.spec.type` 을 출력하고 있어 출력값도 이미 일치 |
 | 9 | 유의사항 19 추가 — `source kubectl-connect` 오류 시 1회에 한해 `rm -rf .kube/` 로 초기화 허용 | **없음**(채점 절차) — 런북 step 9 에 한 줄만 반영. kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인 |
@@ -108,6 +133,56 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-22 audit 정책 — `/index/*` 제거 + DynamoRead 를 액션 1개씩 분리
+- 맥락: 2026-08-21 항목이 `eks:DescribeCluster` 를 ARN 으로 좁히면서 "남는 와일드카드 리소스는
+  `ec2:DescribeVpcs` 한 건뿐"이라고 적었는데, **같은 문서의 DynamoRead 에 `/index/*` 가 남아 있었다**.
+  이의신청 근거로 쓸 주석이 사실과 달랐다(PR #137 코드리뷰 지적).
+- 채택: `dynamodb.tf:32` 의 GSI 가 `client-id-created-at-index` 하나뿐이라 `/index/*` 대신 그 ARN 을
+  쓴다. 이름은 리터럴로 복사하지 않고 `one(aws_dynamodb_table.concert.global_secondary_index).name`
+  으로 리소스에서 직접 읽는다 — GSI 블록이 `// do not change` 라 두 곳에 같은 문자열을 두면
+  드리프트만 생기고, `one()` 이 "GSI 는 1개"라는 전제를 코드로 강제한다.
+  이제 `Resource:"*"` 는 `ec2:DescribeVpcs` 하나이고 와일드카드가 섞인 리소스는 **0건**이다.
+- 채택: DynamoRead 를 `DynamoGetItem`·`DynamoQuery` 두 statement 로 분리. 2026-08-21 항목의 실측
+  (`aws_iam_policy_document` 는 statement 순서는 보존하되 statement 안 actions 는 재정렬)이
+  dynamodb 쌍에는 적용되지 않아 `dynamodb:Query dynamodb:GetItem …` 으로 뒤집혀 렌더링됐다.
+  statement 당 액션 1개면 순서가 확정돼 `mark.md:604` 예상 출력
+  `dynamodb:GetItem dynamodb:Query ec2:DescribeVpcs eks:Describe` 와 그대로 맞는다.
+- 기각: 순서를 그대로 두고 NOTES 서술만 고치기 — 9-1-A 는 부분 일치라 실점 0 이지만, 채점자가
+  예상 출력과 눈으로 대조하는 항목이라 굳이 어긋난 채로 둘 이유가 없다(5줄).
+- 기각: GSI 이름을 `variables.tf` 로 빼기 — 과제지가 고정한 값이고 `dynamodb.tf` 가 `do not change`
+  로 표시된 블록이다. 바뀌기 쉬운 축이 아니라 변수화 대상이 아니다.
+- 확인: `terraform validate` 가 이 표현식을 타입 체크한다(속성명을 일부러 틀리면 `Unsupported attribute`).
+
+### 2026-08-21 `eks:DescribeCluster` 를 클러스터 ARN 으로 축소 — 재배포본 11번의 리소스 와일드카드 금지 부활
+- 맥락: 재배포본 과제지 11 이 "와일드카드 액션 **및 리소스**는 사용해서는 안 됩니다"로 되돌아갔다(정정 1 미반영).
+  기존 주석은 `ec2:DescribeVpcs`·`eks:DescribeCluster` 둘 다 리소스 레벨 ARN 미지원이라고 적었으나 **절반이 틀렸다** —
+  SAR `list_eks.html` Actions 표는 `DescribeCluster` 의 리소스 타입을 `cluster*`(필수)로 명시한다.
+- 채택: statement 를 둘로 분리. `eks:DescribeCluster` → `local.cluster_arn`(`data.tf:24`, Pod Identity trust 와 공용),
+  `ec2:DescribeVpcs` → `"*"` 유지. 와일드카드 리소스가 2개 액션 → 1개로 줄고 채점 영향은 0(9-1-A 는 Action 만 읽는다).
+  **VPC statement 를 앞에** 둬 `mark.md:604` 예상 출력의 `ec2:DescribeVpcs eks:Describe` 순서를 맞춘다.
+  실측: `aws_iam_policy_document` 는 **statement 순서는 보존하지만 statement 안의 actions 순서는 재정렬**한다 —
+  분리 전 `actions = ["ec2:DescribeVpcs", "eks:DescribeCluster"]` 가 실제로는
+  `["eks:DescribeCluster","ec2:DescribeVpcs"]` 로 렌더링돼 예상 출력과 **뒤집혀 있었다**.
+  분리하면 statement 당 액션이 1개가 되어 순서가 확정된다(부수 효과지만 9-1-A 대조에 유리).
+  `mark.sh:97` 의 `Statement[].Action[]` 은 액션이 1개라 `Action` 이 배열이 아닌 문자열로 렌더링돼도
+  값을 그대로 뽑는다(jmespath 로 확인: `dynamodb:Query dynamodb:GetItem kms:Decrypt ec2:DescribeVpcs eks:DescribeCluster`).
+- 기각: 현행 유지 — 채점 영향은 0 이지만 주석이 사실과 달라 이의신청 근거가 약해진다.
+- 기각: `ec2:DescribeVpcs` statement 에 `ec2:Region` 조건 추가 — SAR 상 유일하게 쓸 수 있는 조건 키지만,
+  9-2-A 의 `describe-vpcs` 는 **채점자 CloudShell** 에서 호출되므로 리전이 어긋나면 득점 항목이 Deny 로 죽는다.
+  지문이 문제 삼는 건 조건이 아니라 와일드카드라 이득 0, 실점 리스크만 있다.
+- 참고: EC2 `Describe*` 가 전부 리소스 레벨 미지원이라는 통념은 이제 틀렸다 —
+  같은 표에서 `DescribeVpcAttribute` 는 `vpc*`, `DescribeVpcEndpointServicePermissions` 는 `vpc-endpoint-service*` 를 지원한다.
+
+### 2026-08-21 정정본 사본을 없애고 `mark.sh` 하나로 — 재배포본이 원본을 대체했다
+- 맥락: 정정 10·12 를 반영한 `mark-2026-08-10.sh` 를 원본 `mark.sh` 옆에 두는 규칙이었다. 원본이
+  재배포되지 않는다는 전제에서 "원본은 대조용으로 보존"이 성립했기 때문이다. 2026-08-21 재배포본이
+  오면서 전제가 깨졌고, 재배포본 본문은 `mark-2026-08-10.sh` 와 글자까지 같았다.
+- 채택: `mark.sh` = 재배포본. 날짜 접미사 사본 삭제. 대회 당일 두 이름을 헷갈릴 여지를 없애는 게
+  대조 가치보다 크다 — 런북이 S3 릴레이 tar, `cp ~/`, 자가채점 3곳에서 파일명을 부르고 있었다.
+- 기각: 사본을 남기고 `mark.sh` 만 갱신 — 같은 내용 파일이 둘이 되어 이름만 늘어난다.
+- 대가: 최초본 대조가 필요하면 git 이력(`git show <이전커밋>:set-07/task-1/mark.sh`)으로만 볼 수 있다.
+- 참고: 아래 2026-08-15 항목의 `mark-2026-08-10.sh:27-33,76` 는 이제 `mark.sh` 의 같은 줄을 가리킨다.
 
 ### 2026-08-15 S3 릴레이에서 텍스트 제거 — `outputs.json`·`Dockerfile` 은 붙여넣기로
 - 맥락: 릴레이가 4개를 나르는데 그중 둘이 텍스트였다. 릴레이가 존재하는 이유는 CloudShell 에 파일을 넣을
