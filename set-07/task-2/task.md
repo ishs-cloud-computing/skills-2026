@@ -185,7 +185,7 @@ A/B 버전이 서로 다른 캐시 항목으로 보관되도록 하기 위해 �
 
 | 항목 | 값 |
 |------|-----|
-| Distribution Name | `skillsphone-cdn-ab-distribution` |
+| Distribution Comment | `skillsphone-cdn-ab-distribution` |
 
 ---
 
@@ -205,7 +205,7 @@ A/B 버전이 서로 다른 캐시 항목으로 보관되도록 하기 위해 �
 
 ### 2. EKS Cluster
 
-서비스를 배포하기 위한 EKS 클러스터를 구축하고, 아래와 같이 Managed Addon 설치를 위한 NodeGroup을 구성합니다.
+서비스를 배포하기 위한 EKS 클러스터를 구축하고, 아래와 같이 Addon 설치를 위한 Managed NodeGroup을 구성합니다.
 
 - VPC는 선수가 자유롭게 구성하거나 기본 VPC를 사용할 수 있습니다.
 - **taint**를 통해 Addon NodeGroup에서 App이 실행되지 않도록 합니다.
@@ -265,7 +265,7 @@ KEDA를 EKS Cluster에 설치하여 SQS Queue의 메시지 수에 따라 Pod 수
 
 ### 5. Node Scaling
 
-주문량 증가에 따라 노드 부족으로 인한 문제가 발생하지 않도록 Karpenter를 설치하여 Node Scale-out/in이 자동으로 될 수 있도록 구성합니다.
+주문량 증가에 따라 노드 부족으로 인한 문제가 발생하지 않도록 Karpenter를 설치하여 Node Scale-out/in이 자동으로 될 수 있도록 구성합니다. NodePool, Class를 아래 설명에 맞게 구성하도록 합니다.
 
 - Karpenter Controller는 `kube-system` Namespace에서 동작해야 합니다.
 - 해당 노드에는 App, DaemonSet을 제외한 워크로드가 실행되어선 안 됩니다.
@@ -277,7 +277,7 @@ KEDA를 EKS Cluster에 설치하여 SQS Queue의 메시지 수에 따라 Pod 수
 | NodePool / NodeClass Name | `skm-app-nodepool` / `skm-app-nodeclass` |
 | Allowed Instance Types | `t3.small`, `t3.medium` |
 
-> ⚠️ 과제 종료 전 모든 부하 주입을 종료하여 **Pod 1개, Node 1대만 존재**하도록 합니다. 해당 값과 다를 시 채점에 불이익이 있을 수 있습니다. Scale in/out 채점 시 2분 대기함에 유의합니다.
+> ⚠️ 과제 종료 전 모든 부하 주입을 종료하여 **Pod 1개, Node 1대만 존재**하도록 합니다. 해당 값과 다를 시 채점에 불이익이 있을 수 있습니다. <u>**Pod/Node level Scale in/out 모두 2분 내로 이루어져야 합니다.**</u>
 
 ---
 

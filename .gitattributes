@@ -2,10 +2,12 @@
 *.sh text eol=lf
 *.tpl text eol=lf
 
-*.pdf filter=lfs diff=lfs merge=lfs -text
-*.jpeg filter=lfs diff=lfs merge=lfs -text
+# 과제지·채점지 PDF 와 이미지는 LFS 를 쓰지 않는다 — 정정 재배포가 잦아 자주 갈아끼우는데,
+# 망 정책이 LFS 업로드를 막는 환경에서는 교체 자체가 불가능해진다. 전부 합쳐 8MB 미만이다.
+*.pdf binary
+*.jpeg binary
 
-# 대회 제공 실행 바이너리
+# 대회 제공 실행 바이너리 — 내용이 바뀌지 않아 업로드할 일이 없고, 합계 56MB 라 LFS 를 유지한다
 shared/provided/task-1/book filter=lfs diff=lfs merge=lfs -text
 task-3/provided/user filter=lfs diff=lfs merge=lfs -text
 task-3/provided/product filter=lfs diff=lfs merge=lfs -text

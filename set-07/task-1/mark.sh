@@ -98,13 +98,13 @@ for p in $(aws iam list-role-policies --role-name unicorn-audit-role --query "Po
 
 echo "=== 9-2-A ==="
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-ROLE_ARN=arn:aws:iam::$ACCOUNT_ID:role/unicorn-audit-role
-echo "[1] no external-id:"; aws sts assume-role --role-arn $ROLE_ARN --role-session-name mk 2>&1 | grep -oE AccessDenied | head -1
+ROLE_ARN=arn:aws:iam::$(echo $ACCOUNT_ID):role/unicorn-audit-role
+aws sts assume-role --role-arn $ROLE_ARN --role-session-name mk 2>&1 | grep -oE AccessDenied | head -1
 read -r AK SK TK < <(aws sts assume-role --role-arn $ROLE_ARN --role-session-name mk --external-id unicorn-audit-2026$number --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text)
 export AWS_ACCESS_KEY_ID=$AK AWS_SECRET_ACCESS_KEY=$SK AWS_SESSION_TOKEN=$TK
-echo "[2] assumed:"; aws sts get-caller-identity --query Arn --output text
-echo "[3] allowed:"; aws ec2 describe-vpcs --filters Name=tag:Name,Values=unicorn-vpc --query "Vpcs[0].VpcId" --output text
-echo "[4] denied:"; aws ec2 describe-instances 2>&1 | grep -oE "AccessDenied|UnauthorizedOperation" | head -1
+aws sts get-caller-identity --query Arn --output text
+aws ec2 describe-vpcs --filters Name=tag:Name,Values=unicorn-vpc --query "Vpcs[0].VpcId" --output text
+aws ec2 describe-instances 2>&1 | grep -oE "AccessDenied|UnauthorizedOperation" | head -1
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 
 echo "=== 10-1-A ==="
@@ -120,7 +120,7 @@ kubectl get pods -n monitoring -o custom-columns='NAME:.metadata.name,STATUS:.st
 kubectl get servicemonitor -A -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep -iE "kube-controller-manager|kube-scheduler|kube-etcd" | wc -l
 
 echo "=== 12-1-A ==="
-date -u "+%Y-%m-%dT%H:%M:%SZ"
+TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"
 SINCE=$(date +%s)
 curl -s -X POST "https://$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='unicorn-svc-cf'].DomainName | [0]" --output text)/v1/book" -H 'Content-Type: application/json' -d '{"client_id":"C-FRESH","username":"Fresh","email":"fresh@skills.kr","concert_name":"FreshMark"}' > /dev/null
 echo "waiting 30s for log pipeline" && sleep 30

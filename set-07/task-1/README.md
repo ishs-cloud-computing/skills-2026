@@ -88,7 +88,7 @@ $env:BUCKET     = $o.s3_bucket_name.value
 # CloudShell 은 파일 업로드 UI 가 없고(VPC environment 는 Actions 업로드 자체가 막혀 있다)
 # 레포가 비공개라 git clone 도 불가 → 붙여넣을 수 없는 것만 S3 릴레이로 넘긴다.
 # _transfer/ 는 채점 직전 step 8 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
-tar czf "..\task.tgz" -C .. k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
+tar czf "..\task.tgz" -C .. k8s mark.sh   # 2026-08-21 재배포본
 aws s3 cp "..\task.tgz" "s3://$env:BUCKET/_transfer/task.tgz"
 aws s3 cp ..\..\..\shared\provided\task-1\book "s3://$env:BUCKET/_transfer/book"   # 8.7MB 바이너리
 ```
@@ -237,7 +237,7 @@ curl -sL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | b
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 mkdir -p ~/unicorn && cd ~/unicorn
 aws s3 cp "s3://unicorn-web-$ACCOUNT_ID/_transfer/task.tgz" . && tar xzf task.tgz
-cp mark-2026-08-10.sh ~/                                  # /home/cloudshell-user (유의사항 13)
+cp mark.sh ~/                                             # /home/cloudshell-user (유의사항 13)
 ```
 
 **여기서 step 1 이 출력한 `.env` 블록을 붙여넣는다** — `cat > ~/.env <<'ENVEOF'` 로 시작해
@@ -360,7 +360,7 @@ Invoke-RestMethod -Uri "https://$env:CF/v1/book" -Method Post -ContentType 'appl
 
 ```bash
 source ~/.env
-bash ~/mark-2026-08-10.sh    # 2026-08-10 정정본
+bash ~/mark.sh    # 2026-08-21 재배포본
 ```
 
 > 홈이 초기화된 뒤라면 step 4 부트스트랩 블록을 먼저 다시 실행한다.
@@ -506,7 +506,7 @@ aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMP
 
 ## 검증 시드 / 채점 포인트
 
-- 채점은 `unicorn-mark` CloudShell 에서 `bash mark-2026-08-10.sh` (2026-08-10 정정본) 로 일괄 실행.
+- 채점은 `unicorn-mark` CloudShell 에서 `bash mark.sh` (2026-08-21 재배포본) 로 일괄 실행.
 - 핵심 확인: `aws kms get-key-rotation-status`(app/data/platform = True 90), `aws ecr describe-repositories`(IMMUTABLE_WITH_EXCLUSION),
   `kubectl get nodes -l unicorn=app`(2 AZ 이상), `aws eks list-pod-identity-associations`(unicorn-book-app-sa),
   CloudWatch `/unicorn/eks/book-app` 로그 키 = `client_ip,method,path,status_code,timestamp`,

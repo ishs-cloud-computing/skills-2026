@@ -18,6 +18,8 @@
 14. 채점 값 출력 시 값의 앞 또는 뒤로 큰따옴표가 출력되거나 줄바꿈될 수 있으나, 해당 현상은 채점 시 무시해도 좋습니다.
 15. 채점지에서 페이지 간 줄바꿈되어 일부 잘린 항목이 있을 수 있음에 유의합니다.
 16. 별도 명시가 없는 경우, **빨간색**으로 표시된 부분은 정확히 일치하는지 확인하고, **파란색**으로 표시된 부분은 무시할 수 있습니다.
+17. 채점기준표에는 Timestamp의 TZ가 UTC 기준이나, 채점 시 KST 기준으로 확인하도록 합니다.
+18. `source kubectl-connect` 명령어를 실행할 때 오류가 발생할 경우, 선수가 원한다면 모듈 당 1회에 한해 `rm -rf .kube/` 명령어를 통해 cache 등을 초기화할 수 있도록 합니다. 초기화 후 정상 작동한다면 채점을 진행할 수 있습니다.
 
 ---
 
@@ -411,6 +413,8 @@ PROCESSING_TIME=3
 SQS_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/123456787890/skm-order-queue
 ```
 
+> ※ `57m` 과 patch version `.5-eks-3385e9b` 는 유의사항 16번 파란색 — 채점 시 무시합니다.
+
 #### 3-4-A · KEDA + ScaledObject
 
 ```bash
@@ -445,7 +449,11 @@ t3.medium,t3.small
 ec2nodeclass.karpenter.k8s.aws/skm-app-nodeclass
 ```
 
+> ※ pod 해시 `-8c66dbc4-r4fnp` 는 유의사항 16번 파란색 — 채점 시 무시합니다.
+
 #### 3-6-A · Scale-out Test (부하 주입)
+
+> 3-4, 3-5를 틀렸을 경우 채점을 진행하지 않습니다.
 
 ```bash
 for b in $(seq 1 10); do
@@ -460,7 +468,7 @@ done
 
 ```bash
 POD_PEAK=0; NODE_PEAK=0
-for i in $(seq 1 24); do
+for i in $(seq 1 30); do
   P=$(kubectl get deploy order-processor -n skillsmkt -o jsonpath='{.status.readyReplicas}' 2>/dev/null); P=${P:-0}
   N=$(kubectl get nodes -l karpenter.sh/nodepool=skm-app-nodepool --no-headers 2>/dev/null | wc -l | tr -d ' ')
   [ "$P" -gt "$POD_PEAK" ] && POD_PEAK=$P

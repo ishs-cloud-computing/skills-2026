@@ -25,6 +25,8 @@
 15. 채점지에서 페이지 간 줄바꿈되어 일부 잘린 항목이 있을 수 있음에 유의합니다.
 16. 별도 명시가 없는 경우, 빨간색으로 표시된 부분은 정확히 일치하는지 확인하고, 파란색으로 표시된 부분은 무시할 수 있습니다.
 17. 스크립트 출력 값이 예상 출력 값에서 줄바꿈되어 나타나는 등은 무시합니다.
+18. 채점기준표에는 Timestamp의 TZ가 UTC 기준이나, 채점 시 KST 기준으로 확인하도록 합니다.
+19. `source kubectl-connect` 명령어를 실행할 때 오류가 발생할 경우, 선수가 원한다면 1회에 한해 `rm -rf .kube/` 명령어를 통해 cache 등을 초기화할 수 있도록 합니다. 초기화 후 정상 작동한다면 채점을 진행할 수 있습니다.
 
 ---
 
@@ -401,12 +403,14 @@ aws eks list-pod-identity-associations --cluster-name unicorn-eks-cluster \
 
 ```
 unicorn-book-app-deploy 2 2   <- 빨간색 부분 두 값이 같다면 정답
-unicorn-book-app-svc
+unicorn-book-app-svc ClusterIP
 liveness=/health readiness=/health
 graceful=45 preStop={"exec":{"command":["/bin/sh","-c","sleep 15"]}}
 app
 unicorn-book-app-sa           <- 출력되는 값이 있다면 정답
 ```
+
+\* `ClusterIP`는 채점 시 유의사항 16번에 따라 파란색(무시 가능) 처리한다.
 
 ---
 
@@ -713,7 +717,7 @@ unicorn-monitoring-grafana-7974ccf57f-j585v Running
 **(명령어 입력)**
 
 ```bash
-date -u "+%Y-%m-%dT%H:%M:%SZ"
+TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"
 SINCE=$(date +%s)
 
 curl -s -X POST "https://$(aws cloudfront list-distributions \
@@ -737,7 +741,9 @@ waiting 30s for log pipeline
 {"timestamp":"2026-05-31T23:54:42Z","method":"POST","path":"/v1/book","status_code":200,"client_ip":"10.97.12.184"}
 ```
 
-\* 출력값 형식이 위와 같고, 빨간색 부분의 시간 차가 1분 이내면 득점.
+\* 출력된 로그가 위와 같고, 빨간색 부분의 시간 차가 1분 이내면 득점.
+
+\*\* `None` 등의 값이 출력될 경우 무시하도록 합니다.
 
 ---
 
