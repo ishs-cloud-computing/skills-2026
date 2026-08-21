@@ -48,6 +48,15 @@ until curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
 curl -s "http://${CLIENT_IP}/v1/client/orders?id=1001"
 # → {"client": "ok", "service": {"order_id": "1001", "via": "vpc-lattice"}}
 #   (service.order_id=1001, service.via=vpc-lattice 확인)
+
+# 채점 2-2: service EC2 는 Public IP 가 없어야 한다
+aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2,skills-lattice-service-ec2 Name=instance-state-name,Values=running --query 'Reservations[].Instances[].{Name:Tags[?Key==`Name`].Value|[0],PublicIp:PublicIpAddress,State:State.Name}' --output table
+
+# 채점 2-4: Target Status=HEALTHY 는 독립 합격 기준이다. 셀프 채점 전에 반드시 확인한다
+TG=$(aws vpc-lattice list-target-groups --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-tg`].id|[0]' --output text)
+until [ "$(aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TG" --query 'items[0].status' --output text)" = "HEALTHY" ]; do sleep 10; done
+aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier "$TG" --query 'items[].{Target:id,Port:port,Status:status}' --output table
+# → Status=HEALTHY. UNUSED/UNHEALTHY 상태로 mark2-2.sh 를 돌리면 2-5 는 통과해도 2-4 를 잃는다
 ```
 
 ### [CloudShell] 셀프 채점
@@ -67,4 +76,13 @@ bash mark2-2.sh
 terraform -chdir=terraform destroy -auto-approve
 ```
 
-1회차가 `unexpected state 'UNUSED', wanted target ''` (Lattice Target Group Attachment)로 실패할 수 있다 — EC2가 먼저 지워지며 생기는 레이스다. 같은 명령을 한 번 더 실행하면 정리된다.
+1회차가 `unexpected state 'UNUSED', wanted target ''` (Lattice Target Group Attachment)로 실패한다.
+**[실측 2026-08-21] 재시도로는 해결되지 않는다** — AWS 쪽은 이미 해제됐고(프로바이더 waiter 가 target 이
+아니라 TG 상태를 보는 버그) state 에서 떼어내야 한다.
+
+```bash
+terraform -chdir=terraform state rm aws_vpclattice_target_group_attachment.service
+terraform -chdir=terraform destroy -auto-approve
+```
+
+teardown 이 막혔다고 리소스가 남은 게 아니다. 콘솔에서 수동 삭제하지 마라.

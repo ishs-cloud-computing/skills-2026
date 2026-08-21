@@ -53,6 +53,8 @@
 
 ## 함정 절
 
+- **[실측 확인, 2026-08-21] module-2 `terraform destroy` 가 Lattice target attachment 에서 멈춘다 — 재시도해도 같다**: `aws_vpclattice_target_group_attachment.service` 삭제 시 `unexpected state 'UNUSED', wanted target ''. last error: TargetGroupNotInUse` 로 실패한다. **AWS 쪽은 이미 정상 해제된 상태**다(`aws vpc-lattice list-targets` 가 빈 목록). 프로바이더 waiter 가 target 이 아니라 **TG 상태**를 보는데, service association 이 먼저 지워져 TG 가 `UNUSED` 로 가면 종료 상태로 인정하지 않는 버그다. 재시도는 소용없고, `terraform state rm aws_vpclattice_target_group_attachment.service` 후 `destroy` 를 다시 돌리면 나머지가 정상 삭제된다(실측: 이후 5 resources destroyed, 잔존 리소스 0 — TG·Service·SN·VPC·EC2 전부 확인). **teardown 이 막혔다고 리소스가 남은 게 아니니 콘솔에서 수동 삭제하지 마라.**
+
 - **[실측 확인, 2026-08-04] mark2-4.sh 4-5 의 `No resources found` 2줄은 정상 출력이다 — 재배포하지 마라**: 스크립트 97·98행이 Karpenter 노드와 워커 파드를 조회하는데, 채점 시점엔 큐가 비어 있고 `minReplicaCount: 0`이라 둘 다 0이다. 배포 실패가 아니다. 판정 기준이 "min 0으로 채점 직후 Worker Pod가 없을 수 있으므로 ... 4-6 Scale Out 출력 결과를 포함해 판정할 수 있습니다"를 명시하고, 더 결정적으로 **4-6 의 117행이 4-5 의 97행과 완전히 동일한 label selector**(`karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker`)를 쓴다 — 4-6 에서 그 selector 로 노드가 잡히면 라벨 조건이 같은 결과 파일 안에서 증명된다. 이걸 메우겠다고 min 을 올리거나(과제지 6-6 위반) `consolidateAfter` 를 늘려 유휴 노드를 살려두지 마라.
 - **[실측 확인, 2026-08-04] `keda-operator` Pod `RESTARTS 1` 은 무해하다**: 생성 직후 1회 재시작한다(2026-08-02 실행엔 없던 값). 4-3 판정 기준은 Deployment Available + Pod Running 만 보므로 무관 — Running 이면 넘어가라. `ApproximateNumberOfMessages` 가 발송 60초 뒤에도 12로 보이는 것도 같은 부류다(SQS 지표 지연, 두 실행 모두 재현). 실제 처리 착수까지 약 57초로 기준 180초 대비 3배 여유다.
 - **[실측 확인, 2026-08-02] `.env` 마지막 줄 CRLF로 docker build/push가 깨진다**: PowerShell `Set-Content`가 파일 끝 개행을 CRLF로 써서 `.env` 마지막 줄(`ECR_IMAGE`)에만 `\r`이 붙는다. CloudShell에서 `source .env` 하면 태그가 `...:latest\r`이 돼 build/push가 실패한다. module-4 README 1단계를 `[IO.File]::WriteAllText` + LF 치환으로 고치고, 3단계 `source .env` 앞에 `sed -i 's/\r$//' .env` 가드를 넣었다. mark 스크립트에만 걸려 있던 CRLF 가드로는 이 경로를 못 잡는다.
@@ -91,9 +93,61 @@
 - module-3 실경로 복구(CloudTrail→EventBridge→Lambda): **19.6초** (기준 180초, "수 분" 상정보다 훨씬 빠름)
 - 채점 스크립트: mark2-1/2/3 각 1~3분, **mark2-4는 ~11분**(CloudShell kubectl 설치 + 4-6의 sleep 60×3)
 
+2026-08-21 최종 정정본 반영 후 module-1·2·3 재배포 검증(실측). 4모듈은 미배포.
+
+- module-1 apply: 22 added / **~5분** (DocDB 인스턴스 3분44초). 앱 기동은 apply 완료 후 **15초 내 `/health` 200** — README 의 "재시도 루프 최대 ~10분"은 여유값이고 실측은 즉시다
+- module-2 apply: 24 added / ~2분. **TG `Status=HEALTHY` 는 apply 후 수 분 뒤 확인 시 이미 HEALTHY** 였다(워밍업 구간을 직접 관측하진 못했으나, 조기 채점 리스크는 그대로라 README 대기 루프는 유지)
+- module-3 apply: 16 added / ~1분. destroy 16개 즉시
+- module-1 destroy: DocDB 인스턴스 삭제가 3분+ (apply 보다 느리다)
+
 ---
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
+
+### 2026-08-21 [최종 정정본] 과제지·채점지 교체 — 판정 기준 변화 없음, 전사본만 역이식
+- 출처: 대회측 최종 수정본 PDF. `task.pdf`·`mark.pdf` 를 교체했다(구판 2026-06-11 → 정정본 2026-08-21 15:47, PDF 메타데이터 기준)
+- **과제지는 실질 변경 없음.** 구판 PDF 의 텍스트 레이어가 깨져 있었을 뿐이고, 요구사항 토큰을
+  집합 비교한 결과 완전히 동일했다 → `task.md` 전사본·구현 변경 없음
+- **채점지는 0801 제공본 + 0807/0809/0812 패치를 흡수한 통합본**이다. 3-1~3-5·4-1~4-6 은
+  `provided/008_chall_2nd_patched_0801.md`·`20260807_CHANGELOG.md`·`20260812_CHANGELOG.md` 와
+  내용이 같아 **신설 합격 기준이 없다** → `mark/mark2-3.sh`·`mark2-4.sh` 및 구현 전부 **영향없음**
+- 다만 `mark.md` 전사본에는 그 내용이 역이식된 적이 없었다 → **수정완료(전사본만)**:
+  module-1 1-1~1-5 전체(`--query` 투영·`describe-secret`·`jq password_set`·`-m 10`·판정 문구),
+  module-2 2-1 `--query`·2-2/2-4 판정 문구·2-5 IP 재유도, module-3 3-1~3-5 전체, 4-2·4-6
+- `mark/mark2-1.sh`: 변수명 `CLIENT_IP` → `NOSQL_CLIENT_EC2_PUBLIC_IP` (채점지 순번 0 전문과 정합.
+  module-2 는 0807 에서 이미 같은 리네임을 받았는데 module-1 만 빠져 있었다)
+- `mark/mark2-4.sh`: kubectl 설치 버전을 `v1.35.0` 하드코딩 → **클러스터에서 유도**
+  (`aws eks describe-cluster --query 'cluster.version'`, 실패 시 `v1.35.0` fallback).
+  최종본 순번 0 이 유일하게 새로 바뀐 지점이다. 자동 설치 기능 자체는 셀프 채점 편의로 유지(정본의 상위집합)
+- 신설로 보이지만 이미 충족하던 기준들(확인 완료): `KeyManager=CUSTOMER`(`docdb.tf` 고객관리 CMK),
+  secret `host` 는 scheme·port 없는 hostname(`secrets.tf`, 위반 시 지급 앱이 하드 실패),
+  `dateFieldTypes` BSON date(적재가 지급 앱 `convert_dataset()` 경유),
+  1-5 기대 데이터 4종(정렬 순서까지 일치), `Status=HEALTHY`(`lattice.tf` TG + health check),
+  `events.amazonaws.com` invoke 권한(`eventbridge.tf` `aws_lambda_permission.events`),
+  3-5 로그 그룹(`lambda.tf` 가 terraform 으로 선생성 — 첫 invoke 전에도 출력된다),
+  4-2 IRSA annotation(`eksctl/cluster.yaml` `withOIDC` + `serviceAccounts`, helm 이 덮어쓰지 않음)
+- 런북 보강(**수정완료**): module-1 검증에 AWS 측 1-1/1-2 사전 점검 추가(지금까지 HTTP 엔드포인트만
+  봐서 DocumentDB·KMS·Secret 오설정이 채점 때야 드러났다) + 1-5 기대 데이터 명시;
+  module-2 에 **TG `Status=HEALTHY` 대기 루프** 추가 — `HEALTHY` 가 2-4 의 독립 합격 기준이 돼
+  워밍업(~30-60초) 전에 셀프 채점하면 2-5 는 통과해도 2-4 1.5점을 잃는다. service EC2 무공인IP 확인도 추가;
+  module-4 리허설 루프에 `ApproximateNumberOfMessagesDelayed`·`kubectl get nodeclaims` 추가해 채점 출력과 1:1
+- **실배포 검증(2026-08-21, 계정 600440344359)**: module-1·2·3 을 실제로 배포해 위 판정을 전부 실증했다.
+  1-1 `KeyManager=CUSTOMER`·`Encrypted=True`·`Port=27017`·`BackupRetention=1`·`Class=db.t3.medium` /
+  1-2 host 가 scheme·port 없는 hostname·`password_set=true`·**`KmsKeyId: null`** /
+  1-3 `status=ok,database=skills_retail,port=27017,tls=true` + counts 8/6/3 + **`dateFieldTypes` 5개 전부 `datetime`** /
+  1-4 요구 인덱스 8종(+`_id_`)과 `expiresAt` TTL `expireAfterSeconds: 0` /
+  1-5 네 조회 200 + 기대 데이터·**정렬 순서까지 일치**(C001 → O-1006,O-1001,O-1004 / 기간 PENDING → O-1001,O-1003,O-1006 / W-A → P-BLU-003,P-RED-001, P-GRN-002 미포함) /
+  2-1 CIDR·`available` / 2-2 `{"status":"ok","app":"client"}` 200 + service EC2 PublicIp `None` /
+  2-3 Service·VPC·Service association 전부 `ACTIVE` / 2-4 8080 인바운드가 **prefix list 단독**(IpRanges 빈 배열) + Target `HEALTHY` /
+  2-5 `{"client":"ok","service":{"order_id":"1001","via":"vpc-lattice"}}` 200 /
+  3-2 `IpPermissions: []` / 3-3 `State=Active`·`LastUpdateStatus=Successful`·python3.12·핸들러·Timeout 30·env 2종 /
+  3-4 `IsLogging=True`·Rule `ENABLED`·EventPattern 2조건·Target Lambda ARN·**Lambda policy `events.amazonaws.com`**(`AllowEventBridgeInvoke`) /
+  3-5 **로그그룹이 invoke 이전에 이미 존재**(terraform 선생성 확인) + 채점과 동일 payload invoke 결과
+  `{"status":"RESTORED","revokedPermissionCount":1,"publishStatus":"SNS_PUBLISHED"}` → Inbound `[]` 복귀.
+  검증 후 세 모듈 전부 destroy, 잔존 리소스 0(VPC·EC2·Lattice·S3·CloudTrail·SNS·KMS alias 확인)
+- 관찰(판정 아님): Secret 은 AWS 관리형 키를 쓰므로 `describe-secret` 의 `KmsKeyId` 가 `None` 으로
+  출력된다. **채점 판정 문장에 없는 참고 열이라 정상이다.** CMK 를 붙이면 `iam.tf` 에 `kms:Decrypt` 까지
+  추가해야 하는데 배점이 없어 기각. 이의신청 시 오독을 막으려고 `mark.md` 1-2 에도 같은 주석을 남겼다
 
 ### 2026-08-12 [module-4] 4-5 min 0 예외 판정 범위가 Node 까지 확대
 - 출처: `provided/20260812_CHANGELOG.md` (답변일 2026-08-12). 대응 PATCH 파일 없음

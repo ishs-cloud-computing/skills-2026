@@ -66,6 +66,16 @@ while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$env:CLIENT_IP
 curl.exe -s "http://$env:CLIENT_IP/v1/client/orders?id=1001"
 # → {"client": "ok", "service": {"order_id": "1001", "via": "vpc-lattice"}}
 #   (service.order_id=1001, service.via=vpc-lattice 확인)
+
+# 채점 2-2: service EC2 는 Public IP 가 없어야 한다
+aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2,skills-lattice-service-ec2 Name=instance-state-name,Values=running --query 'Reservations[].Instances[].{Name:Tags[?Key==`Name`].Value|[0],PublicIp:PublicIpAddress,State:State.Name}' --output table
+# → client 는 PublicIp 존재 / service 는 PublicIp 없음(None)
+
+# 채점 2-4: Target Status=HEALTHY 는 독립 합격 기준이다. 셀프 채점 전에 반드시 HEALTHY 를 확인한다
+$TG = aws vpc-lattice list-target-groups --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-tg`].id|[0]' --output text
+while ((aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier $TG --query 'items[0].status' --output text) -ne "HEALTHY") { Start-Sleep 10 }
+aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier $TG --query 'items[].{Target:id,Port:port,Status:status}' --output table
+# → Status=HEALTHY. UNUSED/UNHEALTHY 상태로 mark2-2.sh 를 돌리면 2-5 는 통과해도 2-4 를 잃는다
 ```
 
 ### [CloudShell] 셀프 채점
@@ -83,9 +93,24 @@ bash mark2-2.sh
 terraform -chdir=terraform destroy -auto-approve
 ```
 
-1회차가 다음 에러로 실패할 수 있다 — EC2가 먼저 지워져 target이 `UNUSED`로 떨어지는 레이스다. **같은 명령을 한 번 더 실행**하면 남은 attachment/target group이 정리된다.
+1회차가 다음 에러로 실패한다.
 
 ```
 Error: waiting for VPC Lattice Target Group Attachment (tg-.../i-.../8080) delete:
 unexpected state 'UNUSED', wanted target ''. last error: TargetGroupNotInUse
 ```
+
+**[실측 2026-08-21] 재시도로는 해결되지 않는다** — 같은 지점에서 똑같이 멈춘다. AWS 쪽은 이미 정상
+해제된 상태이고(`aws vpc-lattice list-targets ...` 가 빈 목록), 프로바이더 waiter 가 target 이 아니라
+**TG 상태**를 보는데 service association 이 먼저 지워져 TG 가 `UNUSED` 로 가면 종료로 인정하지 않는
+버그다. 아래처럼 state 에서 떼어낸 뒤 다시 destroy 한다.
+
+```powershell
+aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier <tg-id> --output table
+# → items 가 비어 있으면 AWS 쪽은 이미 해제된 것이다
+
+terraform -chdir=terraform state rm aws_vpclattice_target_group_attachment.service
+terraform -chdir=terraform destroy -auto-approve
+```
+
+teardown 이 막혔다고 리소스가 남은 게 아니다. **콘솔에서 수동 삭제하지 마라.**

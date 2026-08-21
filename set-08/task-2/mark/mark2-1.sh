@@ -54,33 +54,33 @@ aws secretsmanager describe-secret --region ap-northeast-2 --secret-id skills-no
 aws secretsmanager get-secret-value --region ap-northeast-2 --secret-id skills-nosql-docdb-secret --query SecretString --output text | jq -r '{username, host, password_set:(.password != null and .password != "")}'
 aws ec2 describe-instances --region ap-northeast-2 --filters Name=tag:Name,Values=skills-nosql-client-ec2 Name=instance-state-name,Values=running --query 'Reservations[].Instances[].{Name:Tags[?Key==`Name`].Value|[0],InstanceId:InstanceId,State:State.Name,Type:InstanceType,PublicIp:PublicIpAddress}' --output table
 
-CLIENT_IP=$(aws ec2 describe-instances --region ap-northeast-2 --filters Name=tag:Name,Values=skills-nosql-client-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || true)
-echo "CLIENT_IP=${CLIENT_IP}"
+NOSQL_CLIENT_EC2_PUBLIC_IP=$(aws ec2 describe-instances --region ap-northeast-2 --filters Name=tag:Name,Values=skills-nosql-client-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || true)
+echo "NOSQL_CLIENT_EC2_PUBLIC_IP=${NOSQL_CLIENT_EC2_PUBLIC_IP}"
 
 echo
 echo "[1-3] Client Application 및 데이터 적재 상태 (1.5점)"
-if [ -n "$CLIENT_IP" ] && [ "$CLIENT_IP" != "None" ]; then
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}:8080/health"; echo
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}:8080/v1/admin/summary"; echo
+if [ -n "$NOSQL_CLIENT_EC2_PUBLIC_IP" ] && [ "$NOSQL_CLIENT_EC2_PUBLIC_IP" != "None" ]; then
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:8080/health"; echo
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:8080/v1/admin/summary"; echo
 else
   echo "Client EC2 Public IP 식별 실패"
 fi
 
 echo
 echo "[1-4] DocumentDB Index 및 TTL 구성 (1.5점)"
-if [ -n "$CLIENT_IP" ] && [ "$CLIENT_IP" != "None" ]; then
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}:8080/v1/admin/indexes"; echo
+if [ -n "$NOSQL_CLIENT_EC2_PUBLIC_IP" ] && [ "$NOSQL_CLIENT_EC2_PUBLIC_IP" != "None" ]; then
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:8080/v1/admin/indexes"; echo
 else
   echo "Client EC2 Public IP 식별 실패"
 fi
 
 echo
 echo "[1-5] NoSQL 조회 기능 검증 (1.5점)"
-if [ -n "$CLIENT_IP" ] && [ "$CLIENT_IP" != "None" ]; then
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}:8080/v1/orders/O-1001"; echo
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}:8080/v1/customers/C001/orders"; echo
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}:8080/v1/orders/pending?from=2026-06-01T00:00:00Z&to=2026-06-08T00:00:00Z"; echo
-  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${CLIENT_IP}:8080/v1/products/low-stock?warehouseId=W-A"; echo
+if [ -n "$NOSQL_CLIENT_EC2_PUBLIC_IP" ] && [ "$NOSQL_CLIENT_EC2_PUBLIC_IP" != "None" ]; then
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:8080/v1/orders/O-1001"; echo
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:8080/v1/customers/C001/orders"; echo
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:8080/v1/orders/pending?from=2026-06-01T00:00:00Z&to=2026-06-08T00:00:00Z"; echo
+  curl -s -m 10 -w "\nhttp_code=%{http_code}\n" "http://${NOSQL_CLIENT_EC2_PUBLIC_IP}:8080/v1/products/low-stock?warehouseId=W-A"; echo
 else
   echo "Client EC2 Public IP 식별 실패"
 fi
