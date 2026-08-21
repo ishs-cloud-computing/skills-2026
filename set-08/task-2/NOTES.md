@@ -122,11 +122,15 @@
   `env` 3종(`SQS_QUEUE_URL`/`AWS_REGION`/`PROCESSING_SECONDS`)·`scaleTargetRef.name`·
   `TriggerAuthentication name`/`namespace` 전부 누락). 네 절의 `2)` 문구를 정본 원문으로 교체했다.
   판정 기준 자체는 그대로이므로 `mark/mark2-*.sh`·구현은 영향없음
+- **2026-08-22 3차 재대조**: 2차에서도 **2-5·4-3** 이 빠져 있었다(PR #137 코드리뷰). 두 절의 `2)` 를
+  정본 원문으로 교체 — 2-5 는 `http_code=200이어야 합니다` + 응답 JSON 3필드, 4-3 은 4줄
+  (keda-operator availableReplicas / karpenter availableReplicas / Pod phase Running /
+  Fargate Node 실행). 이로써 1-1~4-6 전 항목의 `2)` 가 정본 원문이다. 구현 영향 없음
 - `mark/mark2-1.sh`: 변수명 `CLIENT_IP` → `NOSQL_CLIENT_EC2_PUBLIC_IP` (채점지 순번 0 전문과 정합.
   module-2 는 0807 에서 이미 같은 리네임을 받았는데 module-1 만 빠져 있었다)
-- `mark/mark2-4.sh`: kubectl 설치 버전을 `v1.35.0` 하드코딩 → **클러스터에서 유도**
-  (`aws eks describe-cluster --query 'cluster.version'`, 실패 시 `v1.35.0` fallback).
-  최종본 순번 0 이 유일하게 새로 바뀐 지점이다. 자동 설치 기능 자체는 셀프 채점 편의로 유지(정본의 상위집합)
+- `mark/mark2-4.sh`: kubectl 설치 버전을 클러스터에서 유도하도록 고쳤다가 **2026-08-22 에 되돌렸다**
+  (아래 결정 로그). 최종본 순번 0 이 유일하게 새로 바뀐 지점이지만, 순번 0 은 채점자가 손으로 밟는
+  절차이지 스크립트 본문이 아니다 — 스크립트는 정본(`v1.35.0` 하드코딩) 그대로 둔다
 - 신설로 보이지만 이미 충족하던 기준들(확인 완료): `KeyManager=CUSTOMER`(`docdb.tf` 고객관리 CMK),
   secret `host` 는 scheme·port 없는 hostname(`secrets.tf`, 위반 시 지급 앱이 하드 실패),
   `dateFieldTypes` BSON date(적재가 지급 앱 `convert_dataset()` 경유),
@@ -185,6 +189,37 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-22 [module-4] `mark2-4.sh` 를 정본으로 되돌리고, 안전장치는 런북으로 옮긴다
+- 맥락: PR #137 코드리뷰가 "정본 전사 스크립트에 우리 로직(버전 유도·curl 실패 분기·실행 게이트)이
+  들어갔다"고 지적했다. set-03 의 2026-08-21 [번복] 항목과 같은 계열이다 —
+  **채점 스크립트는 정본 전사본이지 우리가 최적화할 대상이 아니다.**
+- 채택: `install_kubectl` 을 `provided/008_chall_2nd_patched_0801.md:679-693` 과 글자까지 동일하게 복원
+  (`diff` 로 확인). `v1.35.0` 하드코딩·`$HOME/.local/bin` 그대로.
+- 채택: 제거한 안전장치는 **런북**으로 이관한다. `module-4-sqs-scaling/README.md`·`README.linux.md`
+  셀프 채점 절 앞에 채점지 순번 0 과 같은 kubectl 준비 블록을 넣었다(클러스터 버전 유도 → `/tmp` 설치).
+  먼저 깔아두면 `install_kubectl` 이 early-return 하므로 스크립트는 정본 경로 그대로 돈다.
+- 기각: 현행 유지 — 실채점 경로에서는 어차피 early-return 이라 무해하지만, "정본과 다른 흐름을 만들면
+  채점자가 실제로 도는 경로를 리허설이 검증하지 못한다"는 원칙을 세트마다 다르게 적용할 이유가 없다.
+
+### 2026-08-22 [module-4] KEDA Helm 차트를 `--version 2.20.2` 로 고정
+- 맥락: 런북이 `helm install keda kedacore/keda` 를 버전 없이 돌리는데, `30-keda-scaledobject.yaml` 은
+  `podIdentity.provider: aws-eks`(채점 4-4 가 이 문자열을 직접 검사)와 `identityOwner: operator`
+  (aws-eks 경로 인증에 필수, 이슈 #136)에 의존한다. 둘 다 KEDA 가 deprecated 로 두고 **v3 에서 제거 예정**이다.
+- 근거: kedacore/charts 최신은 **2.20.2**(2.20.0 = 2026-06-01), v2.21 은 2026-09 예정.
+  대회 전에 새 차트가 나와도 미고정이면 그걸 끌어오고, major 가 바뀌면 4-4·4-6 이 함께 죽는다.
+- 채택: 두 런북 모두 `--version 2.20.2`. manifest 주석이 주장하는 "2.20 까지는 유효하다"를 런북이 강제한다.
+- 기각: `--version "~2.20"` — 2.x 안에서만 움직이지만 대회 당일 무엇이 깔릴지 재현되지 않는다.
+
+### 2026-08-22 [module-1·2] bash 런북이 PowerShell 런북과 어긋난 지점 3건 + 대기 루프 상한
+- 맥락: PR #137 코드리뷰. `README.linux.md` 는 `README.md` 와 1:1 이라고 선언해 놓고 실제로는 갈라져 있었다.
+- 채택: (1) module-1 의 "AWS 측 사전 점검(채점 1-1/1-2)" 절을 bash 런북에 미러 —
+  DocumentDB·KMS `KeyManager`·Secret `host` 오설정은 HTTP 엔드포인트만 봐선 채점 때야 드러난다.
+  (2) module-2 teardown 의 `terraform state rm` 앞에 `list-targets` 확인 줄 추가 — 확인 없이 떼면
+  destroy 가 다른 이유로 실패했을 때 살아 있는 리소스를 state 밖으로 흘린다.
+  (3) 두 런북의 대기 루프 10곳 전부에 시도 상한(`n` 카운터)을 넣었다. 특히 Lattice HEALTHY 루프는
+  `$TG` 가 `None` 이면 `items[0].status` 가 영원히 `None` 이라 아무 출력 없이 모듈 시간 예산을 태운다.
+- 기각: 지적된 1곳만 수정 — 같은 패턴이 10곳이라 한 곳만 고치면 나머지가 그대로 남는다.
 
 ### 2026-08-21 [module-4] aws-eks 유지 + 트리거 metadata `identityOwner: operator` (이슈 #136)
 - 맥락: 채점 4-4 는 `podIdentity.provider=aws-eks` 를 요구하는데(2026-08-07 정정) 실동작은 그 경로를 거부한다. aws-eks 는 `identityOwner` 기본값이 `pod` 이라 operator 가 `sqs-worker-sa` 역할을 `sts:AssumeRole` 하려 들고, 그 역할은 OIDC 만 신뢰하므로 403 이다. 2026-08-21 실채점 4-6 0점(5.00/7.5)

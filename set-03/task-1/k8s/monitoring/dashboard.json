@@ -767,7 +767,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Status Code",
+      "title": "Status Codes",
       "id": 19,
       "datasource": {
         "type": "datasource",

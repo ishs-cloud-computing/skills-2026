@@ -54,14 +54,14 @@ $env:TARGET_GROUP_ID     = terraform -chdir=terraform output -raw target_group_i
 ## 3. 검증 (배포 후 ~1-2분 대기: user-data systemd 기동, Client Public IP 경유)
 
 ```powershell
-while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$env:CLIENT_IP/health") -ne "200") { Start-Sleep 10 }
+$n=0; while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$env:CLIENT_IP/health") -ne "200" -and $n -lt 60) { Start-Sleep 10; $n++ }   # 상한 10분
 
 curl.exe -s "http://$env:CLIENT_IP/health"
 # → {"status": "ok", "app": "client"}
 
 # Lattice Target Group의 healthy 전환은 배포 완료 후에도 별도로 ~30-60초 더 걸릴 수 있어
 # /health 통과 직후 곧바로 호출하면 502/타임아웃이 날 수 있다 — 재시도 루프로 흡수
-while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$env:CLIENT_IP/v1/client/orders?id=1001") -ne "200") { Start-Sleep 10 }
+$n=0; while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$env:CLIENT_IP/v1/client/orders?id=1001") -ne "200" -and $n -lt 60) { Start-Sleep 10; $n++ }   # 상한 10분
 
 curl.exe -s "http://$env:CLIENT_IP/v1/client/orders?id=1001"
 # → {"client": "ok", "service": {"order_id": "1001", "via": "vpc-lattice"}}
@@ -73,7 +73,7 @@ aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Value
 
 # 채점 2-4: Target Status=HEALTHY 는 독립 합격 기준이다. 셀프 채점 전에 반드시 HEALTHY 를 확인한다
 $TG = aws vpc-lattice list-target-groups --region ap-northeast-1 --query 'items[?name==`skills-lattice-order-tg`].id|[0]' --output text
-while ((aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier $TG --query 'items[0].status' --output text) -ne "HEALTHY") { Start-Sleep 10 }
+$n=0; while ((aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier $TG --query 'items[0].status' --output text) -ne "HEALTHY" -and $n -lt 60) { Start-Sleep 10; $n++ }   # 상한 10분. $TG 가 None 이면 영원히 안 돈다
 aws vpc-lattice list-targets --region ap-northeast-1 --target-group-identifier $TG --query 'items[].{Target:id,Port:port,Status:status}' --output table
 # → Status=HEALTHY. UNUSED/UNHEALTHY 상태로 mark2-2.sh 를 돌리면 2-5 는 통과해도 2-4 를 잃는다
 ```

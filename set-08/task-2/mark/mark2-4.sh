@@ -47,26 +47,9 @@ install_kubectl() {
     aarch64|arm64) kubectl_arch="arm64" ;;
     *) echo "지원하지 않는 CPU 아키텍처입니다: $arch" >&2; exit 2 ;;
   esac
-  # 최종 채점지 순번 0 은 kubectl 버전을 클러스터에서 유도한다(하드코딩 아님).
-  # 조회 실패 시에만 준비본 버전으로 떨어진다.
-  local eks_version kubectl_version
-  eks_version=$(aws eks describe-cluster --region us-west-2 --name skills-sqs-cluster --query 'cluster.version' --output text 2>/dev/null || true)
-  if [ -n "$eks_version" ] && [ "$eks_version" != "None" ]; then
-    kubectl_version="v${eks_version}.0"
-  else
-    kubectl_version="v1.35.0"
-    echo "EKS 클러스터 버전 조회 실패 — kubectl ${kubectl_version} 로 진행합니다." >&2
-  fi
   mkdir -p "$HOME/.local/bin"
-  # -f 만으로는 부족하다 — 404 면 0바이트 파일이 남고 chmod 는 성공해서
-  # 채점 후반 kubectl 호출이 전부 깨진 뒤에야 원인을 알게 된다.
-  if ! curl -fsSL -o "$HOME/.local/bin/kubectl" "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${kubectl_arch}/kubectl"; then
-    rm -f "$HOME/.local/bin/kubectl"
-    echo "kubectl 다운로드 실패: ${kubectl_version} (${kubectl_arch})" >&2
-    exit 2
-  fi
+  curl -fsSL -o "$HOME/.local/bin/kubectl" "https://dl.k8s.io/release/v1.35.0/bin/linux/${kubectl_arch}/kubectl"
   chmod +x "$HOME/.local/bin/kubectl"
-  kubectl version --client >/dev/null 2>&1 || { echo "kubectl 실행 불가: ${kubectl_version}" >&2; exit 2; }
 }
 
 install_base_tools curl jq unzip

@@ -50,7 +50,7 @@ $env:DOCDB_ENDPOINT     = terraform -chdir=terraform output -raw docdb_endpoint
 ## 3. 검증 (pip 설치 + seed/index 재시도 루프 — 실측으로는 apply 직후 바로 200)
 
 ```powershell
-while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$($env:NOSQL_CLIENT_IP):8080/health") -ne "200") { Start-Sleep 15 }
+$n=0; while ((curl.exe -s -o NUL -w "%{http_code}" --max-time 5 "http://$($env:NOSQL_CLIENT_IP):8080/health") -ne "200" -and $n -lt 40) { Start-Sleep 15; $n++ }   # 상한 10분
 
 curl.exe -s "http://$($env:NOSQL_CLIENT_IP):8080/health"
 # → {"status": "ok", "database": "skills_retail", "port": 27017, "tls": true}

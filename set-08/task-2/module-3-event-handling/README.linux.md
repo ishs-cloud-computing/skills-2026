@@ -44,7 +44,7 @@ rm -f payload.json out.json
 
 ```bash
 aws ec2 authorize-security-group-ingress --group-id "$PROTECTED_SG_ID" --protocol tcp --port 22 --cidr 0.0.0.0/0
-until [ "$(aws ec2 describe-security-groups --group-ids "$PROTECTED_SG_ID" --query 'length(SecurityGroups[0].IpPermissions)' --output text)" = "0" ]; do sleep 15; done
+n=0; until [ "$(aws ec2 describe-security-groups --group-ids "$PROTECTED_SG_ID" --query 'length(SecurityGroups[0].IpPermissions)' --output text)" = "0" ] || [ $n -ge 20 ]; do sleep 15; n=$((n+1)); done   # 상한 5분(합격선 180초)
 aws ec2 describe-security-groups --group-ids "$PROTECTED_SG_ID" --query "SecurityGroups[0].IpPermissions"
 # → [] (복구 완료 — 180초 이내여야 함, 유의사항 10)
 ```

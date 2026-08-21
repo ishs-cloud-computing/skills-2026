@@ -253,7 +253,8 @@ aws ec2 describe-security-groups --region ap-northeast-1 --group-ids $SERVICE_SG
 #### 2-5. End-to-End 기능 검증 (배점 1.5)
 
 1) 아래 명령어를 입력합니다.
-2) Client API가 HTTP 200을 반환하고 응답 JSON에 `client=ok, service.order_id=1001, service.via=vpc-lattice`가 포함되는지 확인합니다.
+2) http_code=200이어야 합니다.
+   응답 JSON에 client=ok, service.order_id=1001, service.via=vpc-lattice가 포함되어야 합니다.
 
 ```bash
 LATTICE_CLIENT_EC2_PUBLIC_IP=$(aws ec2 describe-instances --region ap-northeast-1 --filters Name=tag:Name,Values=skills-lattice-client-ec2 Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || true)
@@ -386,7 +387,10 @@ kubectl get serviceaccount sqs-worker-sa -n skills-sqs -o jsonpath='skills-sqs/s
 #### 4-3. KEDA/Karpenter Controller Fargate 배포 구성 (배점 1.25) — 20260807 정정 반영
 
 1) 아래 명령어를 입력합니다.
-2) KEDA/Karpenter Controller Deployment의 availableReplicas가 1 이상, 각 Pod의 phase가 Running이며 Fargate Node에서 실행되는지 확인합니다.
+2) keda-operator Deployment의 availableReplicas가 1 이상이어야 합니다.
+   karpenter Deployment의 availableReplicas가 1 이상이어야 합니다.
+   각 Deployment Pod의 phase는 Running이어야 합니다.
+   해당 Pod들은 Fargate Node에서 실행되어야 합니다.
 
 ```bash
 kubectl get deployment keda-operator -n keda -o json | jq '{name:.metadata.name, availableReplicas:(.status.availableReplicas // 0), readyReplicas:(.status.readyReplicas // 0)}'
