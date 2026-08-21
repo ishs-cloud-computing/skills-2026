@@ -24,12 +24,12 @@
 | 정정 # | 채점항목 | 판정 | 근거 |
 |--------|---------|------|------|
 | 0 | 6-1-A | 영향없음 | `eksctl/cluster.yaml:22-25` |
-| 1 | 9-1-A | 영향없음 | `terraform/iam.tf:195,205,213` (액션 와일드카드 0) |
+| 1 | 9-1-A | 영향없음 | `terraform/iam.tf:195,205,214,222` (액션 와일드카드 0) |
 | 2 | 12-1-A | 수정완료(07-31) | `k8s/logging/fluent-bit.yaml:82`, `eksctl/cluster.yaml:104-107` |
 | 3 | 8-6-A, 12-2-A | 수정완료(07-31) | `terraform/waf.tf:41-54` |
 | 4 | 4-1-A, 8-3/8-4-A | 영향없음 | `terraform/dynamodb.tf:32-37`, `terraform/lambda/index.py:46` |
 | 5 | 8-2/8-3/10-1/12-1/12-2-A | 영향없음 | `terraform/cloudfront.tf:47` |
-| 6 | 9-1-A | 영향없음 | `terraform/iam.tf:218-222` (인라인) |
+| 6 | 9-1-A | 영향없음 | `terraform/iam.tf:227-231` (인라인) |
 | 7 | 12-1-A | 영향없음 | 문구 변경만 |
 | 8 | 6-3-A | 영향없음 | `k8s/app/service.yaml:11` |
 | 9 | 절차 | 영향없음 | `README.md` step 9 주석 |
@@ -70,7 +70,7 @@ task-2 도 같은 날 재배포돼 채점 스크립트 사본이 `mark3.sh`·`ma
 | 채점 스크립트 | 재배포본 본문이 `mark-2026-08-10.sh` 와 **완전 동일** — 별도 정정본을 유지할 이유가 사라져 `mark.sh` 를 그 내용으로 덮고 날짜 접미사 사본을 삭제했다(런북 참조도 `mark.sh` 로 통일) | **없음** — 스크립트 내용 자체는 그대로 |
 | 반영된 정정 | 2, 3, 5, 6, 7, 8, 9, 10, 11, 12 | **없음** — 이미 전부 판정·반영 완료 |
 | 미반영 정정 0 | 8번 Security 의 "Access Entry 사용, aws-auth 미사용" 지문이 **삭제되지 않고 남아 있다** | **없음** — 저장소는 이미 `eksctl/cluster.yaml` `authenticationMode: API`. 강제가 되살아나도 현재 구성이 그 강제를 만족한다 |
-| 미반영 정정 1 ★ | 11번이 "Inline Policy 를 사용하며, 와일드카드 액션 **및 리소스**는 사용해서는 안 됩니다." — 정정 6 만 반영되고 **정정 1(리소스 와일드카드 허용)이 되돌아갔다** | **없음(대체 불가)** — `terraform/iam.tf:206-212` 의 `ec2:DescribeVpcs`/`eks:DescribeCluster` 는 리소스 레벨 ARN 을 지원하지 않아 `Resource:"*"` 외 선택지가 없다. 채점 9-1-A 는 Action 목록만 읽고 "`*` 이 없으면 득점"이므로 실채점 손실은 없다. 지문 위반으로 감점될 여지는 남으므로 이의신청 시 이 근거를 쓴다 |
+| 미반영 정정 1 ★ | 11번이 "Inline Policy 를 사용하며, 와일드카드 액션 **및 리소스**는 사용해서는 안 됩니다." — 정정 6 만 반영되고 **정정 1(리소스 와일드카드 허용)이 되돌아갔다** | **있음(축소)** — `eks:DescribeCluster` 는 `cluster` 를 **필수 리소스 타입**으로 가지므로 `local.cluster_arn` 으로 한정했다(`terraform/iam.tf:219-224`, 2026-08-21 수정 · 근거 SAR `list_eks.html` Actions 표 `DescribeCluster … cluster*`). 남는 `Resource:"*"` 는 `ec2:DescribeVpcs` 한 건뿐이며(`terraform/iam.tf:211-216`), SAR `list_ec2.html` 에서 이 액션의 리소스 타입 열이 비어 있어 대체 불가다(쓸 수 있는 조건 키는 `ec2:Region` 뿐). 채점 9-1-A 는 Action 목록만 읽고 "`*` 이 없으면 득점"이므로 실채점 손실은 0. 지문 위반으로 감점될 여지는 이 한 건에만 남고, 이의신청 시 위 SAR 을 근거로 쓴다. — 주의: EC2 `Describe*` 가 **전부** 리소스 레벨 미지원인 것은 아니다(`DescribeVpcAttribute` 는 `vpc*` 지원). 액션 단위로 확인할 것 |
 | 미반영 정정 4 | 6번 Database 의 "Lambda 를 통한 예약 조회를 지원하기 위해" 문장이 남아 있다 | **없음** — 문장만 삭제 대상이었다. Lambda 는 PK `get_item`, GSI 는 4-1-A 존재 확인만 |
 | 신규 지문 | 8번 Security 가 "Book App **Pod 에 사용되는 Identity Role**" → "Book App 이 사용되는 **Pod Identity Role**" 로 Pod Identity 를 명시 | **없음** — 이미 Pod Identity. 채점 6-3-A 도 `list-pod-identity-associations` 로 확인한다 |
 
@@ -82,7 +82,7 @@ task-2 도 같은 날 재배포돼 채점 스크립트 사본이 `mark3.sh`·`ma
 
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|
-| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. *(2026-08-21 재배포로 무효 — `mark.sh` 자체가 정정본이 됐다)* 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:210-215`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
+| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. *(2026-08-21 재배포로 무효 — `mark.sh` 자체가 정정본이 됐다)* 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:211-224`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
 | 11 | 12-1-A 예상 출력에 "`None` 등의 값이 출력될 경우 무시" 추가 | **없음** — `filter-log-events` 페이지네이션이 만드는 값이라 구현이 손댈 수 없다 |
 | 12 | 12-1-A 기준선 명령을 `date -u "+…Z"` → `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` | **있음** — `k8s/logging/fluent-bit.yaml` 의 `reshape.lua` 가 KST 값을 계산하면서 접미사만 `Z` 였다. `+09:00` 으로 변경(결정 로그 2026-08-15 참조). `mark-2026-08-10.sh` 의 기준선 명령도 정정본으로 교체 *(2026-08-21 재배포로 `mark.sh` 에 흡수)* |
 
@@ -94,7 +94,7 @@ task-2 도 같은 날 재배포돼 채점 스크립트 사본이 `mark3.sh`·`ma
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|
 | 5 | CloudFront 를 "`unicorn-svc-cf` 이름으로" → "`unicorn-svc-cf` **Comment** 를 가지도록" 생성 | **없음** — Distribution 에는 Name 필드가 없고 처음부터 `terraform/cloudfront.tf:47` `comment = "unicorn-svc-cf"` 다. 채점도 전부 `DistributionList.Items[?Comment=='unicorn-svc-cf']` 로 찾는다(`mark.sh:79,111,130`). `cloudfront.tf:110` 의 `Name` 태그는 무해한 여분이라 남긴다 |
-| 6 | 과제지 11 "와일드카드 액션은…" 앞에 "**Inline Policy 를 사용하며,**" 추가 | **없음** — `terraform/iam.tf:218-222` 가 이미 `aws_iam_role_policy`(인라인)다. 채점 9-1-A 가 `aws iam list-role-policies`(인라인 전용)만 쓰므로 고객 관리형으로 붙였으면 0점이었다 |
+| 6 | 과제지 11 "와일드카드 액션은…" 앞에 "**Inline Policy 를 사용하며,**" 추가 | **없음** — `terraform/iam.tf:227-231` 이 이미 `aws_iam_role_policy`(인라인)다. 채점 9-1-A 가 `aws iam list-role-policies`(인라인 전용)만 쓰므로 고객 관리형으로 붙였으면 0점이었다 |
 | 7 | 12-1-A "출력값 **형식**이 위와 같고" → "**출력된 로그**가 위와 같고" | **없음**(문구) — 다만 형식 엄격성이 완화됐다는 근거로 정정 12 판단에 쓰인다. 유의사항 16 에 따라 IP 등 변동값은 무시 |
 | 8 | 6-3-A 예상 출력 `unicorn-book-app-svc` → `unicorn-book-app-svc ClusterIP` | **없음** — `k8s/app/service.yaml:11` 이 이미 `type: ClusterIP`. `mark.sh:60` 이 `TYPE:.spec.type` 을 출력하고 있어 출력값도 이미 일치 |
 | 9 | 유의사항 19 추가 — `source kubectl-connect` 오류 시 1회에 한해 `rm -rf .kube/` 로 초기화 허용 | **없음**(채점 절차) — 런북 step 9 에 한 줄만 반영. kubeconfig 에 cluster info 가 이미 있으면 덮어쓰지 않는 동작이 원인 |
@@ -133,6 +133,26 @@ task-2 도 같은 날 재배포돼 채점 스크립트 사본이 `mark3.sh`·`ma
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-21 `eks:DescribeCluster` 를 클러스터 ARN 으로 축소 — 재배포본 11번의 리소스 와일드카드 금지 부활
+- 맥락: 재배포본 과제지 11 이 "와일드카드 액션 **및 리소스**는 사용해서는 안 됩니다"로 되돌아갔다(정정 1 미반영).
+  기존 주석은 `ec2:DescribeVpcs`·`eks:DescribeCluster` 둘 다 리소스 레벨 ARN 미지원이라고 적었으나 **절반이 틀렸다** —
+  SAR `list_eks.html` Actions 표는 `DescribeCluster` 의 리소스 타입을 `cluster*`(필수)로 명시한다.
+- 채택: statement 를 둘로 분리. `eks:DescribeCluster` → `local.cluster_arn`(`data.tf:24`, Pod Identity trust 와 공용),
+  `ec2:DescribeVpcs` → `"*"` 유지. 와일드카드 리소스가 2개 액션 → 1개로 줄고 채점 영향은 0(9-1-A 는 Action 만 읽는다).
+  **VPC statement 를 앞에** 둬 `mark.md:604` 예상 출력의 `ec2:DescribeVpcs eks:Describe` 순서를 맞춘다.
+  실측: `aws_iam_policy_document` 는 **statement 순서는 보존하지만 statement 안의 actions 순서는 재정렬**한다 —
+  분리 전 `actions = ["ec2:DescribeVpcs", "eks:DescribeCluster"]` 가 실제로는
+  `["eks:DescribeCluster","ec2:DescribeVpcs"]` 로 렌더링돼 예상 출력과 **뒤집혀 있었다**.
+  분리하면 statement 당 액션이 1개가 되어 순서가 확정된다(부수 효과지만 9-1-A 대조에 유리).
+  `mark.sh:97` 의 `Statement[].Action[]` 은 액션이 1개라 `Action` 이 배열이 아닌 문자열로 렌더링돼도
+  값을 그대로 뽑는다(jmespath 로 확인: `dynamodb:Query dynamodb:GetItem kms:Decrypt ec2:DescribeVpcs eks:DescribeCluster`).
+- 기각: 현행 유지 — 채점 영향은 0 이지만 주석이 사실과 달라 이의신청 근거가 약해진다.
+- 기각: `ec2:DescribeVpcs` statement 에 `ec2:Region` 조건 추가 — SAR 상 유일하게 쓸 수 있는 조건 키지만,
+  9-2-A 의 `describe-vpcs` 는 **채점자 CloudShell** 에서 호출되므로 리전이 어긋나면 득점 항목이 Deny 로 죽는다.
+  지문이 문제 삼는 건 조건이 아니라 와일드카드라 이득 0, 실점 리스크만 있다.
+- 참고: EC2 `Describe*` 가 전부 리소스 레벨 미지원이라는 통념은 이제 틀렸다 —
+  같은 표에서 `DescribeVpcAttribute` 는 `vpc*`, `DescribeVpcEndpointServicePermissions` 는 `vpc-endpoint-service*` 를 지원한다.
 
 ### 2026-08-21 정정본 사본을 없애고 `mark.sh` 하나로 — 재배포본이 원본을 대체했다
 - 맥락: 정정 10·12 를 반영한 `mark-2026-08-10.sh` 를 원본 `mark.sh` 옆에 두는 규칙이었다. 원본이

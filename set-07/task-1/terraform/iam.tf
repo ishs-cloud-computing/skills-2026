@@ -205,13 +205,22 @@ data "aws_iam_policy_document" "audit" {
     actions   = ["kms:Decrypt"]
     resources = [aws_kms_key.app.arn]
   }
-  # ec2/eks Describe 는 리소스 레벨 ARN 을 지원하지 않으므로 Resource="*".
-  # (요구사항: 액션 와일드카드 금지 — 액션은 모두 명시)
+  # ec2:DescribeVpcs 는 리소스 레벨 권한을 지원하지 않아(Service Authorization Reference 의
+  # 리소스 타입 열이 비어 있다) Resource="*" 외 선택지가 없다. 요구사항 11 의 리소스 와일드카드
+  # 금지에 유일하게 걸리는 지점이며 이의신청 근거가 된다.
   statement {
-    sid       = "DescribeVpcAndCluster"
+    sid       = "DescribeVpc"
     effect    = "Allow"
-    actions   = ["ec2:DescribeVpcs", "eks:DescribeCluster"]
+    actions   = ["ec2:DescribeVpcs"]
     resources = ["*"]
+  }
+  # eks:DescribeCluster 는 cluster 를 필수 리소스 타입으로 가지므로 본 클러스터로 한정한다.
+  # (요구사항 11 "8번 EKS Cluster 에 대한 Describe 액션으로 한정")
+  statement {
+    sid       = "DescribeCluster"
+    effect    = "Allow"
+    actions   = ["eks:DescribeCluster"]
+    resources = [local.cluster_arn]
   }
 }
 
