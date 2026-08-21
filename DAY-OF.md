@@ -4,6 +4,9 @@
 재시동하면 파일이 초기화되고, AI 코딩 보조는 없으며(AWS 웹 Q 만 허용), 추가 시간도 없다.
 이 문서는 그 상황에서 위에서 아래로 실행한다. 세트별 값은 [7절 **값 대조표**](#7-값-대조표)를 쓴다.
 
+코드블록을 고치다 인자·필드에서 막히면 [DOC-LINKS](DOC-LINKS.md) 를 연다 —
+리소스별 공식문서 주소, 저장소 안 구현 위치, 인터넷 없이 스키마를 뽑는 명령을 한 장에 모은 색인이다.
+
 런북 코드블록은 붙여넣기 전에 **한 줄씩 칠지 블록째 칠지 먼저 판단**한다 — 앞 명령의 출력·성공 여부에 뒤가 걸리는 블록(로그인·apply·삭제·롤아웃)은 한 줄씩, 단순 설치·조회는 블록째. PowerShell 은 앞 줄이 실패해도 뒤 줄을 계속 실행한다.
 
 ## 0. 도착 직후
@@ -125,6 +128,8 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 
 - 구현이 있는 모듈이면 **그 세트 디렉토리를 통째로 복사**하고 이름·리전만 교체한다. 처음부터 쓰지 않는다.
 - 8·9·10 은 어느 세트에도 없다. 이게 걸리면 맨몸이므로 **시간을 여기에 먼저 배분**한다.
+  진입점(문서·가장 가까운 재료·시간 함정)은 [DOC-LINKS 6절](DOC-LINKS.md#6-구현이-없는-카탈로그--맨몸-진입점) 에 정리돼 있다.
+  8(RDS Connection)은 `task-3/terraform/rds.tf`·`rds-proxy.tf` 가 사실상 완성된 재료다.
 
 ### 1과제 추가 문항
 
@@ -132,7 +137,8 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 추가분은 **아직 안 쓰인 옵션 5개**에서 나온다 — KMS / WAF / Security(IAM·Pod Identity·IRSA·OIDC) / Lambda GET API / Observability.
 출제지침이 "모니터링 도구 설치" 류를 예시로 들므로 Observability 가 가장 유력하다.
 
-옵션 5개는 전부 **[`shared/addons/`](shared/addons/README.md) 부착 키트**로 대응한다 —
+옵션 5개는 전부 **[`shared/addons/`](shared/addons/README.md) 부착 키트**(`add-addon-kit` 브랜치)로 대응한다 —
+부착 지점만 추린 요약은 [DOC-LINKS 5절](DOC-LINKS.md#5-덧붙이기-스니펫--기존-문항을-건드리지-않고-얹는-것) 에 있다.
 스니펫 복사 → tfvars 값 주입 → plan 으로 기존 diff 없음 확인 → apply. 기존 문항은 건드리지 않는다.
 
 | 옵션 | 부착 키트 | 비고 |
