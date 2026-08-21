@@ -41,7 +41,6 @@ module-4-container-logging/
 본 PC 단계(1·2)는 이 모듈 **전용 PowerShell 탭**에서 진행하고, 시작 시 kubeconfig를 모듈 경로로 고정한다.
 EKS 클러스터가 여러 개인 대회이므로(module-3: ap-northeast-2, 3과제도 EKS) 터미널 1개 = 클러스터 1개 — 이 터미널의 eksctl 은 o11y-cluster 에만 붙는다.
 CloudShell 쪽은 홈이 리전별로 갈려 있어 격리가 자동으로 된다(이 모듈은 ap-northeast-1 CloudShell).
-
 ### 0) [CloudShell] IAM 권한 조기 검증
 
 지급 계정은 PowerUser급 IAM 계정 — eksctl·IRSA 는 IAM Role 생성 권한이 전제다. 시작 전에 확인하고, AccessDenied 면 즉시 감독에게 문의한다:

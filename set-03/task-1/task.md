@@ -101,7 +101,7 @@ Book 애플리케이션을 wsc2026 Namespace에 Deployment로 배포합니다. �
 
 ## 9. S3 Bucket
 
-Static Page Hosting을 위해 S3를 구성하고 Cloudfront를 이용해서 호스팅을 하도록 합니다. S3에 지급받은 배포파일들을 static/에 전부 업로드해두도록 하며, Private 환경으로 구성하고 오직 Cloudfront에서만 접근 가능하도록 설정합니다. 버킷과 객체 모두 SSE-KMS 형태로 KMS CMK로 암호화하고 버킷 키를 활성화합니다.
+Static Page Hosting을 위해 S3를 구성하여 S3에 지급받은 정적 배포파일들을 static/에 전부 업로드해두도록 하며, Private 환경으로 구성하고 오직 Cloudfront에서만 접근 가능하도록 설정합니다. 버킷과 객체 모두 SSE-KMS 형태로 KMS CMK로 암호화하고 버킷 키를 활성화합니다.
 
 - S3 Bucket Name : `wsc2026-static-<임의의 영문 4자리>-<본인 비번호>-bucket`
 - CMK Name : `wsc2026-bucket-kms`
@@ -122,7 +122,7 @@ Static Page Hosting을 위해 S3를 구성하고 Cloudfront를 이용해서 호�
 
 ## 11. Observability
 
-EKS 노드 그룹과 애플리케이션의 효율적인 관리 및 모니터링을 위해 Prometheus, Alertmanager를 활용한 옵저버빌리티 환경을 Addon Node에 구축합니다. Prometheus를 통해 인프라와 애플리케이션의 메트릭을 수집하며, 노드 수준의 메트릭 수집을 위해 Node Exporter를 DaemonSet으로 배포하고 데이터 보존 기간은 7일로 설정합니다. 시스템 이상 징후 발생 시 즉각적인 대응이 가능하도록 Prometheus Alertmanager를 통해 알람 체계를 구성합니다. 애플리케이션에서 발생하는 액세스 로그는 Fluent Bit을 통해 수집하여 CloudWatch Logs로 전송합니다. Fluent Bit은 DaemonSet으로 배포하며, health 로그는 제외하고 실제 API 요청 로그만 수집합니다. 수집된 로그는 파싱하며 Reference02의 형태를 참고하여 Grafana 대시보드에서 조회 가능하도록 구조화합니다. 최종적으로 Grafana를 Prometheus, Alertmanager, CloudWatch 데이터 소스와 연동하여 통합 대시보드를 구성하며, Service 타입을 LB로 지정하여 통해 외부 브라우저에서 접근이 가능하도록 설정합니다. Grafana의 CloudWatch Logs 데이터 소스를 통해 애플리케이션 로그를 조회할 수 있도록 합니다. 대시보드 상단에는 노드 그룹 및 네임스페이스별로 데이터를 필터링할 수 있도록 구성하고, 임계치 기반 색상 변환을 적용하여 CPU 80% 이상은 빨간색, 60~80%는 노란색, 60% 미만은 초록색으로 표시하며 Pod 재시작 횟수가 1회 이상 발생할 경우 경고 색상을 점등합니다. 자세한 내용은 Reference02를 참고해 구성하도록 합니다.
+EKS 노드 그룹과 애플리케이션의 효율적인 관리 및 모니터링을 위해 Prometheus, Alertmanager를 활용한 옵저버빌리티 환경을 Addon Node에 구축합니다. Prometheus를 통해 인프라와 애플리케이션의 메트릭을 수집하며, 노드 수준의 메트릭 수집을 위해 Node Exporter를 DaemonSet으로 배포하고 데이터 보존 기간은 7일로 설정합니다. 시스템 이상 징후 발생 시 즉각적인 대응이 가능하도록 Prometheus Alertmanager를 통해 알람 체계를 구성합니다. 애플리케이션에서 발생하는 액세스 로그는 Fluent Bit을 통해 수집하여 CloudWatch Logs로 전송합니다. Fluent Bit은 DaemonSet으로 배포하며, health 로그는 제외하고 실제 API 요청 로그만 수집합니다. 수집된 로그는 파싱하며 Reference02의 형태를 참고하여 Grafana 대시보드에서 조회 가능하도록 구조화합니다. 최종적으로 Grafana를 Prometheus, Alertmanager, CloudWatch 데이터 소스와 연동하여 통합 대시보드를 구성하며, Service 타입을 LB로 지정하여 통해 외부 브라우저에서 접근이 가능하도록 설정합니다. Grafana의 CloudWatch Logs 데이터 소스를 통해 애플리케이션 로그를 조회할 수 있도록 합니다. 대시보드 상단에는 노드 그룹 및 네임스페이스별로 데이터를 필터링할 수 있도록 구성하고, 임계치 기반 색상 변환을 적용하여 CPU 80% 이상은 빨간색, 60~80%는 노란색, 60% 미만은 초록색으로 표시하며 Pod 재시작 횟수가 1회 이상 발생할 경우 경고 색상을 점등합니다. 자세한 내용은 Reference02를 참고해 구성하도록 합니다. 동작의 확인을 위해 로그 및 메트릭을 1개 이상 발생시켜야 합니다.
 
 - Grafana Dashboard Name : `wsc2026-grafana-dashboard`
 - Grafana Admin Password : `Skills$#$@!`
@@ -177,7 +177,7 @@ EKS에서 운영되는 애플리케이션의 엔드포인트 제공과 부하 �
 
 ### Grafana Dashboard
 
-| Low | Panel |
+| Low | Panel Metric Description |
 |---|---|
 | Node | All Node CPU / All Node Memory / All Available Nodes |
 | Pod | All Pod CPU / All Pod Memory / All Pending Pods / All Pod restarts |

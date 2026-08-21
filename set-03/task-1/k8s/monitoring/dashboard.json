@@ -767,7 +767,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Status Codes",
+      "title": "Status Code",
       "id": 19,
       "datasource": {
         "type": "datasource",
@@ -801,7 +801,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"2..\"}[1m]))",
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"2..\"}[1m])) or vector(0)",
           "legendFormat": "2XX"
         },
         {
@@ -810,7 +810,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"4..\"}[1m]))",
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"4..\"}[1m])) or vector(0)",
           "legendFormat": "4XX"
         },
         {
@@ -819,7 +819,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"5..\"}[1m]))",
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"5..\"}[1m])) or vector(0)",
           "legendFormat": "5XX"
         },
         {

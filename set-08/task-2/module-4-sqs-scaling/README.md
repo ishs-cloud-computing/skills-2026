@@ -261,10 +261,11 @@ kubectl get nodepool,ec2nodeclass
 foreach ($t in 60, 120, 180) {
   Start-Sleep -Seconds 60
   Write-Host "=== after ${t}s ==="
-  aws sqs get-queue-attributes --region us-west-2 --queue-url $env:QUEUE_URL --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --output table
+  aws sqs get-queue-attributes --region us-west-2 --queue-url $env:QUEUE_URL --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible ApproximateNumberOfMessagesDelayed --output table
   kubectl get deployment sqs-worker -n skills-sqs
   kubectl get pods -n skills-sqs -l app=sqs-worker -o wide
   kubectl get nodes -l karpenter.sh/nodepool=skills-sqs-nodepool,skills-nodepool=event-worker -o wide
+  kubectl get nodeclaims -l karpenter.sh/nodepool=skills-sqs-nodepool
 }
 ```
 

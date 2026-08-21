@@ -55,7 +55,7 @@ sed -i 's/\r$//' <스크립트_파일명>
 2. **4모듈 `terraform apply` 전부 시작**. 실측 소요: module-3 ~1분 / module-2 ~2분 / module-4 ~3분 / module-1 ~7분(DocumentDB 인스턴스 병목).
 3. **module-4 eksctl create cluster 시작** (terraform apply 직후, **~19분**으로 전체 최장 경로). 별도 창에서 실행하고 로그 파일로 진행을 확인한다.
 4. eksctl 대기 중 CloudShell에서 워커 이미지 build/push 진행 (module-4 README 3단계 — 병렬 처리 설계).
-5. **module-2 검증 + 채점** (대기 짧음).
+5. **module-2 검증 + 채점** (대기 짧음). ⚠ apply 직후 바로 채점하지 않는다 — Lattice Target Group 이 `HEALTHY` 로 넘어가는 데 ~30-60초 더 걸리고, `Status=HEALTHY` 는 채점 2-4 의 독립 합격 기준이다. README 3단계의 HEALTHY 대기 루프를 통과한 뒤 `mark2-2.sh` 를 돌린다.
 6. **module-3 검증 + 채점** (실경로 복구 실측 ~20초).
 7. **module-1 검증 + 채점**.
 8. module-4 클러스터 준비 후 helm → k8s manifest apply → 스케일 검증 → 채점 (module-4 README 4단계 이후). `mark2-4.sh`만 실행에 **~11분** 걸리니 시간을 따로 잡는다.
