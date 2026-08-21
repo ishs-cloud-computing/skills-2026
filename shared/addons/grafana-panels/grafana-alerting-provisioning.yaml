@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Grafana 통합 알림(unified alerting) 룰 provisioning — ConfigMap(label grafana_alert=1)을
+# grafana sidecar(values grafana.sidecar.alerts.enabled) 가 /etc/grafana/provisioning/alerting 에 올린다.
+# PrometheusRule(Alertmanager 경로)과 별개 — 과제지가 "Grafana 알림 룰" 을 명시할 때만.
+# 파일 형식은 Grafana alerting provisioning(apiVersion 1). 확인 필요: README 함정 절.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: addon-grafana-alert-rules
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  addon-rules.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: addon-alerts
+        folder: addon
+        interval: 1m
+        rules:
+          - uid: addon-pod-restarts
+            title: PodRestarts
+            condition: C
+            for: 3m
+            labels:
+              severity: warning
+            annotations:
+              summary: "container restarts > 3 in ${NAMESPACE}"
+            data:
+              - refId: A
+                relativeTimeRange: { from: 600, to: 0 }
+                datasourceUid: prometheus
+                model:
+                  refId: A
+                  expr: sum(kube_pod_container_status_restarts_total{namespace="${NAMESPACE}"})
+                  instant: true
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  refId: C
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator: { type: gt, params: [3] }
+    # 수신처 — 과제지가 요구할 때만 (email 은 grafana.ini smtp 설정 필요)
+    # contactPoints:
+    #   - orgId: 1
+    #     name: addon-webhook
+    #     receivers:
+    #       - uid: addon-webhook
+    #         type: webhook
+    #         settings:
+    #           url: http://alertmanager-operated.monitoring.svc:9093/api/v2/alerts
+    # policies:
+    #   - orgId: 1
+    #     receiver: addon-webhook

@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# KEDA TriggerAuthentication + ScaledObject (SQS) — 전체 옵션 예시
+# 원본: set-08 task-2 module-4 30-keda-scaledobject.yaml
+# ${QUEUE_URL} ${REGION} ${NAMESPACE} ${DEPLOYMENT} 치환 후 apply.
+# ---------------------------------------------------------------------------
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: addon-sqs-trigger-auth
+  namespace: "${NAMESPACE}"
+spec:
+  podIdentity:
+    # aws: keda-operator SA 의 IRSA/Pod Identity 역할로 SQS 조회 (KEDA 2.x 권장).
+    # 채점 스크립트가 aws-eks 문자열을 요구하면 aws-eks 로 (deprecated, KEDA 3.0 제거 예정 — set-08 4-4).
+    provider: aws
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: addon-sqs-scaledobject
+  namespace: "${NAMESPACE}"
+spec:
+  scaleTargetRef:
+    name: "${DEPLOYMENT}"
+  # 0 이면 큐가 비었을 때 Pod 0 (0→1 활성화는 KEDA operator 가 pollingInterval 마다 직접 폴링)
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  # 큐 확인 주기 (초). 과제지 상한("15초 이하")을 그대로 쓴다
+  pollingInterval: 15
+  # 마지막 트리거 활성 후 0 으로 내리기까지 대기 (초). min>0 이면 무관
+  cooldownPeriod: 30
+  # HPA scaleDown 안정화 윈도(초) — 채점이 빠른 축소를 보면 0
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 30
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: addon-sqs-trigger-auth
+      metadata:
+        queueURL: "${QUEUE_URL}"
+        # 메시지 N 건당 Pod 1 개
+        queueLength: "5"
+        awsRegion: "${REGION}"
+        # true 면 in-flight 메시지(수신 중)를 제외하고 Visible 만 센다
+        scaleOnInFlight: "false"

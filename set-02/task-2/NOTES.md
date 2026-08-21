@@ -10,7 +10,7 @@
 | 모듈 | 이름 | 리전 | 미해결 |
 |------|------|------|--------|
 | 1 | workflow | ap-southeast-1 | 없음 |
-| 2 | analytics | ap-northeast-2 | 없음 |
+| 2 | analytics | ap-northeast-2 | EC2 Role 이름이 전사본(`analytics`) ↔ 구현(`alaytics`) 로 어긋남. 2026-08-21 신판이 원문 오타를 고쳤으나 `.tf` 리네임 미반영 — 이슈 #133 |
 | 3 | event | eu-west-1 | 없음 |
 | 4 | msk | ap-northeast-1 | iam(기본) 실배포 검증 2026-08-16. tls(`-var` 지정) 실배포 미검증. 당일 모드는 `select-auth-mode` 판정을 따른다 |
 

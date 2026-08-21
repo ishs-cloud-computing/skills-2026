@@ -1,0 +1,170 @@
+{
+  "widgets": [
+    {
+      "type": "text",
+      "width": 24,
+      "height": 1,
+      "properties": { "markdown": "## ${name}" }
+    }%{ if alb_arn_suffix != "" },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "ALB 5XX",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Sum",
+        "period": ${period},
+        "metrics": [
+          ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", "${alb_arn_suffix}"],
+          ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", "${alb_arn_suffix}"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "ALB TargetResponseTime / RequestCount",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": ${period},
+        "metrics": [
+          ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", "${alb_arn_suffix}"],
+          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${alb_arn_suffix}", { "stat": "Sum", "yAxis": "right" }]
+        ]
+      }
+    }%{ endif }%{ if rds_instance_id != "" },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "RDS CPUUtilization",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": ${period},
+        "metrics": [
+          ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${rds_instance_id}"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "RDS DatabaseConnections",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": ${period},
+        "metrics": [
+          ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${rds_instance_id}"]
+        ]
+      }
+    }%{ endif }%{ if ecs_cluster_name != "" && ecs_service_name != "" },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "ECS ${ecs_service_name} CPU / Memory",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": ${period},
+        "metrics": [
+          ["AWS/ECS", "CPUUtilization", "ClusterName", "${ecs_cluster_name}", "ServiceName", "${ecs_service_name}"],
+          ["AWS/ECS", "MemoryUtilization", "ClusterName", "${ecs_cluster_name}", "ServiceName", "${ecs_service_name}"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "ECS ${ecs_service_name} Tasks (Container Insights)",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": ${period},
+        "metrics": [
+          ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", "${ecs_cluster_name}", "ServiceName", "${ecs_service_name}"],
+          ["ECS/ContainerInsights", "DesiredTaskCount", "ClusterName", "${ecs_cluster_name}", "ServiceName", "${ecs_service_name}"]
+        ]
+      }
+    }%{ endif }%{ if eks_cluster_name != "" },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "EKS ${eks_cluster_name} Node CPU / Memory",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": ${period},
+        "metrics": [
+          ["ContainerInsights", "node_cpu_utilization", "ClusterName", "${eks_cluster_name}"],
+          ["ContainerInsights", "node_memory_utilization", "ClusterName", "${eks_cluster_name}"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "EKS ${eks_cluster_name} Pods / Nodes",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": ${period},
+        "metrics": [
+          ["ContainerInsights", "cluster_number_of_running_pods", "ClusterName", "${eks_cluster_name}"],
+          ["ContainerInsights", "cluster_node_count", "ClusterName", "${eks_cluster_name}"]
+        ]
+      }
+    }%{ endif }%{ if lambda_function_name != "" },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Lambda ${lambda_function_name}",
+        "region": "${region}",
+        "view": "timeSeries",
+        "stat": "Sum",
+        "period": ${period},
+        "metrics": [
+          ["AWS/Lambda", "Invocations", "FunctionName", "${lambda_function_name}"],
+          ["AWS/Lambda", "Errors", "FunctionName", "${lambda_function_name}"],
+          ["AWS/Lambda", "Throttles", "FunctionName", "${lambda_function_name}"],
+          ["AWS/Lambda", "Duration", "FunctionName", "${lambda_function_name}", { "stat": "Average", "yAxis": "right" }]
+        ]
+      }
+    }%{ endif }%{ if waf_acl_name != "" },
+    {
+      "type": "metric",
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "WAF ${waf_acl_name} Blocked / Allowed",
+        "region": "${waf_metric_region}",
+        "view": "timeSeries",
+        "stat": "Sum",
+        "period": ${period},
+        "metrics": [
+          ["AWS/WAFV2", "BlockedRequests", "WebACL", "${waf_acl_name}", "Region", "${waf_dimension_region}", "Rule", "ALL"],
+          ["AWS/WAFV2", "AllowedRequests", "WebACL", "${waf_acl_name}", "Region", "${waf_dimension_region}", "Rule", "ALL"]
+        ]
+      }
+    }%{ endif }
+  ]
+}

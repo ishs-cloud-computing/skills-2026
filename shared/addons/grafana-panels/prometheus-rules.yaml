@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# PrometheusRule 5종 — kube-state-metrics + cAdvisor 메트릭만 사용(외부 exporter 불필요).
+# 원본: set-03 task-1 k8s/monitoring/prometheus-rules.yaml. HTTP 오류율·지연 룰은 README 블록 절.
+# kube-prometheus-stack values: ruleSelectorNilUsesHelmValues: false 여야 release 라벨 없이 선택된다.
+# ${NAMESPACE} = 감시 대상 앱 네임스페이스, metadata.namespace = 모니터링 네임스페이스.
+# ---------------------------------------------------------------------------
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: addon-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: addon.rules
+      rules:
+        # Pod CPU 사용률(limit 대비) 80% 초과 3분
+        - alert: PodHighCPU
+          expr: |
+            sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace="${NAMESPACE}", container!="", image!=""}[2m]))
+              / sum by (namespace, pod) (kube_pod_container_resource_limits{namespace="${NAMESPACE}", resource="cpu"}) > 0.8
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} CPU > 80% for 3m"
+
+        # Pod 메모리 사용률(limit 대비) 90% 초과 3분
+        - alert: PodHighMemory
+          expr: |
+            sum by (namespace, pod) (container_memory_working_set_bytes{namespace="${NAMESPACE}", container!="", image!=""})
+              / sum by (namespace, pod) (kube_pod_container_resource_limits{namespace="${NAMESPACE}", resource="memory"}) > 0.9
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} memory > 90% for 3m"
+
+        # CrashLoopBackOff 또는 3분 이상 Not Ready (완료된 Pod 제외)
+        - alert: PodNotReady
+          expr: |
+            (max by (namespace, pod) (kube_pod_container_status_waiting_reason{namespace="${NAMESPACE}", reason="CrashLoopBackOff"}) == 1)
+            or
+            (min by (namespace, pod) (kube_pod_status_ready{namespace="${NAMESPACE}", condition="true"}) == 0
+              and on (namespace, pod) max by (namespace, pod) (kube_pod_status_phase{namespace="${NAMESPACE}", phase=~"Running|Pending"}) == 1)
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready / crashlooping for 3m"
+
+        # 컨테이너 재시작 3회 초과
+        - alert: PodCrashLooping
+          expr: |
+            max by (namespace, pod) (kube_pod_container_status_restarts_total{namespace="${NAMESPACE}"}) > 3
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} restarted > 3 times"
+
+        # 노드 NotReady 3분
+        - alert: NodeNotReady
+          expr: |
+            kube_node_status_condition{condition="Ready", status="true"} == 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node {{ $labels.node }} NotReady for 3m"

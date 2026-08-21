@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# Grafana 를 Terraform ALB(IP TargetGroup) 뒤에 붙인다 — AWS Load Balancer Controller 필요.
+# Grafana Service 이름은 <release>-grafana (kube-prometheus-stack 번들). port 는 values grafana.service.port.
+# 원본: set-07 task-1 k8s/monitoring/grafana-targetgroupbinding.yaml
+# ${GRAFANA_TG_ARN} 은 terraform output(aws_lb_target_group ... arn).
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: addon-grafana-tgb
+  namespace: monitoring
+spec:
+  serviceRef:
+    name: "${GRAFANA_SVC}"
+    port: 3000
+  targetGroupARN: "${GRAFANA_TG_ARN}"
+  targetType: ip

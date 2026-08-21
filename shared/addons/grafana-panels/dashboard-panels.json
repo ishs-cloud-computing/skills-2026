@@ -1,0 +1,246 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "<DASHBOARD_TITLE>",
+  "uid": "<DASHBOARD_UID>",
+  "schemaVersion": 39,
+  "tags": ["addon"],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Pod CPU Usage (cores)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "noValue": "0" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=\"<NAMESPACE>\", container!=\"\", image!=\"\"}[5m]))",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Pod Memory Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "noValue": "0" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{namespace=\"<NAMESPACE>\", container!=\"\", image!=\"\"})",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Container Restarts",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "options": { "graphMode": "none", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "fieldConfig": { "defaults": { "unit": "short", "noValue": "0", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 3 } ] } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(kube_pod_container_status_restarts_total{namespace=\"<NAMESPACE>\"}) or vector(0)",
+          "legendFormat": "restarts"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Running Pods",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "fieldConfig": { "defaults": { "unit": "short", "noValue": "0" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(kube_pod_status_phase{namespace=\"<NAMESPACE>\", pod=~\"<DEPLOYMENT>-.*\", phase=\"Running\"}) or vector(0)",
+          "legendFormat": "running"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Pod Network Receive",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "Bps", "noValue": "0" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (namespace, pod) (rate(container_network_receive_bytes_total{namespace=\"<NAMESPACE>\"}[5m]))",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "HTTP Response Time p50/p95/p99 (ALB)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "s", "noValue": "0" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "aws_applicationelb_target_response_time_p50{load_balancer=~\".*<ALB_NAME>.*\"}",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "aws_applicationelb_target_response_time_p95{load_balancer=~\".*<ALB_NAME>.*\"}",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "aws_applicationelb_target_response_time_p99{load_balancer=~\".*<ALB_NAME>.*\"}",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "HTTP Response Time p50/p95/p99 (CloudWatch datasource)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "s", "noValue": "0" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "cloudwatch", "uid": "cloudwatch" },
+          "queryMode": "Metrics",
+          "region": "default",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "dimensions": { "LoadBalancer": "<ALB_ARN_SUFFIX>" },
+          "statistic": "p50",
+          "period": "60",
+          "label": "p50"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "cloudwatch", "uid": "cloudwatch" },
+          "queryMode": "Metrics",
+          "region": "default",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "dimensions": { "LoadBalancer": "<ALB_ARN_SUFFIX>" },
+          "statistic": "p95",
+          "period": "60",
+          "label": "p95"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "cloudwatch", "uid": "cloudwatch" },
+          "queryMode": "Metrics",
+          "region": "default",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetResponseTime",
+          "dimensions": { "LoadBalancer": "<ALB_ARN_SUFFIX>" },
+          "statistic": "p99",
+          "period": "60",
+          "label": "p99"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Log Count by Level (Loki)",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "interval": "1m",
+      "fieldConfig": {
+        "defaults": { "noValue": "0", "custom": { "drawStyle": "bars", "fillOpacity": 100, "stacking": { "mode": "normal", "group": "A" }, "lineWidth": 1, "showPoints": "never" } },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": "/^error$/i" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "#E24D42" } } ] },
+          { "matcher": { "id": "byRegexp", "options": "/^warn(ing)?$/i" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "#EAB839" } } ] },
+          { "matcher": { "id": "byRegexp", "options": "/^info$/i" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "#7EB26D" } } ] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (level) (count_over_time({<LOKI_LABEL>=\"<NAMESPACE>\"} | json | __error__=\"\" [$__auto]))",
+          "legendFormat": "{{level}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Log Level Distribution (Loki)",
+      "type": "piechart",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "interval": "1m",
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "pieType": "pie",
+        "displayLabels": ["percent"],
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "values": [] },
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (level) (count_over_time({<LOKI_LABEL>=\"<NAMESPACE>\"} | json | __error__=\"\" [$__auto]))",
+          "legendFormat": "{{level}}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "ERROR Log Count (plain text match)",
+      "type": "timeseries",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "fieldConfig": { "defaults": { "noValue": "0", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({<LOKI_LABEL>=\"<NAMESPACE>\"} |= \"ERROR\" [1m]))",
+          "legendFormat": "ERROR",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Recent Logs",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 30 },
+      "options": { "showTime": true, "showLabels": true, "showCommonLabels": false, "wrapLogMessage": true, "prettifyLogMessage": false, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{<LOKI_LABEL>=\"<NAMESPACE>\"}",
+          "queryType": "range"
+        }
+      ]
+    }
+  ]
+}

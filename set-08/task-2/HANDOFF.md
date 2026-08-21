@@ -9,7 +9,7 @@
 코드·문서 작업 끝났고, **2026-08-02 실 apply + CloudShell 실채점 리허설까지 완료**했다. 4모듈 20개 채점 항목 전부 기대 출력 일치(불일치 0), teardown 후 4개 리전 잔존 리소스 0 확인. 리허설에서 나온 런북 버그·개선점은 README/NOTES에 반영 완료.
 
 - 실측 기록: [LOGS.md](LOGS.md) (항목별 증거·소요시간)
-- 런북 개선점과 반영 여부: [FEEDBACK.md](FEEDBACK.md)
+- 런북 개선점은 [README.md](README.md)와 [NOTES.md](NOTES.md)에 반영돼 있다.
 
 남은 건 대회 당일 재실행뿐. 다시 apply하면 AWS 비용이 발생하니 사용자 확인 없이 시작하지 마라.
 
@@ -33,10 +33,10 @@ grep -n "^| [0-9]" set-08/task-2/NOTES.md   # 모듈 현황 표 4행
 
 ## 다음 작업
 
-1. ~~실 apply + 실채점~~ **완료(2026-08-02)**: 4모듈 배포·검증·CloudShell 채점·teardown 전부 수행. 결과는 LOGS.md, 런북 반영은 FEEDBACK.md `[반영]` 표시 참고.
+1. ~~실 apply + 실채점~~ **완료(2026-08-02)**: 4모듈 배포·검증·CloudShell 채점·teardown 전부 수행. 결과는 [LOGS.md](LOGS.md), 런북 반영 내용은 [README.md](README.md)와 [NOTES.md](NOTES.md)를 참고.
 2. **NOTES 커버리지 `[~]` → `[x]` 승격**: 실채점 증거는 확보됐으나 커버리지 표는 아직 `[~]`다. LOGS.md 항목별 증거를 근거로 승격할 것.
 3. ~~협의회 예상 출력 파일 도착 시~~ **완료(2026-08-01)**: 공식 판정 기준 `provided/008_chall_2nd_patched_0801.md` 도착·대조 완료(불일치 0), 공식 diff `mark/mark2-{1..4}.sh` 적용 완료. 오류 정정 마감 2026-08-13 — 추가 오류 발견 시에만 게시판 질의.
-4. **보류 항목 1건**: module-1~3(`-chdir`) vs module-4(`cd`) terraform 명령 형식 통일 — 다음 세트 런북에서 처음부터 통일 (FEEDBACK.md `[보류]`).
+4. **보류 항목 1건**: module-1~3(`-chdir`) vs module-4(`cd`) terraform 명령 형식 통일 — 다음 세트 런북에서 처음부터 통일.
 
 ## 새 작업 시작 전 필수 읽기 (스코프 좁혀서 — 전체 재독 금지)
 

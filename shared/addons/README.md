@@ -4,6 +4,8 @@
 당일 추가된 문항을 기존 task-1 에 부착하기 위한 스니펫 모음.
 기존 문항·리소스는 건드리지 않는다 (DAY-OF 1절 — 당일 변동은 추가 방식).
 
+추가 문항을 찾을 때는 [KIT-INDEX](../../KIT-INDEX.md)를 authoritative source로 쓰고, 자주 쓰는 표현은 [QUICK-REFERENCE](../../QUICK-REFERENCE.md)에서 먼저 찾는다. 각 addon은 **COPY** 방식이며 독립 Terraform state나 독립 `apply` 대상이 아니다.
+
 ## 카테고리 → 준비물
 
 | 옵션 | 스니펫 | 실전 구현 (참고용) |

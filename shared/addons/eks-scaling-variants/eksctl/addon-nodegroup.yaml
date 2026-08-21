@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# taint 붙은 Addon 관리형 노드그룹 — 기존 클러스터에:
+#   eksctl create nodegroup -f addon-nodegroup.yaml
+# 원본: set-07 task-2 module-3 eksctl/cluster.yaml (managedNodeGroups 항목)
+# ---------------------------------------------------------------------------
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: "${CLUSTER_NAME}"
+  region: "${REGION}"
+
+managedNodeGroups:
+  - name: "${CLUSTER_NAME}-addon-ng"
+    amiFamily: AmazonLinux2023
+    instanceType: t3.medium
+    minSize: 1
+    maxSize: 2
+    desiredCapacity: 1
+    privateNetworking: true
+    # EC2 Name 태그 채점은 tags.Name 이 아니라 instanceName (MNG tags 는 인스턴스에 전파되지 않는다)
+    instanceName: "${CLUSTER_NAME}-addon-ng-node"
+    labels:
+      role: addon
+    # CriticalAddonsOnly: CoreDNS·Karpenter chart 는 기본 toleration 으로 무설정 스케줄,
+    # KEDA 는 helm values 에 tolerations 를 따로 준다
+    taints:
+      - key: CriticalAddonsOnly
+        value: "true"
+        effect: NoSchedule
