@@ -102,7 +102,7 @@ Book 애플리케이션은 반드시 Application Nodegroup에서 동작해야 �
 
 ## 11. CloudFront
 
-사용자가 S3로 호스팅하는 웹페이지와 애플리케이션에 접근할 수 있도록 Distribution을 구성합니다. 사용자의 모든 요청은 반드시 CloudFront를 통해서만 처리되어야 합니다. 전세계의 사용자가 빠르게 접근할 수 있도록 구성해야 합니다. HTTP로 접근하는 경우 HTTPS로 리다이렉트 되어야 하며, CloudFront에서 전달하는 요청에는 반드시 `X-Origin-Verify: wskorea26-cf` 헤더가 포함되어야 하고, S3로 전달하는 요청에는 `wskorea26-s3-access` 헤더가 포함되어야 합니다. 루트 경로로 접근 시 S3 웹 페이지가 출력되어야 하며, 캐싱을 활성화합니다. `/book` 경로로 접근 시 ALB로 요청이 전달되어야 합니다.
+사용자가 S3로 호스팅하는 웹페이지와 애플리케이션에 접근할 수 있도록 Distribution을 구성합니다. 사용자의 모든 요청은 반드시 CloudFront를 통해서만 처리되어야 합니다. 전세계의 사용자가 빠르게 접근할 수 있도록 구성해야 합니다. HTTP로 접근하는 경우 HTTPS로 리다이렉트 되어야 하며, CloudFront에서 전달하는 요청에는 반드시 `X-Origin-Verify: wskorea26-cf` 헤더가 포함되어야 하고, S3로 전달하는 요청에는 `wskorea26-s3-access: true` 헤더가 포함되어야 합니다. 루트 경로로 접근 시 S3 웹 페이지가 출력되어야 하며, 캐싱을 활성화합니다. `/book` 경로로 접근 시 ALB로 요청이 전달되어야 합니다.
 
 - Distribution Name : `wskorea26-concert-cf`
 - ALB Origin ID : `wskorea26-alb-origin`
