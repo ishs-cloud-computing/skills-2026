@@ -9,7 +9,7 @@
 - 구성: terraform(단일 리전 종합 인프라) + eksctl(private cluster, Pod Identity) + k8s(app/logging/monitoring).
   머신 3분할 — 본 PC(PS7: terraform·eksctl·시드·정리) / 일반 CloudShell(이미지 빌드) /
   `unicorn-mark` CloudShell VPC environment(helm·kubectl·채점). **작업용 bastion 없음.**
-- 미해결: 배포 실측 미수행 — apply·`mark-2026-08-10.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
+- 미해결: 배포 실측 미수행 — apply·`mark.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
 - 채점 신원은 PowerUser~Administrator 수준 **IAM 사용자**의 CloudShell 이다(2026-08-04 답변). 본 PC 가
   클러스터를 만들므로 본 PC 신원이 그 IAM 사용자와 같아야 하고, 어긋나면 access entry 로 사후 보정한다.
 - 새 필수 절차: eksctl 이 fully-private 클러스터를 public+private 로 만든 뒤 public 을 끄므로,
@@ -19,6 +19,7 @@
 <!-- mark.sh / mark/markN.sh 항목 대비 현재 구현이 어디까지 왔는지. -->
 
 정정(errata) 대비 — `set-07/errata/1과제.txt` 12건 전부 판정 완료. 근거는 정정 로그 표.
+2026-08-21 재배포본 PDF 기준으로 재확인했다(반영/미반영 목록은 `set-07/changelog.txt` 2026-08-21).
 
 | 정정 # | 채점항목 | 판정 | 근거 |
 |--------|---------|------|------|
@@ -32,11 +33,11 @@
 | 7 | 12-1-A | 영향없음 | 문구 변경만 |
 | 8 | 6-3-A | 영향없음 | `k8s/app/service.yaml:11` |
 | 9 | 절차 | 영향없음 | `README.md` step 9 주석 |
-| 10 | 9-2-A | 수정완료 | `mark-2026-08-10.sh` (정정본 사본) |
+| 10 | 9-2-A | 수정완료 | `mark.sh` (재배포본 = 정정본) |
 | 11 | 12-1-A | 영향없음 | 채점 측 지침 |
-| 12 | 12-1-A | 수정완료 | `k8s/logging/fluent-bit.yaml:106`, `mark-2026-08-10.sh:123` |
+| 12 | 12-1-A | 수정완료 | `k8s/logging/fluent-bit.yaml:106`, `mark.sh:123` |
 
-배포 실측 대비 — [ ] 미실행. `bash mark-2026-08-10.sh` 결과 수신 후 항목별로 채운다.
+배포 실측 대비 — [ ] 미실행. `bash mark.sh` 결과 수신 후 항목별로 채운다.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거가 된다. -->
@@ -47,19 +48,40 @@
 
 ---
 ## 정정 로그
-<!-- 과제지·채점지의 오류/정정. task.pdf·mark.pdf 와 전사본 task.md·mark.md 는 원본 대조용으로 고치지 않는다. -->
+<!-- 과제지·채점지의 오류/정정. -->
 
-정정 정본은 `set-07/errata/1과제.txt` 하나뿐이고, 배경·"수정없음" 판정·답변과 정본이 어긋난 지점은
-`set-07/changelog.txt` 에 있다. 내용이 바뀐 실행 파일은 원본을 두고 **날짜 접미사 사본**으로 추가한다
-(`mark-2026-08-10.sh`) — task-2 와 같은 규칙이다(`set-07/task-2/NOTES.md` 정정 로그).
+정정 정본은 `set-07/errata/1과제.txt` 이고, 배경·"수정없음" 판정·답변과 정본이 어긋난 지점은
+`set-07/changelog.txt` 에 있다. **2026-08-21 부터 task-1 의 `task.pdf`·`mark.pdf`·`mark.sh` 는
+재배포본이 정본**이며, 전사본 `task.md`·`mark.md` 도 재배포본을 따라간다(아래 2026-08-21 절).
+task-2 는 재배포본이 없어 예전 규칙 그대로 — 원본을 두고 **날짜 접미사 사본**을 추가한다
+(`mark3-2026-08-01.sh` 등, `set-07/task-2/NOTES.md` 정정 로그).
+
+### 2026-08-21 과제지·채점지 재배포본 수령 (출처: 출제자 재배포 PDF 2종)
+
+`changelog.txt` 가 "수정본은 재배포되지 않는다"고 적어둔 전제가 깨졌다. 1과제 **과제지·채점지 PDF 수정본**이
+재배포되어 `task.pdf`·`mark.pdf` 를 교체하고 전사본 `task.md`·`mark.md` 를 재배포본 기준으로 갱신했다.
+2과제는 재배포본이 오지 않아 `errata/2과제.txt` 가 그대로 정본이다.
+
+| 구분 | 내용 | 구현 영향 |
+|---|---|---|
+| 채점 스크립트 | 재배포본 본문이 `mark-2026-08-10.sh` 와 **완전 동일** — 별도 정정본을 유지할 이유가 사라져 `mark.sh` 를 그 내용으로 덮고 날짜 접미사 사본을 삭제했다(런북 참조도 `mark.sh` 로 통일) | **없음** — 스크립트 내용 자체는 그대로 |
+| 반영된 정정 | 2, 3, 5, 6, 7, 8, 9, 10, 11, 12 | **없음** — 이미 전부 판정·반영 완료 |
+| 미반영 정정 0 | 8번 Security 의 "Access Entry 사용, aws-auth 미사용" 지문이 **삭제되지 않고 남아 있다** | **없음** — 저장소는 이미 `eksctl/cluster.yaml` `authenticationMode: API`. 강제가 되살아나도 현재 구성이 그 강제를 만족한다 |
+| 미반영 정정 1 ★ | 11번이 "Inline Policy 를 사용하며, 와일드카드 액션 **및 리소스**는 사용해서는 안 됩니다." — 정정 6 만 반영되고 **정정 1(리소스 와일드카드 허용)이 되돌아갔다** | **없음(대체 불가)** — `terraform/iam.tf:206-212` 의 `ec2:DescribeVpcs`/`eks:DescribeCluster` 는 리소스 레벨 ARN 을 지원하지 않아 `Resource:"*"` 외 선택지가 없다. 채점 9-1-A 는 Action 목록만 읽고 "`*` 이 없으면 득점"이므로 실채점 손실은 없다. 지문 위반으로 감점될 여지는 남으므로 이의신청 시 이 근거를 쓴다 |
+| 미반영 정정 4 | 6번 Database 의 "Lambda 를 통한 예약 조회를 지원하기 위해" 문장이 남아 있다 | **없음** — 문장만 삭제 대상이었다. Lambda 는 PK `get_item`, GSI 는 4-1-A 존재 확인만 |
+| 신규 지문 | 8번 Security 가 "Book App **Pod 에 사용되는 Identity Role**" → "Book App 이 사용되는 **Pod Identity Role**" 로 Pod Identity 를 명시 | **없음** — 이미 Pod Identity. 채점 6-3-A 도 `list-pod-identity-associations` 로 확인한다 |
+
+나머지 차이는 전사본의 표현 오차 교정 수준이다(10-1 ALB 괄호 위치, 12 메트릭 문장, 13 Application 문장 등).
+채점지 쪽은 유의사항 18·19 추가, 6-3-A 예상 출력 `unicorn-book-app-svc ClusterIP`, 12-1-A 의
+`TZ=Asia/Seoul date` 기준선·"출력된 로그가 위와 같고"·"`None` 무시" — 모두 이미 반영된 정정이다.
 
 ### 2026-08-10 답변 (출처: `set-07/errata/1과제.txt` 10~12 + `changelog.txt`)
 
 | # | 정정 내용 | 구현 영향 |
 |---|-----------|-----------|
-| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:210-215`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
+| 10 | 9-2-A 채점스크립트를 별첨 1 정정본으로 — 식별용 고정 출력값(`[1] no external-id:` 등) 삭제 | **없음**(라벨만 제거) — 자가채점만 정정본 `mark-2026-08-10.sh` 사용. `mark.sh` 는 최초본이라 그대로 둔다. *(2026-08-21 재배포로 무효 — `mark.sh` 자체가 정정본이 됐다)* 별첨 1 이 요구하는 4단계(external-id 없이 assume → AccessDenied / assume 성공 / `describe-vpcs` 성공 / `describe-instances` 거부)는 `terraform/iam.tf:177-181`(ExternalId `StringEquals` 조건) + `terraform/data.tf:26`(`unicorn-audit-2026<등번호>`) + `terraform/iam.tf:210-215`(Describe 2종만 허용, `describe-instances` 미포함)으로 이미 충족 |
 | 11 | 12-1-A 예상 출력에 "`None` 등의 값이 출력될 경우 무시" 추가 | **없음** — `filter-log-events` 페이지네이션이 만드는 값이라 구현이 손댈 수 없다 |
-| 12 | 12-1-A 기준선 명령을 `date -u "+…Z"` → `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` | **있음** — `k8s/logging/fluent-bit.yaml` 의 `reshape.lua` 가 KST 값을 계산하면서 접미사만 `Z` 였다. `+09:00` 으로 변경(결정 로그 2026-08-15 참조). `mark-2026-08-10.sh` 의 기준선 명령도 정정본으로 교체 |
+| 12 | 12-1-A 기준선 명령을 `date -u "+…Z"` → `TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00"` | **있음** — `k8s/logging/fluent-bit.yaml` 의 `reshape.lua` 가 KST 값을 계산하면서 접미사만 `Z` 였다. `+09:00` 으로 변경(결정 로그 2026-08-15 참조). `mark-2026-08-10.sh` 의 기준선 명령도 정정본으로 교체 *(2026-08-21 재배포로 `mark.sh` 에 흡수)* |
 
 `changelog.txt` 2026-08-10 의 `주의:` 3건은 위 표에 흡수했다. 다만 **08-04 의 "과제지 예시 형식(`Z`)에 맞출 것"과
 08-10 의 "로그 timestamp 도 `+09:00` 으로 기록할 것"이 정면 충돌**한다 — 후행·구체적인 08-10 을 채택했다(결정 로그).
@@ -108,6 +130,16 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-21 정정본 사본을 없애고 `mark.sh` 하나로 — 재배포본이 원본을 대체했다
+- 맥락: 정정 10·12 를 반영한 `mark-2026-08-10.sh` 를 원본 `mark.sh` 옆에 두는 규칙이었다. 원본이
+  재배포되지 않는다는 전제에서 "원본은 대조용으로 보존"이 성립했기 때문이다. 2026-08-21 재배포본이
+  오면서 전제가 깨졌고, 재배포본 본문은 `mark-2026-08-10.sh` 와 글자까지 같았다.
+- 채택: `mark.sh` = 재배포본. 날짜 접미사 사본 삭제. 대회 당일 두 이름을 헷갈릴 여지를 없애는 게
+  대조 가치보다 크다 — 런북이 S3 릴레이 tar, `cp ~/`, 자가채점 3곳에서 파일명을 부르고 있었다.
+- 기각: 사본을 남기고 `mark.sh` 만 갱신 — 같은 내용 파일이 둘이 되어 이름만 늘어난다.
+- 대가: 최초본 대조가 필요하면 git 이력(`git show <이전커밋>:set-07/task-1/mark.sh`)으로만 볼 수 있다.
+- 참고: 아래 2026-08-15 항목의 `mark-2026-08-10.sh:27-33,76` 는 이제 `mark.sh` 의 같은 줄을 가리킨다.
 
 ### 2026-08-15 S3 릴레이에서 텍스트 제거 — `outputs.json`·`Dockerfile` 은 붙여넣기로
 - 맥락: 릴레이가 4개를 나르는데 그중 둘이 텍스트였다. 릴레이가 존재하는 이유는 CloudShell 에 파일을 넣을

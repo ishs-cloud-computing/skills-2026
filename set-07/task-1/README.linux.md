@@ -39,7 +39,7 @@ EOF
 # CloudShell 은 파일 업로드 UI 가 없고(VPC environment 는 Actions 업로드 자체가 막혀 있다)
 # 레포가 비공개라 git clone 도 불가 → 붙여넣을 수 없는 것만 S3 릴레이로 넘긴다.
 # _transfer/ 는 채점 직전 step 8 에서 비운다 (web 버킷은 채점 대상 — mark.sh 3-1-A).
-tar czf ../task.tgz -C .. k8s mark-2026-08-10.sh   # 2026-08-10 정정본. mark.sh 최초본은 대조용
+tar czf ../task.tgz -C .. k8s mark.sh   # 2026-08-21 재배포본
 aws s3 cp ../task.tgz "s3://$BUCKET/_transfer/task.tgz"
 aws s3 cp ../../../shared/provided/task-1/book "s3://$BUCKET/_transfer/book"   # 8.7MB 바이너리
 ```
@@ -151,7 +151,7 @@ for i in $(seq 1 20); do curl -s -o /dev/null "https://$CF/health"; done        
 
 ### 7) → README.md step 7 (`unicorn-mark` CloudShell — 자가 채점)
 
-`bash ~/mark-2026-08-10.sh`. 홈이 초기화된 뒤라면 step 4 부트스트랩 블록을 먼저 다시 실행한다.
+`bash ~/mark.sh`. 홈이 초기화된 뒤라면 step 4 부트스트랩 블록을 먼저 다시 실행한다.
 
 ### 8) [본 PC] 채점 전 정리
 

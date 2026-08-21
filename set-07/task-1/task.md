@@ -8,7 +8,7 @@
 
 ## 1. 요구사항
 
-당신은 Unicorn Tickets DevOps의 엔지니어로서 콘서트 예약 플랫폼의 클라우드 환경을 설계하고 운영하고자 합니다. 티켓 예약 시 사용자들이 몰려 높은 트래픽이 발생할 수 있기에 확장성이 높고 안정적이어야 하며, 이를 위해 컨테이너 오케스트레이션 도구로 EKS를 선택하였습니다. 아래 다이어그램과 주어진 요구사항을 기반으로 인프라를 구축합니다.
+당신은 Unicorn Tickets의 DevOps 엔지니어로서 콘서트 예약 플랫폼의 클라우드 환경을 설계하고 운영하고자 합니다. 티켓 예약 시 사용자들이 몰려 높은 트래픽이 발생할 수 있기에 확장성이 높고 안정적이어야 하며, 이를 위해 컨테이너 오케스트레이션 도구로 EKS를 선택하였습니다. 아래 다이어그램과 주어진 요구사항을 기반으로 인프라를 구축합니다.
 
 ### Diagram
 
@@ -53,7 +53,7 @@
 10. 문제지에 표기된 중괄호 `{ }`는 동일 패턴의 리소스를 축약 표기한 것이며, 선수가 중괄호 내 값을 각각 전개하여 사용해야 합니다. (예: `unicorn-subnet-pub-{a,b,c}` → `unicorn-subnet-pub-a`, `unicorn-subnet-pub-b`, `unicorn-subnet-pub-c`)
 11. 모든 IAM Policy 및 리소스 기반 Policy(Key Policy, Bucket Policy 등)는 `Principal: "*"` 또는 `Action: "*"`과 같이 권한을 광범위하게 개방하여 작성해서는 안 되며, 각 리소스가 요구하는 최소 권한 원칙에 따라 권한을 부여해야 합니다.
 12. 모든 EC2 인스턴스는 별도 명시가 없는 한 `t3.medium` 사이즈를 사용합니다.
-13. 다이어그램의 구성은 실제 과제지의 아키텍처를 추상적으로 시각화한 이미지로, 실제 과제지의 지시와 일부 개수(Subnet 등)가 다를 수 있다는 점에 주의합니다.
+13. 다이어그램의 구성은 실제 과제지의 아키텍처를 추상적으로 시각화한 이미지로, 실제 과제지의 지시와 일부(Subnet 개수 등) 다를 수 있다는 점에 주의합니다.
 14. 채점을 위해 Private Subnet에 `unicorn-mark` 이름을 가진 CloudShell VPC Environment를 구성합니다. 해당 쉘 안에서 `kubectl` 등의 명령어를 조작함에 유의합니다. 해당 쉘은 구성한 모든 리소스에 접근이 가능해야 합니다.
 
 ---
@@ -129,12 +129,12 @@ App을 배포하기 위해 EKS를 사용합니다. 고가용성을 고려하여 
 
 - 제공된 Book App은 `unicorn` 네임스페이스에서 실행해야 하며, `unicorn-book-app-deploy`, `unicorn-book-app-svc` 이름을 가지도록 Deployment와 Service를 구성합니다.
 - 배포 시 컨테이너 이름은 `book`으로 설정합니다.
-- Pod의 비정상 상태에서 App이 자동으로 복구되며, 준비되지 않은 Pod에 트래픽이 전달되지 않도록 `/health` 엔드포인트를 활용한 Liveness / Readiness Probe를 구성합니다.
+- App의 비정상 상태에서 Pod가 자동으로 복구되며 준비되지 않은 Pod에 트래픽이 전달되지 않도록 `/health` 엔드포인트를 활용한 Liveness / Readiness Probe를 구성합니다.
 - 배포 또는 노드 교체 시 진행 중인 요청이 유실되지 않도록 App Pod는 종료 시 preStop hook과 `terminationGracePeriodSeconds`를 통해 graceful shutdown이 보장되어야 합니다.
 
 ### Security
 
-클러스터의 Authentication mode는 EKS Access Entry를 사용하도록 하며, `aws-auth ConfigMap` 방식은 사용하지 않습니다. Book App Pod에 사용되는 Identity Role의 Trust Policy는 본 클러스터에서만 사용 가능하도록 명시하며, 최소 권한 원칙에 따라 Book App 동작에 반드시 필요한 권한만으로 구성하도록 합니다.
+클러스터의 Authentication mode는 EKS Access Entry를 사용하도록 하며, `aws-auth ConfigMap` 방식은 사용하지 않습니다. Book App이 사용되는 Pod Identity Role의 Trust Policy는 본 클러스터에서만 사용 가능하도록 명시하며, 최소 권한 원칙에 따라 Book App 동작에 반드시 필요한 권한만으로 구성하도록 합니다.
 
 ---
 
@@ -152,21 +152,21 @@ App을 배포하기 위해 EKS를 사용합니다. 고가용성을 고려하여 
 
 ### 10-1. Application Load Balancer
 
-고객이 app에 접근할 수 있도록 ALB를 구성합니다. (CloudFront를 거치지 않는 모든 내부망 포함) 요청을 거절하고자 Internal ALB로 구성합니다. GET 요청은 Lambda로 라우팅되어 예약 조회 기능을 제공하며, POST 요청 및 `GET /health`는 Book App으로 라우팅되도록 합니다.
+고객이 app에 접근할 수 있도록 ALB를 구성합니다. CloudFront를 거치지 않는 모든(내부망 포함) 요청을 거절하고자 Internal ALB로 구성합니다. GET 요청은 Lambda로 라우팅되어 예약 조회 기능을 제공하며, POST 요청 및 `GET /health`는 Book App으로 라우팅되도록 합니다.
 
 - **ALB/TG Name** : `unicorn-alb` / `unicorn-tg`
 - **ALB Listening Port** : HTTP 80
 
 ### 10-2. CloudFront CDN
 
-고객이 접근할 Endpoint를 제공하기 위해 Pay-as-you-go 형태의 CloudFront Distribution을 `unicorn-svc-cf` 이름으로 생성합니다. Distribution은 두 개의 Origin을 가지며, S3 버킷에 대한 Origin은 OAC를 통해서만 접근하도록 구성하고, S3 버킷 정책은 해당 Distribution의 ARN만 허용하도록 합니다. 요청을 처리하기 위한 Origin은 `unicorn-alb`를 VPC Origin으로 연결하여 인터넷 노출 없이 Internal ALB로 트래픽이 도달하도록 합니다. 정적 asset 등 GET 요청에 대한 응답이 캐싱되도록 설정합니다.
+고객이 접근할 Endpoint를 제공하기 위해 Pay-as-you-go 형태의 CloudFront Distribution을 `unicorn-svc-cf` Comment를 가지도록 하여 생성합니다. Distribution은 두 개의 Origin을 가지며, S3 버킷에 대한 Origin은 OAC를 통해서만 접근하도록 구성하고, S3 버킷 정책은 해당 Distribution의 ARN만 허용하도록 합니다. 요청을 처리하기 위한 Origin은 `unicorn-alb`를 VPC Origin으로 연결하여 인터넷 노출 없이 Internal ALB로 트래픽이 도달하도록 합니다. 정적 asset 등 GET 요청에 대한 응답이 캐싱되도록 설정합니다.
 
 ### 10-3. WAF
 
-`us-east-1` 리전에 Web ACL을 구성하고 CloudFront Distribution에 연결하여 어플리케이션 계층 공격을 차단합니다. 이름을 `unicorn-waf`로 가지며, 기본 동작은 Allow로 설정합니다.
+`us-east-1` 리전에 Web ACL을 구성하고 CloudFront Distribution에 연결하여 어플리케이션 계층 공격을 차단합니다. `unicorn-waf` 이름을 가지며, 기본 동작은 Allow로 설정합니다.
 
-- AWS Managed Rule Groups로 `AWSManagedRulesCommonRuleSet`과 `AWSManagedRulesKnownBadInputsRuleSet`을 attach 합니다. 두 Rule Group의 Override action은 모두 None으로 두며, 별도의 rule-level override 없이 그대로 적용합니다.
-- IP Rate Limiting 기반 Custom Rule `unicorn-rate-limit`을 생성하여 적용합니다. 동일 클라이언트 IP가 60초 내에 50건을 초과하여 요청 시 차단되도록 Rate-Based Statement를 구성합니다.
+- AWS Managed Rule Groups로 `AWSManagedRulesCommonRuleSet`과 `AWSManagedRulesKnownBadInputsRuleSet`을 attach 합니다. 필요할 경우 하기 Custom Response 지정을 위해 override를 진행할 수 있으며, 채점 시 XSS 공격을 진행함에 유의합니다.
+- IP 기반 Rate Limiting을 위한 Custom Rule `unicorn-rate-limit`를 생성하여 적용합니다. 동일 클라이언트 IP가 60초 내에 50건을 초과하여 요청 시 차단되도록 Rate-Based Statement를 구성합니다.
 - 차단 시 응답은 `HTTP 403`, `Request blocked by Unicorn WAF`여야 합니다.
 - 평가 결과는 `aws-waf-logs-unicorn` LogGroup으로 전송되어야 하며, Log Group은 Platform CMK로 암호화되어야 합니다.
 
@@ -174,7 +174,7 @@ App을 배포하기 위해 EKS를 사용합니다. 고가용성을 고려하여 
 
 ## 11. Security
 
-Audit 및 보안 사고 대응에 사용하기 위한 IAM Role을 구성합니다. 해당 Role은 동일 계정의 IAM Principal이 External ID와 함께 Assume 했을 때만 사용 가능해야 하며, External ID가 없거나 일치하지 않는 경우 Assume Role이 거부되어야 합니다. Role의 최대 세션 시간은 1시간으로 제한하며, 부여되는 권한은 6번 DynamoDB 테이블에 대한 조회와 1번 VPC, 8번 EKS Cluster에 대한 Describe 액션으로 한정합니다. 와일드카드 액션 및 리소스는 사용해서는 안 됩니다.
+Audit 및 보안 사고 대응에 사용하기 위한 IAM Role을 구성합니다. 해당 Role은 동일 계정의 IAM Principal이 External ID와 함께 Assume 했을 때만 사용 가능해야 하며, External ID가 없거나 일치하지 않는 경우 Assume Role이 거부되어야 합니다. Role의 최대 세션 시간은 1시간으로 제한하며, 부여되는 권한은 6번 DynamoDB 테이블에 대한 조회와 1번 VPC, 8번 EKS Cluster에 대한 Describe 액션으로 한정합니다. Inline Policy를 사용하며, 와일드카드 액션 및 리소스는 사용해서는 안 됩니다.
 
 - **IAM Role Name / External ID** : `unicorn-audit-role` / `unicorn-audit-2026<선수등번호>`
 
@@ -196,9 +196,9 @@ CloudWatch Logs로 전송된 로그는 아래와 같은 형식으로 구성되�
 
 ### EKS Metrics Monitoring
 
-EKS Cluster 및 Book App의 상세 메트릭은 EKS 위에 설치형 Prometheus, Grafana를 통해 수집하고 시각화합니다. EKS는 관리형 Control Plane을 사용하기 때문에 노출되지 않는 컴포넌트에 대한 메트릭 수집은 비활성화되어야 합니다. CloudWatch Metrics의 경우, Exporter를 비롯해 여러 방법을 사용 가능하며 선수가 다양한 방법으로 수집할 수 있습니다.
+EKS Cluster 및 Book App의 상세 메트릭은 EKS 위에 설치형 Prometheus, Grafana를 통해 수집하고 시각화합니다. EKS는 관리형 Control Plane을 사용하기 때문에 노출되지 않는 컴포넌트에 대한 메트릭 수집은 비활성화되어야 합니다. 메트릭의 경우, CloudWatch Metrics Exporter를 비롯해 여러 방법을 사용 가능하며, 선수가 다양한 방법으로 수집할 수 있습니다.
 
-Grafana는 ALB를 통해 외부에서 접근 가능해야 하며, 관리자 계정으로 로그인하여 `unicorn-grafana-dashboard` 이름의 대시보드를 확인할 수 있어야 합니다. 대시보드에는 아래 예시 이미지와 똑같이 구성하여야 하며, 클러스터의 EKS 노드 CPU/Memory 사용률(Time Series), unicorn 네임스페이스의 Pod 상태(Stat, graph 포함), Book App Ready Pod 수(Stat), HTTP 요청 응답 시간(Time Series)을 시각화하는 패널을 구성합니다.
+Grafana는 ALB를 통해 외부에서 접근 가능해야 하며, 관리자 계정으로 로그인하여 `unicorn-grafana-dashboard` 이름의 대시보드를 확인할 수 있어야 합니다. 대시보드에는 아래 예시 이미지와 똑같이 구성하여야 하며, EKS 클러스터의 노드 CPU/Memory 사용률(Time Series), unicorn 네임스페이스의 Pod 상태(Stat, graph 포함), Book App의 Ready Pod 수(Stat), HTTP 요청 응답 시간(Time Series)을 시각화하는 패널을 구성합니다.
 
 Panel Type은 전술한 타입을 사용하며, 정확한 Panel의 이름, 구성, 배치, 디자인 등은 아래 이미지대로 구성합니다. 단, 텍스트가 잘린 부분은 잘린 부분까지만 작성하여도 정답 인정합니다.
 
@@ -226,4 +226,4 @@ Book App은 예약 정보를 받아 DB에 저장하는 POST API를 제공합니�
 
 | API | Request | Response | Description |
 |---|---|---|---|
-| `POST /v1/book` | `application/json`<br>- `client_id`: Client ID (String)<br>- `username`: 구매자 이름 (String)<br>- `email`: 구매자 이메일 (String)<br>- `concert_name`: 콘서트 (String)<br>- Sample: `'{"client_id": "C001", "username": "Alice", "email": "kim@example.com", "concert_name": "Seoul2025"}'` | Code 200<br>- `booking_id`: 유니크 예약 ID (String)<br>Sample: `{"booking_id": "C2011YY"}` | 요청의 HTTP Body에 있는 필드 값과 `created_at` 필드가 DynamoDB 테이블에 저장됩니다. |
+| `POST /v1/book` | `application/json`<br>- `client_id`: Client ID (String)<br>- `username`: 구매자 이름 (String)<br>- `email`: 구매자 이메일 (String)<br>- `concert_name`: 콘서트 (String)<br>- Sample: `'{"client_id": "C001", "username": "Alice", "email": "kim@example.com", "concert_name": "Seoul2025"}'` | Code 200<br>- `booking_id`: 유니크 예약 ID (String)<br>Sample: `{"booking_id": "C2011YY"}` | HTTP 요청의 Body에 있는 필드 값과 `created_at` 필드가 DynamoDB 테이블에 저장됩니다. |
