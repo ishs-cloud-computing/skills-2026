@@ -37,7 +37,6 @@
 | set-02 | [대조표](#set-02-task-1) | [대조표](#set-02-task-2) | [task-2](#set-02-task-2--추가-가능-문항) |
 | set-03 | [대조표](#set-03-task-1) | — | [task-1](#set-03-task-1--추가-가능-문항) |
 | set-07 | [대조표](#set-07-task-1) | [대조표](#set-07-task-2) | [task-1](#set-07-task-1--추가-가능-문항) · [task-2](#set-07-task-2--추가-가능-문항) |
-| set-08 | [대조표](#set-08-task-2) |  [task-2](#set-08-task-2--추가-가능-문항) |
 | task-3 | [대조표](#task-3) | | [대처](#task-3--추가-가능-문항) |
 
 세트 번호를 모르면 [세트 식별표](#세트-식별표)로 먼저 판별한다.
@@ -185,12 +184,11 @@ flowchart LR
 | 대기 | 실측 | 출처 |
 | --- | --- | --- |
 | MSK 클러스터 | **31분 40초** (모듈 전체 35분, destroy 23분) | set-02 m4 |
-| eksctl 클러스터 | **19~20분** (삭제 8분) | set-08 task-2 |
-| CloudFront 배포 | 5~10분 | set-08 task-1 |
-| DocumentDB 인스턴스 | 3분 44초 (모듈 전체 5~7분) | set-08 m1 |
-| NAT GW | ~2분 | set-08 m4 |
-| 그 외 모듈 apply | 1~3분 | set-07·set-08 |
-| mark 스크립트 | 1~3분 (kubectl 설치·sleep 포함은 ~11분) | set-08 task-2 |
+| eksctl 클러스터 | **19~20분** (삭제 8분) | set-07 task-2 m3 |
+| CloudFront 배포 | 5~10분 | set-03 task-1 |
+| NAT GW | ~2분 | set-02 / set-07 |
+| 그 외 모듈 apply | 1~3분 | set-02 · set-07 |
+| mark 스크립트 | 1~3분 (kubectl 설치·sleep 포함은 ~11분) | set-07 task-2 |
 
 **긴 것부터 건다.** MSK·EKS·CloudFront·RDS/DocumentDB 가 든 모듈을 먼저 치환해 먼저 apply 를 걸고, 1~3분짜리 모듈을 그 대기 시간에 채운다. 순서를 반대로 잡으면 마지막 30분이 통째로 대기가 된다.
 
@@ -285,22 +283,22 @@ terraform apply     # 여기서 이 창을 두고 다음 모듈로 넘어간다
 
 | #  | 모듈                     | 필수 서비스                          | 구현 있는 세트                  |
 | -- | ------------------------ | ------------------------------------ | ------------------------------- |
-| 1  | NoSQL                    | DynamoDB or DocumentDB               | set-07 m1, set-08 m1            |
+| 1  | NoSQL                    | DynamoDB or DocumentDB               | set-07 m1                       |
 | 2  | CDN                      | CloudFront                           | set-07 m2                       |
-| 3  | EKS Scaling              | EKS                                  | set-07 m3, set-08 m4 |
+| 3  | EKS Scaling              | EKS                                  | set-07 m3                       |
 | 4  | Real-time data analytics | VPC, EC2, ELB, Managed Flink         | set-02 m2                       |
-| 5  | VPC Lattice              | VPC                                  | set-08 m2            |
+| 5  | VPC Lattice              | VPC                                  | **없음** — `shared/addons/lattice-hardening/` |
 | 6  | Workflow                 | S3, Lambda, DynamoDB, Step Functions | set-02 m1                       |
-| 7  | Cloud event handling     | VPC, EC2                             | set-02 m3, set-08 m3            |
+| 7  | Cloud event handling     | VPC, EC2                             | set-02 m3                       |
 | 8  | RDS Connection           | RDS, VPC                             | **없음** — `shared/addons/rds-connection/` |
 | 9  | VPN                      | Client VPN, VPC, EC2                 | **없음** — `shared/addons/client-vpn/` |
 | 10 | Keycloak                 | VPC, EC2, IAM, Keycloak              | **없음** — `shared/addons/keycloak/` |
-| 11 | Container logging        | VPC, Loki, Grafana, EKS, EC2         | set-07 m4            |
-| 12 | REST API Implement       | Lambda                               | **없음** — `shared/addons/`                       |
+| 11 | Container logging        | VPC, Loki, Grafana, EKS, EC2         | set-07 m4                       |
+| 12 | REST API Implement       | Lambda                               | **없음** — `shared/addons/`     |
 | 13 | MSK                      | MSK, VPC                             | set-02 m4                       |
 
 - 구현이 있는 모듈이면 **그 세트 디렉토리를 통째로 복사**하고 이름·리전만 교체한다. 처음부터 쓰지 않는다.
-- 8·9·10 은 어느 세트에도 없다. 이게 걸리면 `shared/addons/` 의 해당 키트로 시작하되 **시간을 여기에 먼저 배분**한다.
+- 5·8·9·10·12 는 현재 세트에 없다. 이게 걸리면 `shared/addons/` 의 해당 키트로 시작하되 **시간을 여기에 먼저 배분**한다.
   진입점(문서·가장 가까운 재료·시간 함정)은 [DOC-LINKS 6절](DOC-LINKS.md#6-구현이-없는-카탈로그--맨몸-진입점) 에 정리돼 있다.
   8(RDS Connection)은 `task-3/terraform/rds.tf`·`rds-proxy.tf` 가 사실상 완성된 재료다.
 
@@ -349,7 +347,7 @@ New-Item -ItemType Directory set-XX/task-2/provided/module-5
 배부물은 `provided/` 규칙과 같이 **원본 그대로** 둔다. 구현 코드가 그걸 참조하게 만든다.
 | 과제 | 덮어쓸 경로 | 참조 방식 |
 | --- | --- | --- |
-| task-1 | `shared/provided/task-1/` | 런북이 `app/` 으로 복사(set-03) 또는 빌드 컨텍스트로 직접 지정(set-08) |
+| task-1 | `shared/provided/task-1/` | 런북이 `app/` 으로 복사(set-03) 또는 빌드 컨텍스트로 직접 지정(set-07) |
 | task-2 | `set-XX/task-2/provided/module-N/` | terraform 이 `file()`·`base64gzip(file())` 로 직접 읽음 |
 
 ```powershell
@@ -429,7 +427,6 @@ docker push "${ECR}:v2"
 
 1절 종이 대조와 5절 신규 문항 매핑에서 쓰는 표. 각 세트 README 에는 여기로 오는 링크만 남겼다.
 필요한 세트에는 **대조표**(축 / 준비본 값 / 다르면 고칠 곳)를 두고, 각 세트에는 **추가 가능 문항**(기존 문항 뒤에 붙을 수 있는 꼬리 지시문 / 근거 / 대처)을 둔다.
-**set-08 task-1 은 대조표 미작성** — 해당 세트가 걸리면 그 README 의 변수 목록(`variables.tf`)으로 직접 대조한다.
 
 - ⚠ 가 붙은 축은 tfvars 한 줄로 끝나지 않는다 — "고칠 곳" 의 파일을 같이 고친다.
 - 추가 가능 문항의 "근거" 는 같은 카탈로그 번호의 다른 세트 채점 항목이거나 흔한 채점 항목이다. "(추정)" 표기는 근거가 약한 후보다.
@@ -445,7 +442,6 @@ docker push "${ECR}:v2"
 | set-02 | 접두어 `wskorea26`, "Korea Skills Concert", VPC `172.16.0.0/16`, AZ **c/d**, EKS + Grafana(`skills-<비번호>-admin`), 채점 SG `wskorea26-vpc-environment-sg` | 접두어 `wsc2026`, **Workflow(성적 CSV) / Real-time analytics(Flink Studio) / Event handling / MSK(센서)**, 리전 `ap-southeast-1 / ap-northeast-2 / eu-west-1 / ap-northeast-1`, VPC `analytics-vpc`·`event-vpc`·`msk-vpc` |
 | set-03 | 회사 **skills.inc**, 접두어 `wsc2026`, VPC `wsc2026-skills-vpc` `192.168.0.0/16` + `hub`/`app` 서브넷, CMK 5개, CloudFront `/booking`, Lambda Function URL, Grafana 비번 `Skills$#$@!` | 없음 |
 | set-07 | **Unicorn Tickets**, 접두어 `unicorn-`, VPC `10.97.0.0/16` 3AZ, KMS `unicorn-kms-{app,data,platform}`, WAF `Request blocked by Unicorn WAF`, 채점 VPC env `unicorn-mark` | "Small Challenge", **NoSQL(BigBae Trains) / CDN Function(SkillsPhone) / EKS Scaling(SkillsMarket) / EKS O11y**, 리전 `ap-southeast-1 / us-east-1 / ap-northeast-2 / ap-northeast-1`, 접두 `bigbae-nosql-`·`skillsphone-cdn-ab-`·`skm-`·`o11y-`, EC2 `t3.small` |
-| set-08 | 접두어 `skills-book`, **ECS Fargate**(EKS 아님) + CloudFront, `X-Origin-Verify`, S3 `skills-book-static-2026-<비번호>`, 4xx/5xx Metric Filter 네임스페이스 `Skills/CloudComputing/Task1`, Private Subnet + NAT, PK `booking_id` | "Small Challenges", 접두어 `skills-nosql / skills-lattice / skills-ceh / skills-sqs`, 리전 **서울·도쿄·싱가포르·오레곤**, DocumentDB `retail_dataset.json`, `skills-ceh-protected-sg`, EKS **Fargate 컨트롤러** + KEDA + Karpenter |
 | task-3 | "System operation" 3시간, Go 바이너리 `user`·`product`·`stress`, `load_user.dump`, `apdev-rds-instance`, `/images/<path>`, `t3.medium` 단일, "Fargate·Lambda 사용 불가" | — |
 
 ### set-02
@@ -584,8 +580,8 @@ docker push "${ECR}:v2"
 
 | 후보 | 근거 | 대처 |
 |---|---|---|
-| Lambda timeout ≥30·Handler 지정·로그 그룹 `/aws/lambda/<fn>` 존재·보존기간 | set-08 m3 task 5-3 / mark 3-3·3-5 (같은 카탈로그 7) | `set-08/task-2/module-3-event-handling/terraform/lambda.tf` 의 `aws_cloudwatch_log_group` 선생성 + `timeout` 변수 패턴 복사, `lambda.tf` `lambda_timeouts` 로컬에 값 |
-| 복구 SLA "180초 이내" / Lambda 직접 invoke 검증 | set-08 유의사항 10, mark 3-5 | 이미 동작 — `README.md` §3 복구 테스트에 `aws lambda invoke` 경로 추가만 |
+| Lambda timeout ≥30·Handler 지정·로그 그룹 `/aws/lambda/<fn>` 존재·보존기간 | 카탈로그 7 흔한 채점 | `shared/addons/lambda-hardening/` 의 `aws_cloudwatch_log_group` 선생성 + `timeout` 변수 패턴 복사, `lambda.tf` `lambda_timeouts` 로컬에 값 |
+| 복구 SLA "180초 이내" / Lambda 직접 invoke 검증 | 이벤트 복구 검증 | 이미 동작 — `README.md` §3 복구 테스트에 `aws lambda invoke` 경로 추가만 |
 | CloudTrail 로그 파일 검증·멀티리전·CloudWatch Logs 전달·KMS | CloudTrail 흔한 항목 | `cloudtrail.tf` 에 `enable_log_file_validation=true`, `is_multi_region_trail=true`(현재 false) 한 줄; Logs 전달·KMS: `shared/addons/cloudtrail-hardening/` |
 | SNS 이메일 구독 / SNS KMS | 과제지 "관리자에게 알림" 구체화 | `shared/addons/cw-alarms/` (`aws_sns_topic_subscription` email, `kms_master_key_id`) |
 | Config 룰 추가(예: `EC2_INSTANCE_NO_PUBLIC_IP`, `ENCRYPTED_VOLUMES`) / Config 자동 교정(SSM Automation) | mark 3-3 Config 룰 패턴 확장 | 룰은 `config.tf` `aws_config_config_rule` 블록 복사 + 이름 변수 추가; 자동 교정: `shared/addons/eventbridge-security-rules/` (`aws_config_remediation_configuration`) |
@@ -656,7 +652,7 @@ docker push "${ECR}:v2"
 
 | 후보 | 근거 | 대처 |
 |---|---|---|
-| CloudWatch 메트릭 필터 + 알람(4xx/5xx) | Observability 옵션 확장. set-08 task-1 §9 (`skills-book-4xx-filter`·`-alarm`, Namespace `Skills/CloudComputing/Task1`) | `set-08/task-1/terraform/cloudwatch.tf` 의 `aws_cloudwatch_log_metric_filter`×2 + `aws_cloudwatch_metric_alarm`×2 복사. 로그 그룹은 기존 `aws_cloudwatch_log_group.book_app` 참조, filter pattern 은 fluent-bit 가 내보내는 JSON(`status` 필드)에 맞춰 `{ $.status = 4* }` 형으로 수정. 변수 `metric_namespace`·`alarm_threshold` 추가. 키트: `shared/addons/cw-alarms/` |
+| CloudWatch 메트릭 필터 + 알람(4xx/5xx) | Observability 옵션 확장 | `shared/addons/cw-alarms/` 의 `aws_cloudwatch_log_metric_filter`×2 + `aws_cloudwatch_metric_alarm`×2 복사. 로그 그룹은 기존 `aws_cloudwatch_log_group.book_app` 참조, filter pattern 은 fluent-bit 가 내보내는 JSON(`status` 필드)에 맞춰 `{ $.status = 4* }` 형으로 수정. 변수 `metric_namespace`·`alarm_threshold` 추가. 키트: `shared/addons/cw-alarms/` |
 | Container Insights (`amazon-cloudwatch-observability`) | 출제지침 예시 "모니터링 도구 설치"; `shared/addons/observability` 경로 A | `task-3/eksctl/cloudwatch-tuned.yaml` 의 addon 블록 복사 → `eksctl create addon --cluster wsc2026-eks-cluster --name amazon-cloudwatch-observability`. 기존 fluent-bit DaemonSet 과 로그 이중 수집 주의(addon 의 fluent-bit 이 `/var/log/containers` 도 읽음 — 네임스페이스 필터 extraFiles 패턴 같은 파일 참고). 요구 시 retention 은 `aws logs put-retention-policy` |
 | CloudWatch Logs 그룹 CMK 암호화 | KMS 옵션 확장. 로그 그룹 KMS/보존 일반 구성 "모든 CloudWatch Logs KMS", set-07 §8 "수집하는 모든 로그 Platform CMK" | `set-07/task-1/terraform/cloudwatch.tf` 의 `kms_key_id` + `kms.tf` 의 `AllowCloudWatchLogs` 키 정책 문장을 `kms.tf` 의 적절한 키(신규 `-logs-kms` 또는 `-eks-kms`)에 추가. 기존 로그 그룹에 in-place 적용 가능(재생성 없음). EKS Control Plane 로그 그룹(`/aws/eks/...`)은 EKS 가 만들므로 `aws logs associate-kms-key` 로 사후 연결. 키트: `shared/addons/kms/` |
 | VPC Flow Log | set-07 task-1 §3 "VPC Flow Log 활성화" (mark 1-3-A) | `set-07/task-1/terraform/flowlog.tf` 복사(로그 그룹+IAM role+`aws_flow_log`). 변수 `flow_log_group_name`·retention 추가, `vpc_id = aws_vpc.this.id` 로 교체. 키트: `shared/addons/vpc-flow-log/` |
@@ -712,19 +708,19 @@ docker push "${ECR}:v2"
 
 | 후보 | 근거 | 대처 |
 |---|---|---|
-| DynamoDB Gateway VPC Endpoint | 과제지 3 "App 서브넷은 외부 인터넷 경유 금지" + set-08 t1 mark 1-5(`com.amazonaws.<r>.dynamodb` Gateway), 동일한 VPC Endpoint 구성 | ``set-07/task-1/terraform/endpoints.tf`` 의 `aws_vpc_endpoint.dynamodb` 블록을 `set-07/task-1/terraform/endpoints.tf` 에 추가(route_table_ids = private RT). 기존 리소스 무영향. 키트: `shared/addons/vpc-endpoints/` |
-| CloudWatch Metric Filter + Alarm (4xx/5xx) | 옵션 Observability; set-08 t1 mark 6-2~6-4(필터명·알람명·Threshold·Period·TreatMissingData) | `set-08/task-1/terraform/cloudwatch.tf` 의 `aws_cloudwatch_log_metric_filter`·`aws_cloudwatch_metric_alarm` 복사, 로그그룹을 `/unicorn/eks/book-app`·패턴을 `{ $.status_code >= 400 }` 로. 이름 변수 추가. 키트: `shared/addons/cw-alarms/` (set-07 에는 alarm 없음 — 원본은 set-08) |
+| DynamoDB Gateway VPC Endpoint | 과제지 3 "App 서브넷은 외부 인터넷 경유 금지", VPC Endpoint 일반 구성 | ``set-07/task-1/terraform/endpoints.tf`` 의 `aws_vpc_endpoint.dynamodb` 블록을 `set-07/task-1/terraform/endpoints.tf` 에 추가(route_table_ids = private RT). 기존 리소스 무영향. 키트: `shared/addons/vpc-endpoints/` |
+| CloudWatch Metric Filter + Alarm (4xx/5xx) | 옵션 Observability | `shared/addons/cw-alarms/` 의 `aws_cloudwatch_log_metric_filter`·`aws_cloudwatch_metric_alarm` 복사, 로그그룹을 `/unicorn/eks/book-app`·패턴을 `{ $.status_code >= 400 }` 로. 이름 변수 추가. 키트: `shared/addons/cw-alarms/` |
 | Prometheus Alert 룰 / Alertmanager | 옵션 Observability; set-03 t1 mark 11-4(PodHighCPU·PodNotReady·HighErrorRate·PodCrashLooping 등 5종) | `set-03/task-1/k8s/monitoring/prometheus-rules.yaml`(PrometheusRule) 복사 + `kube-prometheus-stack-values.yaml` 에 alertmanager nodeSelector `unicorn=addon` 추가(`set-03/.../kube-prometheus-stack-values.yaml:51` 참고). 키트: `shared/addons/grafana-panels/` |
 | Grafana 패널·데이터소스 추가 (Pod CPU/Mem, 재시작 횟수, 네트워크 RX, CloudWatch 데이터소스) | set-07 t1 12-1~12-4, set-03 t1 11-2(datasources cloudwatch·alertmanager) | `set-02/task-1/k8s/monitoring/dashboard.json`·``set-07/task-1/k8s/monitoring/dashboard.json`` 패널을 `set-07/task-1/k8s/monitoring/dashboard.json` 에 추가; CloudWatch datasource 는 kube-prometheus-stack `grafana.additionalDataSources` + `unicorn-cwexporter-role` 권한 재사용(`iam.tf:87-105`). 키트: `shared/addons/grafana-panels/` |
 | Container Insights (amazon-cloudwatch-observability addon) | 옵션 Observability 예시 "모니터링 도구 설치"; `shared/addons/observability` 경로 A | `task-3/eksctl/cloudwatch-tuned.yaml` 의 addon 블록을 `eksctl/cluster.yaml` addons 에 추가(Pod Identity association 포함). 기존 클러스터엔 `eksctl create addon`. ⚠ operator Deployment 는 `nodeSelector unicorn=addon` configurationValues 필요(요구사항 8) |
-| Secrets Manager 시크릿 (App CMK 암호화) | 과제지 4 가 App CMK 용도로 Secrets Manager 를 명시하는데 준비본에 리소스가 없다 — 당일 "Grafana 관리자 계정을 Secrets Manager 에 저장" 류 추가 유력(추정) | `set-08/task-2/module-1-nosql/terraform/secrets.tf` 복사, `kms_key_id = aws_kms_key.app.arn`, 이름 변수 추가. 키트: `shared/addons/secrets-manager/` |
+| Secrets Manager 시크릿 (App CMK 암호화) | 과제지 4 가 App CMK 용도로 Secrets Manager 를 명시하는데 준비본에 리소스가 없다 — 당일 "Grafana 관리자 계정을 Secrets Manager 에 저장" 류 추가 유력(추정) | `shared/addons/secrets-manager/` 의 `secrets.tf` 복사, `kms_key_id = aws_kms_key.app.arn`, 이름 변수 추가. 키트: `shared/addons/secrets-manager/` |
 | WAF 룰 추가 (SQLi·IP reputation·geo·경로 scope-down) | 옵션 WAF 확장; `shared/addons/waf/README.md` "SQLi 룰셋", task-3 `waf.tf:63` | `set-07/task-1/terraform/waf.tf` 의 managed rule 블록을 복사해 `AWSManagedRulesSQLiRuleSet`/`AmazonIpReputationList` 추가(priority 충돌 주의). 차단 본문 필요하면 `waf_xss_rules` 방식으로 override. 키트: `shared/addons/waf-extra-rules/` |
-| CloudFront→ALB 커스텀 헤더 검증 (`X-Origin-Verify`) | set-02 t1 mark 7-2·8-4, set-08 t1 3-2·3-3 | `set-02/task-1/terraform/cloudfront.tf` origin `custom_header` + `alb.tf` 리스너 규칙(헤더 조건 → forward, 기본 403) 복사. 변수 `origin_verify_header`. ⚠ 현재 VPC Origin 규칙과 리스너 규칙 우선순위 재배치. 키트: `shared/addons/cloudfront-hardening/` |
-| DynamoDB TTL / Streams / 백업 | 카탈로그 1 확장(set-07 m1 Streams, set-08 m1 TTL) — 1과제 Database 항목 흔한 추가 | TTL: `shared/addons/dynamodb-hardening/`. Streams: `set-07/task-2/module-1-nosql/terraform/dynamodb.tf:9-10` 복사 |
+| CloudFront→ALB 커스텀 헤더 검증 (`X-Origin-Verify`) | set-02 t1 mark 7-2·8-4 | `set-02/task-1/terraform/cloudfront.tf` origin `custom_header` + `alb.tf` 리스너 규칙(헤더 조건 → forward, 기본 403) 복사. 변수 `origin_verify_header`. ⚠ 현재 VPC Origin 규칙과 리스너 규칙 우선순위 재배치. 키트: `shared/addons/cloudfront-hardening/` |
+| DynamoDB TTL / Streams / 백업 | 카탈로그 1 확장(set-07 m1 Streams) — 1과제 Database 항목 흔한 추가 | TTL: `shared/addons/dynamodb-hardening/`. Streams: `set-07/task-2/module-1-nosql/terraform/dynamodb.tf:9-10` 복사 |
 | ECR 수명주기 정책 / 이미지 수 제한 | ECR 항목 흔한 추가(취약점 0·태그 불변은 이미 있음) | `shared/addons/ecr-hardening/` (`aws_ecr_lifecycle_policy`) |
 | Lambda 확장 (X-Ray tracing, DLQ, reserved concurrency, 추가 쿼리 API) | 옵션 Lambda GET API; set-03 t1 `lambda.tf:61` Function URL | 추가 API 는 `lambda/index.py` + `alb.tf` 리스너 규칙; tracing/DLQ: `shared/addons/lambda-hardening/` |
 | EKS 보안 추가 (IMDS hop 1, 노드 egress 차단, 클러스터 DNS 도메인) | EKS 보안 확장 | IMDS: `eksctl/cluster.yaml` 노드그룹에 `disableIMDSv1` 이미 있음(hop limit 은 eksctl 기본 2 — 과제 나오면 LT 필요). 노드 egress 차단은 NAT 설계와 충돌 ⚠ (VPC endpoint 추가로 대응). DNS 도메인은 ``set-07/task-1/eksctl/cluster.yaml`` 참고 |
-| IRSA 전환 요구 (`eks.amazonaws.com/role-arn` annotation 채점) | 옵션 Security; set-08 m4 mark 4-2 | `shared/addons/irsa/README.md` "기존 클러스터에 당일 부착" — `eksctl utils associate-iam-oidc-provider` + `create iamserviceaccount --override-existing-serviceaccounts`. Pod Identity 는 그대로 두고 annotation 만 추가하는 경로 |
+| IRSA 전환 요구 (`eks.amazonaws.com/role-arn` annotation 채점) | 옵션 Security (IRSA) | `shared/addons/irsa/README.md` "기존 클러스터에 당일 부착" — `eksctl utils associate-iam-oidc-provider` + `create iamserviceaccount --override-existing-serviceaccounts`. Pod Identity 는 그대로 두고 annotation 만 추가하는 경로 |
 
 [↑ 세트 바로가기](#세트-바로가기)
 
@@ -802,12 +798,12 @@ docker push "${ECR}:v2"
 
 | 후보 | 근거 | 대처 |
 |---|---|---|
-| TTL 속성 (예: 예약 만료 자동 삭제) | 카탈로그 1; set-08 m1 3-3 TTL `expireAfterSeconds` | `shared/addons/dynamodb-hardening/` (`ttl {}` 블록 + `ttl_attribute` 변수, `dynamodb.tf`) |
-| SSE KMS CMK 암호화 / 삭제 보호 | set-07 t1 4-1-A, set-08 t1 5-2, **없음** — `shared/addons/` `dynamodb.tf:20` | `set-07/task-1/terraform/dynamodb.tf:39-44`(server_side_encryption+PITR) + `kms.tf` app 키 블록 복사. ⚠ SSE 변경은 in-place 가능, 이름 변경은 재생성 |
-| Secrets Manager + IAM 최소권한 (EC2 인스턴스 프로파일) | set-08 m1 3-4 secret 3키, mark 1-2 | `set-08/task-2/module-1-nosql/terraform/secrets.tf`·`iam.tf` 복사. 키트: `shared/addons/secrets-manager/` |
+| TTL 속성 (예: 예약 만료 자동 삭제) | 카탈로그 1 NoSQL 확장 | `shared/addons/dynamodb-hardening/` (`ttl {}` 블록 + `ttl_attribute` 변수, `dynamodb.tf`) |
+| SSE KMS CMK 암호화 / 삭제 보호 | set-07 t1 4-1-A | `set-07/task-1/terraform/dynamodb.tf:39-44`(server_side_encryption+PITR) + `kms.tf` app 키 블록 복사. ⚠ SSE 변경은 in-place 가능, 이름 변경은 재생성 |
+| Secrets Manager + IAM 최소권한 (EC2 인스턴스 프로파일) | 카탈로그 1 보안 확장 | `shared/addons/secrets-manager/` 의 `secrets.tf`·`iam.tf` 복사. 키트: `shared/addons/secrets-manager/` |
 | Lambda DLQ / 재시도·배치 설정 (ESM `batch_size`, `maximum_retry_attempts`, `bisect`) | 카탈로그 1 Streams 후처리 확장 | `lambda.tf:86-92` ESM 블록에 인자 추가. 키트: `shared/addons/lambda-hardening/` |
-| VPC 이름·CIDR·서브넷 지정, EC2 t3 외 타입 | set-08 m1 3-1 VPC 요구, 30% 변동으로 이름 지정 가능 | 이미 `variables.tf: vpc_name·vpc_cidr·subnet_cidr·instance_type` 로 변수화됨 |
-| DocumentDB 로 대체 출제 | 카탈로그 1 "DynamoDB or DocumentDB" | `set-08/task-2/module-1-nosql/` 통째 복사(`docdb.tf`·`secrets.tf`·`index_setup.py.tftpl`), 이름·리전만 교체 |
+| VPC 이름·CIDR·서브넷 지정, EC2 t3 외 타입 | 30% 변동으로 이름 지정 가능 | 이미 `variables.tf: vpc_name·vpc_cidr·subnet_cidr·instance_type` 로 변수화됨 |
+| DocumentDB 로 대체 출제 | 카탈로그 1 "DynamoDB or DocumentDB" | `shared/addons/docdb-hardening/` 통째 복사(`docdb.tf`·`secrets.tf`), 이름·리전만 교체 |
 
 ##### module-2-cdn-function
 
@@ -824,10 +820,10 @@ docker push "${ECR}:v2"
 
 | 후보 | 근거 | 대처 |
 |---|---|---|
-| Fargate Profile (keda/karpenter 를 Fargate 로) | set-08 m4 6-2, mark 4-1·4-3 | `set-08/task-2/module-4-sqs-scaling/eksctl/cluster.yaml` fargateProfiles 블록 복사. ⚠ 현재 addon NG 1/1/1 채점과 공존 설계 필요. 키트: `shared/addons/eks-scaling-variants/` |
-| TriggerAuthentication (`podIdentity.provider: aws`) 명시 | set-08 m4 6-6, mark 4-4 (`identityOwner: operator` 는 KEDA 3.0 deprecated) | `set-08/task-2/module-4-sqs-scaling/k8s/30-keda-scaledobject.yaml` 의 TriggerAuthentication 블록 복사 |
-| ScaledObject min 0 / pollingInterval·cooldownPeriod 지정 | set-08 m4 6-6(min 0 max 6, polling ≤15, cooldown ≤30), EKS Scaling 일반 구성 | `k8s/30-keda-scaledobject.yaml` 필드 추가(min 0 이면 `pollingInterval` 재도입 — NOTES 결정로그) |
-| SQS DLQ / VisibilityTimeout / 암호화 | set-08 m4 6-3(visibility ≥30) | `terraform/sqs.tf` 인자 추가 — `set-08/task-2/module-4-sqs-scaling/terraform/sqs.tf` 참고. 키트: `shared/addons/sqs-hardening/` |
+| Fargate Profile (keda/karpenter 를 Fargate 로) | EKS Scaling 확장 | `shared/addons/eks-scaling-variants/eksctl/fargate-profile.yaml` fargateProfiles 블록 복사. ⚠ 현재 addon NG 1/1/1 채점과 공존 설계 필요. 키트: `shared/addons/eks-scaling-variants/` |
+| TriggerAuthentication (`podIdentity.provider: aws`) 명시 | KEDA 스케일링 확장 | `shared/addons/eks-scaling-variants/k8s/30-keda-scaledobject.yaml` 의 TriggerAuthentication 블록 복사 |
+| ScaledObject min 0 / pollingInterval·cooldownPeriod 지정 | EKS Scaling 일반 구성 | `k8s/30-keda-scaledobject.yaml` 필드 추가(min 0 이면 `pollingInterval` 재도입 — NOTES 결정로그) |
+| SQS DLQ / VisibilityTimeout / 암호화 | SQS 확장 | `terraform/sqs.tf` 인자 추가 — `shared/addons/sqs-hardening/` 참고. 키트: `shared/addons/sqs-hardening/` |
 | App HPA 기반 CPU 스케일 병행 / PDB | EKS Scaling 일반 항목 | `set-07/task-1/k8s/app/pdb.yaml` 복사 |
 
 ##### module-4-container-logging
@@ -838,136 +834,6 @@ docker push "${ECR}:v2"
 | OTel 추가 프로세서(필터·속성 재작성) / 메트릭 파이프라인 | 카탈로그 11 수집기 확장 | `k8s/20-otel-collector.yaml` ConfigMap 수정 — 예시 `shared/addons/loki-retention/README.md` |
 | 노드 TZ KST 검증·노드 Name 태그 | set-07 m3 3-2 instanceName 채점 | `eksctl/cluster.yaml` NG 에 `instanceName` 추가(`module-3-eks-scaling/eksctl/cluster.yaml:95` 패턴) |
 | Grafana alerting (ERROR 건수 임계 알람) / Contact point | Observability 확장, set-03 t1 Alert | 키트: `shared/addons/grafana-panels/` (Grafana provisioning `alerting` values) |
-
-[↑ 세트 바로가기](#세트-바로가기)
-
-### set-08
-
-[↑ 세트 바로가기](#세트-바로가기)
-
-#### set-08 task-2
-
-4모듈 모두 `terraform.tfvars` 가 비어 있고 기본값이 과제지 값이다. **다른 값만 tfvars 에 적어 덮는다.**
-
-##### module-1-nosql (`ap-northeast-2`)
-
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 리전 | `ap-northeast-2` | `terraform/variables.tf: region` ⚠ (지급 앱 상수) |
-| VPC 이름·CIDR | `skills-nosql-vpc`(미채점) · `10.63.0.0/16` | `variables.tf: vpc_name`·`vpc_cidr` |
-| 서브넷·AZ | public `10.63.0.0/24`(`2a`) / DB `10.63.10.0/24`(`2a`)·`10.63.11.0/24`(`2c`) | `variables.tf: public_subnet_cidr`·`public_az`·`db_subnets`(맵 키 `skills-nosql-sn-db-a/c`) |
-| DocDB 클러스터·인스턴스 | `skills-nosql-docdb-cluster` / `skills-nosql-docdb-instance-1` (1대) | `variables.tf: docdb_cluster_identifier`·`docdb_instance_identifier` |
-| 인스턴스 클래스 | `db.t3.medium` | `variables.tf: docdb_instance_class` |
-| 포트 · TLS | `27017` · 기본 파라미터 그룹(TLS on) | `variables.tf: docdb_port` ⚠ / TLS 는 `docdb.tf` 기본값 |
-| 백업 보존 | `1`일 | `variables.tf: backup_retention_days` |
-| KMS | `alias/skills-nosql-docdb` (storage_encrypted) | `variables.tf: kms_alias` |
-| Secret | `skills-nosql-docdb-secret` 키 `username`/`password`/`host`, 마스터 `skillsadmin`·랜덤 24자 | `variables.tf: secret_name` ⚠ ·`docdb_master_username`; 키 이름은 `secrets.tf` 리터럴 |
-| DB 이름 | `skills_retail` | `terraform/index_setup.py.tftpl` `DATABASE_NAME` 리터럴 ⚠ (지급 앱 상수) |
-| 인덱스·TTL | orders 3·products 2·sessions 3(`expiresAt` TTL 0) | `terraform/index_setup.py.tftpl` ⚠ |
-| Client EC2 | `skills-nosql-client-ec2` · `t3.micro` · Public IP · 앱 `8080` · `global-bundle.pem` | `variables.tf: client_ec2_name`·`instance_type`·`app_port`; CA URL 은 `userdata.sh.tftpl` 리터럴 |
-
-⚠ **`region`·`secret_name`·DB 이름·포트는 지급 `docdb_client.py` 상수와 묶여 있다.** 지급 파일 자체가 바뀐 날에만 같이 바꾼다(NOTES 함정). 인덱스 사양 변경은 `index_setup.py.tftpl` 직접 수정.
-
-##### module-2-lattice (`ap-northeast-1`)
-
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 리전·AZ | `ap-northeast-1` · `1a` 단일 | `terraform/variables.tf: region`·`az` |
-| Client VPC | `skills-lattice-client-vpc` · `10.61.0.0/16` · 서브넷 `10.61.0.0/24` | `variables.tf: client_vpc_name`·`client_vpc_cidr`·`client_subnet_cidr` |
-| Service VPC | `skills-lattice-service-vpc` · `10.62.0.0/16` · 서브넷 `10.62.0.0/24` | `variables.tf: service_vpc_name`·`service_vpc_cidr`·`service_subnet_cidr` |
-| EC2 | `skills-lattice-client-ec2`(Public IP) / `skills-lattice-service-ec2`(Public IP 없음) · `t3.micro` | `variables.tf: client_ec2_name`·`service_ec2_name`·`instance_type` |
-| 포트 | client `80` / service `8080` / listener `80` | `variables.tf: client_port`·`service_port`·`listener_port` |
-| Service Network | `skills-lattice-sn` · Client VPC 연결 · assoc SG 80 from `10.61.0.0/16` | `variables.tf: sn_name`; SG 는 `sg.tf`(`client_port`·`client_vpc_cidr` 참조) |
-| Service | `skills-lattice-order-service` (auth NONE) · `SERVICE_URL` = dns_entry | `variables.tf: lattice_service_name`; `SERVICE_URL` 은 `ec2.tf` 가 terraform 참조로 주입 |
-| Target Group | `skills-lattice-order-tg` · INSTANCE · HTTP/8080 · `/health` | `variables.tf: tg_name`; 경로 `/health` 는 `lattice.tf` 리터럴 |
-| Listener | `skills-lattice-http-listener` · HTTP/80 → TG | `variables.tf: listener_name`·`listener_port` |
-| Service SG | 8080 from VPC Lattice managed prefix list **만** | `sg.tf` ⚠ |
-
-⚠ **module-2 service SG 에 CIDR 을 절대 추가하지 않는다.** 과제지가 `0.0.0.0/0` 허용 시 미충족을 명시한다.
-
-##### module-3-event-handling (`ap-southeast-1`)
-
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 리전·AZ | `ap-southeast-1` · `1a` | `terraform/variables.tf: region`·`az` |
-| VPC·서브넷 | `skills-ceh-vpc` · `10.73.0.0/16` · `10.73.0.0/24` (IGW 없음) | `variables.tf: vpc_name`·`vpc_cidr`·`subnet_cidr` |
-| EC2 | `skills-ceh-ec2` · `t3.micro` | `variables.tf: ec2_name`·`instance_type` |
-| 보호 SG | `skills-ceh-protected-sg` · Inbound 0 · egress 별도 리소스 | `variables.tf: protected_sg_name` |
-| SNS | `skills-ceh-alert-topic` (Standard, 구독 없음) | `variables.tf: topic_name` |
-| Lambda | `skills-ceh-remediate-fn` · timeout `30` · `python3.12` · `remediate_security_group.lambda_handler` · env `PROTECTED_SECURITY_GROUP_ID`/`SNS_TOPIC_ARN` | `variables.tf: lambda_function_name`·`lambda_timeout`; runtime·handler·env 키는 `lambda.tf` 리터럴 ⚠ |
-| Lambda 로그 그룹 | `/aws/lambda/skills-ceh-remediate-fn` (선생성, 7일) | `lambda_function_name` 파생 |
-| CloudTrail | `skills-ceh-cloudtrail` · 단일 리전 · 버킷 `skills-ceh-cloudtrail-<account_id>` | `variables.tf: trail_name` |
-| EventBridge | `skills-ceh-sg-change-rule` · default bus · `AuthorizeSecurityGroupIngress` | `variables.tf: rule_name`; 패턴은 `eventbridge.tf` 리터럴 |
-
-⚠ 과제지가 runtime/handler/감지 이벤트명을 바꾸면 `lambda.tf`·`eventbridge.tf` 직접 수정. 런북 실경로 검증은 apply 5분 후(새 Trail 지연).
-
-##### module-4-sqs-scaling (`us-west-2`)
-
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 리전 | `us-west-2` | `terraform/variables.tf: region` + `eksctl/cluster.yaml metadata.region` ⚠ |
-| 클러스터 | `skills-sqs-cluster` (버전 미지정, public+private 엔드포인트, API_AND_CONFIG_MAP) | `variables.tf: cluster_name` ⚠ + `eksctl/cluster.yaml metadata.name`·`tags` |
-| VPC·서브넷 | `10.64.0.0/16` · pub `10.64.0.0/24`,`10.64.1.0/24` · priv `10.64.10.0/24`,`10.64.11.0/24` · `2a`,`2b` | `variables.tf: vpc_cidr`·`subnets`(맵 키 `skills-sqs-sn-*`); `cluster.yaml vpc.subnets` 는 output 치환 |
-| Fargate Profile | `skills-sqs-fp-keda`(ns keda) / `skills-sqs-fp-karpenter`(ns karpenter) / +`skills-sqs-fp-kube-system` | `eksctl/cluster.yaml fargateProfiles` 리터럴 ⚠ |
-| SQS | `skills-sqs-queue` · Standard · visibility `30` | `variables.tf: queue_name`·`visibility_timeout` |
-| IRSA SA | `keda/keda-operator` · `karpenter/karpenter` · `skills-sqs/sqs-worker-sa` | `eksctl/cluster.yaml iam.serviceAccounts` 리터럴 ⚠ + helm `serviceAccount.name`(README 4단계) |
-| IAM | `skills-sqs-keda-policy`/`-worker-policy`/`-karpenter-policy` · `KarpenterNodeRole-skills-sqs-cluster` | `variables.tf: name_prefix`·`cluster_name` |
-| ECR | `skills-sqs-worker` (미채점) · python:3.12-slim + boto3 | `variables.tf: ecr_repo_name`; `app/Dockerfile` |
-| Worker | ns `skills-sqs` / Deployment `sqs-worker` / label `app=sqs-worker` / env `SQS_QUEUE_URL`·`AWS_REGION`·`PROCESSING_SECONDS=5` / nodeSelector `karpenter.sh/nodepool=skills-sqs-nodepool`,`skills-nodepool=event-worker` / req 500m·512Mi | `k8s/00-namespace.yaml`·`k8s/20-deployment.yaml` 리터럴 ⚠ |
-| KEDA | ScaledObject `sqs-worker-scaledobject` / TriggerAuth `sqs-worker-trigger-auth`(`aws-eks`) / min `0` max `6` / queueLength `2` / polling `15` / cooldown `30` | `k8s/30-keda-scaledobject.yaml` 리터럴 ⚠ |
-| Karpenter | NodePool `skills-sqs-nodepool`(label `skills-nodepool=event-worker`, `t3.medium`/`t3.large`, on-demand, `WhenEmpty`/30s, limit cpu 16) / EC2NodeClass `skills-sqs-nodeclass`(AL2023) | `k8s/10-karpenter-nodepool.yaml` 리터럴 ⚠ |
-| helm | release `karpenter`(ns karpenter, `settings.clusterName=skills-sqs-cluster`) / `keda`(ns keda) — Deployment 이름 `karpenter`/`keda-operator` 고정 조회 | `README.md` 4단계 리터럴 ⚠ |
-
-⚠ **module-4 `cluster_name` 을 바꾸면 tfvars 로 안 끝난다.** `k8s/10-karpenter-nodepool.yaml` 의 `subnetSelectorTerms`(`karpenter.sh/discovery`)·`securityGroupSelectorTerms`(`aws:eks:cluster-name`) 태그 값과 `eksctl/cluster.yaml` 의 `metadata.name`·`tags`, README helm `--set settings.clusterName` 이 이름을 리터럴로 재조립한다. 놓치면 Karpenter 가 서브넷·SG 를 못 찾아 노드 프로비저닝이 조용히 실패한다.
-⚠ **k8s 오브젝트 이름·수치는 전부 manifest 리터럴.** 4-4 가 env 전체를 덤프하므로 env 추가 금지, helm release 이름 변경 금지(4-3 고정 조회).
-
-#### set-08 task-2 — 추가 가능 문항
-
-##### module-1-nosql
-
-| 후보 | 근거 | 대처 |
-|---|---|---|
-| DocDB 파라미터 그룹 명시(TLS enabled / audit·profiler 로그 CloudWatch 내보내기) | DocDB 흔한 채점(암호화·로깅), 현재 기본 PG 의존 | 키트: `shared/addons/docdb-hardening/` (`aws_docdb_cluster_parameter_group` tls/audit_logs + `enabled_cloudwatch_logs_exports`) |
-| 삭제 방지·백업 윈도우·보존 연장 | 과제지 3-2 "1일 이상" → 수치 상향 가능 | `variables.tf: backup_retention_days`; `deletion_protection`은 `docdb.tf` 한 줄 |
-| 읽기 복제 인스턴스 추가(`-instance-2`) | 고가용성 흔한 변형 | `docdb.tf` `aws_docdb_cluster_instance` count 화 + 이름 변수 — ⚠ db.t3.medium 1대 추가 비용 |
-| Secrets Manager 자동 회전 / KMS 로 Secret 암호화 | Secret 계열 확장, task-1 KMS 옵션과 동형 | `secrets.tf` `kms_key_id=aws_kms_key.docdb.arn` 한 줄; 회전: `shared/addons/secrets-manager/` |
-| 컬렉션·인덱스·TTL 추가 | 과제지 3-3 표 행 추가 형태 | `terraform/index_setup.py.tftpl` 인덱스 목록에 항목 추가 후 재apply(`seed` 루프 재실행) |
-| DynamoDB 로 출제(카탈로그 1번 "or DynamoDB") — GSI·Streams→Lambda·PITR | set-07 m1 task 1~3절, mark 1-1-A~1-3-A | set-07/task-2/module-1-nosql `terraform/dynamodb.tf`·`lambda.tf`(event source mapping) 복사, 테이블·GSI·함수명 변수 |
-| Client EC2 IAM 최소권한·Secrets VPC Endpoint | 최소권한·네트워크 흔한 항목 | `iam.tf` 는 이미 최소권한; Endpoint 는 set-07 task-1 `terraform/endpoints.tf` interface 블록 참고 |
-
-##### module-2-lattice
-
-| 후보 | 근거 | 대처 |
-|---|---|---|
-| Listener Rule 헤더 기반 라우팅 + 가중치 TG 2개 | VPC Lattice 구성 | `set-08/task-2/module-2-vpc-lattice` 의 `aws_vpclattice_listener_rule.v1/v2`·TG v2 복사; 두 번째 service EC2 는 `ec2.tf` 복제. 키트: `shared/addons/lattice-hardening/` |
-| Service VPC 도 SN 에 연결 | VPC Lattice 구성 | `lattice.tf` `aws_vpclattice_service_network_vpc_association` 블록 복제(`aws_vpc.service`) |
-| Lattice Auth Policy(IAM 인증) | 카탈로그 "VPC" 필수 외 보안 확장 | 키트: `shared/addons/lattice-hardening/` (`aws_vpclattice_auth_policy`, auth_type `AWS_IAM`) |
-| Lattice 액세스 로그(CloudWatch/S3) | 로깅 계열 흔한 항목 | 키트: `shared/addons/lattice-hardening/` (`aws_vpclattice_access_log_subscription`) |
-| 커스텀 도메인·HTTPS 리스너 | Lattice 흔한 변형 | ACM 필요, 출제 가능성 낮음(추정) |
-
-##### module-3-event-handling
-
-| 후보 | 근거 | 대처 |
-|---|---|---|
-| EventBridge 룰 추가(IAM Role 변경·인스턴스 종료·타입 변경·정지) | set-02 m3 4절 룰 4개, mark 3-2 | set-02/task-2/module-3-event `terraform/eventbridge.tf` 의 `role_change`·`ec2_terminate`·`ec2_type_change`·`ec2_stop` 블록 복사, 이름 변수 추가; Lambda 는 지급 파일이 처리 가능한 이벤트만. 패턴 모음: `shared/addons/eventbridge-security-rules/` |
-| AWS Config 룰(SSH 개방·필수 태그) | set-02 m3 mark 3-3(`wsc2026-sg-ssh-rule`·`required-tags-rule`) | set-02 m3 `terraform/config.tf`(recorder·delivery channel·2 rule) 복사, 룰 이름·태그 키 변수 |
-| SNS 구독(이메일) / Lambda DLQ | 알림 계열 확장 | `sns.tf` 에 `aws_sns_topic_subscription`(protocol email, 확인 수동); DLQ 는 `lambda.tf` `dead_letter_config` + SQS. 키트: `shared/addons/cw-alarms/`·`shared/addons/lambda-hardening/` |
-| CloudTrail 관리 이벤트 Read/Write 명시·로그 파일 검증·다중 리전 | set-02 m3 5절("Management Events Read/Write") | `cloudtrail.tf` 에 `event_selector{read_write_type="All"}`·`enable_log_file_validation` 추가. 키트: `shared/addons/cloudtrail-hardening/` |
-| Lambda 오류 알람 / 로그 보존 | 운영 계열 흔한 항목 | `aws_cloudwatch_metric_alarm`(Errors≥1) — set-08 task-1 `terraform/cloudwatch.tf` 알람 블록 복사 |
-| EC2 IAM Role 지정 | set-02 m3 2절(`wsc2026-event-ec2-role`) | set-02 m3 `terraform/ec2.tf` role·instance profile 블록 복사 |
-| 보호 SG egress 도 복구 대상 | 지급 Lambda 범위 밖(추정) | 지급 코드 변경 불가 — 출제 시 감독 질의 |
-
-##### module-4-sqs-scaling
-
-| 후보 | 근거 | 대처 |
-|---|---|---|
-| SQS DLQ(redrive) / SSE 암호화 | SQS 흔한 채점(암호화·DLQ) | `sqs.tf` 에 `aws_sqs_queue.dlq` + `redrive_policy`, `sqs_managed_sse_enabled`. 키트: `shared/addons/sqs-hardening/` |
-| Addon NodeGroup + taint 로 컨트롤러 분리 | set-07 m3 2절·mark 3-2-A/3-5-A(taint 1개 이상) | set-07/task-2/module-3-eks-scaling `eksctl/cluster.yaml` managedNodeGroups + `k8s/10-karpenter-nodepool.yaml` taints 참고 — ⚠ Fargate 설계와 충돌, 기존 4-3(Fargate 배치) 깨지지 않게 NodeGroup 은 별도 용도만 |
-| EKS Control Plane 로깅 / Secrets Envelope KMS | Observability·KMS 옵션 동형 | 로깅은 `eksctl utils update-cluster-logging --enable-types all`(shared/addons/observability 함정 절); Secrets KMS 는 `eksctl utils enable-secrets-encryption`(재생성 없이 부착). 키트: `shared/addons/eks-logging-variants/` |
-| Fargate Pod 로그 → CloudWatch(aws-observability ns ConfigMap) | Fargate 로깅 흔한 항목, 4-3 컨트롤러가 Fargate | 키트: `shared/addons/eks-logging-variants/` (`aws-observability` Namespace + `aws-logging` ConfigMap + Pod execution role `logs:*` 정책) |
-| Container Insights / Worker 파드 로그 | Observability 옵션 | `eksctl create addon --name amazon-cloudwatch-observability`(shared/addons/observability 경로 A; Fargate 노드엔 에이전트 안 뜸 — Karpenter 노드만) |
-| 채점 주체 Access Entry 사전 등록 | CLAUDE.md EKS 채점 접근, 협의회 update-kubeconfig 1회 | README 7단계 `aws eks create-access-entry`·`associate-access-policy`(정확 ARN `arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy`) |
-| ECR 이미지 스캔·불변 태그 | set-07 task-1 7절 동형 | `terraform/ecr.tf` 에 `image_scanning_configuration{scan_on_push}`·`image_tag_mutability`. 키트: `shared/addons/ecr-hardening/` |
 
 [↑ 세트 바로가기](#세트-바로가기)
 
@@ -1014,9 +880,9 @@ docker push "${ECR}:v2"
 
 | WAF 추가 룰 — 스캐너 UA block | README STEP 12·`waf/scanner-ua.json`(priority 30 예약) | 콘솔: regex set `skills-waf-scanner-uas` 채우기 → JSON editor 에 `waf/scanner-ua.json`(ARN 2개 `terraform output`) 붙여넣기. 부하 생성기 UA 가 브라우저형인지 로그로 먼저 확인 |
 | WAF 추가 룰 — CommonRuleSet(UA 전용)·rate-based·custom 403 본문·geo | shared/addons/waf `waf-cloudfront.tf`(rate_based), set-07 `task-1/terraform/waf.tf`(`custom_response_body`), ARCHITECTURE "WAF 운용 기준" `common-ua-only` HCL | `task-3/terraform/waf.tf` 에 룰 추가 — **반드시 `and_statement` 로 `api_paths` ARN 조건 동반**(404 유지). rate-based 는 NOTES "보류"(채점 트래픽 단일 IP, 동반 사살) — 당일 소스 IP 분리 확인 후만. 템플릿: `shared/addons/waf-extra-rules/` |
-| CloudWatch 알람 추가 (ALB 5xx·TargetResponseTime, WAF BlockedRequests, RDS CPU/커넥션, 노드 수) + SNS | "장애/오류 감지" 요구(task 7절) · set-08 `task-1/terraform/cloudwatch.tf`(metric filter + `aws_cloudwatch_metric_alarm`), set-08 `task-2/module-3-event-handling/terraform/sns.tf` | alarm 리소스 패턴 복사, 네임스페이스를 `AWS/ApplicationELB`(`LoadBalancer` dimension = `data.aws_lb.this[0].arn_suffix`)·`AWS/WAFV2`(us-east-1 provider, `Region=Global`)·`AWS/RDS` 로. 템플릿: `shared/addons/cw-alarms/` |
+| CloudWatch 알람 추가 (ALB 5xx·TargetResponseTime, WAF BlockedRequests, RDS CPU/커넥션, 노드 수) + SNS | "장애/오류 감지" 요구(task 7절) | alarm 리소스 패턴 복사, 네임스페이스를 `AWS/ApplicationELB`(`LoadBalancer` dimension = `data.aws_lb.this[0].arn_suffix`)·`AWS/WAFV2`(us-east-1 provider, `Region=Global`)·`AWS/RDS` 로. 템플릿: `shared/addons/cw-alarms/` |
 | CloudWatch 대시보드 | "모니터링 환경 구축" 요구 · observability README 경로 D | `shared/addons/cw-dashboard/`. 콘솔 생성 후 `aws cloudwatch get-dashboard` 로 JSON 회수 가능 |
-| 로그 쿼리 추가 (Logs Insights 저장 쿼리 / metric filter → 알람) | NOTES "Logs Insights 쿼리 세트"(01–04·10–15, 파일 삭제) · set-08 `task-1/terraform/cloudwatch.tf` metric filter | WAF: 로그 그룹 `aws-waf-logs-skills-waf`(us-east-1) / 앱: `/aws/containerinsights/skills-eks/application`. 템플릿: `shared/addons/cw-logs-insights/` |
+| 로그 쿼리 추가 (Logs Insights 저장 쿼리 / metric filter → 알람) | NOTES "Logs Insights 쿼리 세트" | WAF: 로그 그룹 `aws-waf-logs-skills-waf`(us-east-1) / 앱: `/aws/containerinsights/skills-eks/application`. 템플릿: `shared/addons/cw-logs-insights/` |
 | 로그 수집 범위·보존 조정 / Control Plane 로깅 | 관측성 README 함정 항목 · `eksctl/cloudwatch-tuned.yaml` | tuned 파일 `eksctl update addon -f` 한 줄 / `aws logs put-retention-policy` / `eksctl utils update-cluster-logging --enable-types all --approve` |
 | Grafana·Prometheus / Loki 설치형 모니터링 ⚠ | 관측성 README 경로 B·C, set-07 `task-1/k8s/monitoring/`, set-07 `task-2/module-4-container-logging/helm/` | TargetGroupBinding 으로 기존 ALB 재사용. ⚠ 노드 1대에 안 들어가 EC2 가 늘면 비용 ratio 12점 직격 — 요구될 때만, requests 최소화 |
 | ALB 를 CloudFront 전용으로 잠그기 | ARCHITECTURE "보안 범위"(걷어낸 항목), `outputs.tf cloudfront_prefix_list_id` | `k8s/20-ingress.yaml` 에 `alb.ingress.kubernetes.io/security-group-prefix-lists: <id>` 한 줄 → re-apply |
@@ -1062,13 +928,13 @@ URL 패턴 고정: `https://registry.terraform.io/providers/hashicorp/aws/latest
 | DynamoDB | `dynamodb_table` `dynamodb_table_item` | task-1, set-07 m1, set-02 m1/m4, `dynamodb-hardening/` |
 | Lambda | `lambda_function` `lambda_permission` `lambda_event_source_mapping` `lambda_function_url` `lambda_layer_version` | `lambda-hardening/` `lambda-get-api/` `lambda-vpc-rds/` |
 | API Gateway | `api_gateway_rest_api` `api_gateway_resource` `api_gateway_method` `api_gateway_integration` `api_gateway_deployment` `api_gateway_stage` `api_gateway_method_settings` `api_gateway_usage_plan` `api_gateway_api_key` `api_gateway_model` `api_gateway_gateway_response` | **없음** — `shared/addons/`, `apigw-hardening/` |
-| Step Functions·이벤트 | `sfn_state_machine` `cloudwatch_event_rule` `cloudwatch_event_target` `cloudtrail` `config_configuration_recorder` `config_config_rule` `config_remediation_configuration` `guardduty_detector` | set-02 m1/m3, set-08 m3, `sfn-hardening/` `eventbridge-security-rules/` `cloudtrail-hardening/` |
+| Step Functions·이벤트 | `sfn_state_machine` `cloudwatch_event_rule` `cloudwatch_event_target` `cloudtrail` `config_configuration_recorder` `config_config_rule` `config_remediation_configuration` `guardduty_detector` | set-02 m1/m3, `sfn-hardening/` `eventbridge-security-rules/` `cloudtrail-hardening/` |
 | CloudWatch | `cloudwatch_log_group` `cloudwatch_log_metric_filter` `cloudwatch_metric_alarm` `cloudwatch_dashboard` `cloudwatch_query_definition` `sns_topic` `sns_topic_subscription` | `cw-alarms/` `cw-dashboard/` `cw-logs-insights/` |
 | KMS·Secrets·IAM | `kms_key` `kms_alias` `kms_replica_key` `secretsmanager_secret` `secretsmanager_secret_version` `secretsmanager_secret_rotation` `iam_role` `iam_policy` `iam_role_policy` `iam_instance_profile` `iam_openid_connect_provider` · data `iam_policy_document` | `kms/` `secrets-manager/` `iam-audit-role/` `irsa/` |
 | 컨테이너 | `ecr_repository` `ecr_lifecycle_policy` `ecr_pull_through_cache_rule` `ecs_cluster` `ecs_service` `ecs_task_definition` `eks_access_entry` `eks_pod_identity_association` | task-1 ECR/ECS, `ecr-hardening/`, EKS 는 eksctl |
 | 컴퓨트 | `instance` `launch_template` `autoscaling_group` `autoscaling_policy` `key_pair` · data `ami` `ssm_parameter` | 2과제 EC2 모듈, `ec2-hardening/` `ec2-asg-alb/` |
-| 데이터·스트림 | `db_instance` `db_subnet_group` `db_parameter_group` `db_proxy` `db_proxy_default_target_group` `db_proxy_target` `docdb_cluster` `docdb_cluster_instance` `docdb_cluster_parameter_group` `msk_cluster` `msk_configuration` `kinesis_stream` `kinesis_firehose_delivery_stream` `sqs_queue` `sqs_queue_redrive_allow_policy` `glue_catalog_database` | task-3, set-08 m1, set-02 m2/m4, `rds-connection/` `docdb-hardening/` `msk-hardening/` `kinesis-firehose/` `sqs-hardening/` |
-| Lattice·VPN | `vpclattice_service_network` `vpclattice_service` `vpclattice_target_group` `vpclattice_listener` `vpclattice_listener_rule` `vpclattice_service_network_vpc_association` `vpclattice_service_network_service_association` `vpclattice_auth_policy` `vpclattice_access_log_subscription` `ec2_client_vpn_endpoint` `ec2_client_vpn_network_association` `ec2_client_vpn_authorization_rule` `ec2_client_vpn_route` `acm_certificate` | set-08 m2, `lattice-hardening/` `client-vpn/` |
+| 데이터·스트림 | `db_instance` `db_subnet_group` `db_parameter_group` `db_proxy` `db_proxy_default_target_group` `db_proxy_target` `docdb_cluster` `docdb_cluster_instance` `docdb_cluster_parameter_group` `msk_cluster` `msk_configuration` `kinesis_stream` `kinesis_firehose_delivery_stream` `sqs_queue` `sqs_queue_redrive_allow_policy` `glue_catalog_database` | task-3, set-02 m2/m4, `rds-connection/` `docdb-hardening/` `msk-hardening/` `kinesis-firehose/` `sqs-hardening/` |
+| Lattice·VPN | `vpclattice_service_network` `vpclattice_service` `vpclattice_target_group` `vpclattice_listener` `vpclattice_listener_rule` `vpclattice_service_network_vpc_association` `vpclattice_service_network_service_association` `vpclattice_auth_policy` `vpclattice_access_log_subscription` `ec2_client_vpn_endpoint` `ec2_client_vpn_network_association` `ec2_client_vpn_authorization_rule` `ec2_client_vpn_route` `acm_certificate` | `lattice-hardening/` `client-vpn/` |
 
 인터넷이 느리면 로컬 스키마로 인자 이름만 뽑는다(`terraform init` 끝난 디렉터리에서):
 
