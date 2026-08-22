@@ -247,6 +247,21 @@
   "`/v1/book` 을 제외한 로그" 라 엄격 일치가 안전하고, 제공 바이너리는 그 경로를 만들지 않는다
   (라우팅이 `/v1/book` Exact 하나뿐이라 404 는 `path=/nonexist` 형태로만 남는다)
 
+### 2026-08-22 step 2 이미지 빌드 입력을 CloudShell 업로드 UI → S3 릴레이(book) + 붙여넣기(Dockerfile)
+- 맥락: set-07 task-1 방식으로 통일. 기존 런북은 `Dockerfile`·`book` 을 **Actions → Upload file**
+  로 올리게 했는데 재시도마다 반복되는 수동 단계였고, 셸을 VPC environment 로 잘못 열면
+  업로드 자체가 막혀 그 자리에서 멈춘다. step 1 은 이미 `outputs.json`·`task.tgz` 를 릴레이하고
+  있어 `book` 한 줄만 얹으면 된다
+- 채택: step 1 이 `..\app\book`(step 0 에서 shared 원본을 복사해 둔 것)을
+  `s3://<static bucket>/_transfer/book` 으로 올리고, CloudShell 이 `aws s3 cp` 로 받는다.
+  텍스트인 `Dockerfile` 은 `cat > Dockerfile <<'DOCKEREOF'` 붙여넣기 + `wc -l`(24) 대조
+- CloudShell 쪽 버킷 이름은 `list-buckets` + `starts_with(Name,'wsc2026-static-')` 로 찾는다 —
+  이름에 `bucket_suffix` 랜덤 4자가 박혀 있어 손으로 옮겨 적으면 틀리기 쉽다. `echo "$BUCKET"` 로
+  step 1 출력과 눈으로 대조한다
+- `sed -i 's/\r$//' Dockerfile`: Windows 클립보드 CRLF 가드
+- `_transfer/` 는 기존대로 step 9-3 에서 통째로 비운다(mark 6-1). 별도 정리 단계를 늘리지 않았다
+- 기각: `book` 도 heredoc(바이너리라 불가) / 버킷 이름 하드코딩(suffix 가 세트 실행마다 바뀐다)
+
 ### 2026-08-21 mark.sh 는 정본의 `sleep 180` 을 쓰지 않는다 — 파드 생성 1회 + 알람 폴링
 - 맥락: 최종 채점지가 부하 파드 6종 생성 + `sleep 180` 을 11-1·11-3 **양쪽에** 둔다. 정본을 그대로
   베끼면 리허설마다 6분이 나간다(11-3 실행분은 `AlreadyExists` 로 조용히 실패하고 sleep 만 다시 돈다)

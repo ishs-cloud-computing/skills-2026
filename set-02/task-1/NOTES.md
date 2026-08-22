@@ -178,6 +178,20 @@
 ---
 ## 결정 로그
 
+### 2026-08-22 step 2 이미지 빌드 입력을 CloudShell 업로드 UI → S3 릴레이(book) + 붙여넣기(Dockerfile)
+- 맥락: set-07 task-1 이 쓰는 방식으로 통일했다. 기존 런북은 `book` 과 `Dockerfile` 을
+  **Actions → Upload file** 로 올리게 했는데, ① 업로드는 손으로 파일 두 개를 고르는 수동 단계라
+  재시도(세션 만료·리빌드)마다 반복되고, ② VPC environment 는 업로드 자체가 막혀 있어 셸을
+  잘못 열면 그 자리에서 막힌다
+- 채택: 붙여넣을 수 없는 것(8.4MB `book` 바이너리)만 step 1 에서 `s3://<web bucket>/_transfer/book`
+  으로 올리고 CloudShell 이 `aws s3 cp` 로 받는다. 텍스트인 `Dockerfile` 은
+  `cat > Dockerfile <<'DOCKEREOF'` 로 붙여넣고 `wc -l`(23) 로 줄 수를 대조한다
+- `sed -i 's/\r$//' Dockerfile`: Windows 클립보드가 붙이는 CRLF 가드. `COPY --chmod=755 book /book`
+  뒤에 `\r` 이 남으면 조용히 어긋난다. Linux 런북에는 불필요하므로 넣지 않았다
+- 릴레이 객체는 step 2 끝에서 `aws s3 rm` 한다. 이 버킷은 채점 대상이라(mark 2-1) `_transfer/` 를
+  남기지 않는다. `web/main/` prefix 만 검사하지만 남길 이유가 없다
+- 기각: 릴레이 없이 `book` 도 heredoc(바이너리라 불가) / 릴레이 전용 버킷 신설(불필요 리소스)
+
 ### 2026-08-22 [10-1~4] Grafana 대시보드를 신판 채점 기준(book app)에 맞춤 — namespace 변수 + 기본값 `wskorea26`
 - 근거: 2026-08-21 신판 채점지가 10-1~4 를 전부 `book app` 기준으로 본문에 명시했다(`mark.md:475-478`).
   구판에서 4패널을 전역으로 둔 근거였던 취합본 01 "All Pod" 문답은 `11-3` 을 가리키는데
