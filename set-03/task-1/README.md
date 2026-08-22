@@ -50,7 +50,7 @@ README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7·9·10 �
 aws --version                          # 2.32.0 이상 (aws login 요건)
 
 # 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행 (default 프로파일)
-aws login              # region = ap-northeast-2
+aws configure              # region = ap-northeast-2
 
 # local .env.ps1 — 셸 재시작에도 재사용 (작업 규칙 6, .gitignore 등록됨)
 @'
@@ -370,8 +370,6 @@ vim mark.sh && chmod +x mark.sh
 kubectl delete pod not-ready error-gen latency-gen crash-test stress-cpu stress-mem -n wsc2026 --ignore-not-found
 
 # 정리 후 로그·메트릭 1건 재생성 (과제지 11절 필수 조건) — 파드를 지우면 트래픽이 끊긴다
-# $CF 는 step 8 의 bastion 셸 변수라 여기(새 CloudShell)엔 없다. Comment 로 다시 찾는다
-CF=$(aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='wsc2026-cdn'].DomainName|[0]" --output text)
 curl -s -X POST "https://$CF/booking" -H 'Content-Type: application/json'   -d '{"client_id":"C900","username":"Final","email":"final@test.com","concert_name":"Seoul2025"}'
 aws logs tail /wsc2026/eks/book-app --since 2m | tail -3   # 비어 있으면 안 된다
 ```
