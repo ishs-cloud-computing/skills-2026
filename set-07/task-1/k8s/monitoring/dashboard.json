@@ -192,19 +192,19 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "aws_applicationelb_target_response_time_p50{load_balancer=~\".*unicorn-alb.*\"}",
+          "expr": "aws_applicationelb_target_response_time_p50{load_balancer=~\".*unicorn-alb.*\", target_group=~\".*unicorn-tg/.*\"}",
           "legendFormat": "p50"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "aws_applicationelb_target_response_time_p95{load_balancer=~\".*unicorn-alb.*\"}",
+          "expr": "aws_applicationelb_target_response_time_p95{load_balancer=~\".*unicorn-alb.*\", target_group=~\".*unicorn-tg/.*\"}",
           "legendFormat": "p95"
         },
         {
           "refId": "C",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "aws_applicationelb_target_response_time_p99{load_balancer=~\".*unicorn-alb.*\"}",
+          "expr": "aws_applicationelb_target_response_time_p99{load_balancer=~\".*unicorn-alb.*\", target_group=~\".*unicorn-tg/.*\"}",
           "legendFormat": "p99"
         }
       ]

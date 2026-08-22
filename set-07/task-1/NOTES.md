@@ -163,6 +163,13 @@ Grafana 절(과제지 p7 / 채점지 p13)은 **재배포본에서도 내용이 �
 - `Book App Ready Pods` 가 `w:4` 인 근거: 이미지 제목이 `Book App Ready ...` 로 잘려 있고,
   채점지가 "4번은 Book App Ready까지만 출력되어도 정답"이라고 그 잘림을 그대로 인정한다.
   `w:8` 로 두면 제목이 안 잘려서 오히려 이미지와 달라진다.
+- p50/p95/p99 가 색만 다른 채로 두 개씩(총 6줄) 나오던 것은 `unicorn-alb` 에 TargetGroup 이 둘이라
+  그렇다 — `unicorn-tg`(Book App) 와 `unicorn-lambda-tg`(GET Lambda). CloudWatch 는
+  TargetResponseTime 을 (LoadBalancer, TargetGroup) 조합마다 내보내고, `legendFormat: "p99"` 는
+  표시 이름만 고정할 뿐 시리즈를 합치지 않는다. 쿼리에 `target_group=~".*unicorn-tg/.*"` 를 걸어
+  앱 TG 만 남겼다(뒤의 `/` 가 `unicorn-lambda-tg` 를 배제한다). exporter 에서 `aws_dimensions` 를
+  `[LoadBalancer]` 만으로 줄이는 방법도 되지만, Lambda 응답시간까지 섞이고 helm upgrade 가
+  또 필요해서 대시보드 쪽만 고쳤다.
 - `range_seconds` 는 기본 600 을 6h(21600) 로 늘렸다. `delay_seconds` 만 고치면 트래픽이 끊긴 지
   12분 뒤 시계열이 사라져 대시보드 기본 창(`now-1h`)에서 다시 No Data 가 된다 — 실제로 그렇게 됐다.
   창을 6h 로 두면 시드 한 번으로 경기 내내 마지막 데이터포인트를 계속 내보낸다. 값이 오래된 건
