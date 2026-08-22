@@ -47,6 +47,13 @@
     서브넷 맵 키는 리터럴 `wsc2026-...` 이고, 보간을 쓰는 곳은 IGW/RTB/NAT 태그뿐이다.
     클러스터·테이블·ECR·Lambda 이름도 `variables.tf` 기본값이지 tfvars 항목이 아니다
     (tfvars 에는 `player_number`·`bucket_suffix` 둘뿐, 버킷 이름은 `data.tf` 에서 조합).
+- **함정: bastion 의 `k8s/` 는 step 1 업로드 시점 스냅샷이다.** `dashboard.json` 을 고친 뒤
+  `task.tgz` 를 다시 릴레이하지 않으면 step 5 렌더가 조용히 옛 내용으로 ConfigMap 을 만든다.
+  에러가 전혀 없고 증상은 "패널이 안 고쳐진다" 뿐이라 원인을 엉뚱한 데서 찾게 된다
+  (2026-08-22 실제로 겪음 — Application Logs 필터가 안 걸린다고 판단했으나 배포본이
+  `d3b0313` 이전 버전이었다. 쿼리·문법·ConfigMap YAML 왕복 모두 정상이었다).
+  → README step 5 에 배포본↔원본 sha256 대조(CRLF 정규화), step 8 에 로컬 파일 없이 되는
+  의미 검사(`filter @message like`·`count by (label_eks` grep)를 넣어 즉시 드러나게 했다.
 - 미해결:
   - ~~11-4 HighLatency 실발화 불가~~ → **2026-08-07 정정으로 채점 항목이 삭제됐다**(정정 로그).
     11-4 는 5종만 확인한다. 과제지 Alert 표의 HighLatency 규칙 자체는 그대로 요구되므로

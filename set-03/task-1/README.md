@@ -259,6 +259,13 @@ kubectl create configmap wsc2026-grafana-dashboard -n observability \
   --from-file=dashboard.json=monitoring/dashboard.json --dry-run=client -o yaml \
   | kubectl label --local -f - -o yaml grafana_dashboard=1 > rendered/monitoring/99-dashboard-cm.yaml
 
+# 배포된 ConfigMap 이 지금 이 dashboard.json 과 같은지 — 두 해시가 달라야 할 이유가 없다.
+# 다르면 bastion 의 k8s/ 트리가 낡은 것이다(step 1 의 task.tgz 를 다시 올려 다시 푼다).
+# CRLF 정규화: Windows 경유 전송이라 파일에 \r 이 붙어 있다.
+kubectl get cm wsc2026-grafana-dashboard -n observability \
+  -o jsonpath='{.data.dashboard\.json}' 2>/dev/null | tr -d '\r' | sha256sum   # 배포본(없으면 빈 해시)
+tr -d '\r' < monitoring/dashboard.json | sha256sum                            # 지금 렌더한 원본
+
 # 치환 후: 잔여 ${} 가 없어야 함 (출력 없음 = 정상)
 grep -rn '\${' rendered && echo '치환 누락!' || echo OK
 
@@ -382,6 +389,12 @@ KSM_POD=$(kubectl get pods -n observability -l app.kubernetes.io/name=kube-state
 kubectl exec -n observability "$KSM_POD" -- wget -qO- localhost:8080/metrics | grep -m2 '^kube_node_labels'
 # → label_eks_amazonaws_com_nodegroup="wsc2026-addon-nodegroup" 이 보여야 한다.
 #   안 보이면 kube-prometheus-stack-values.yaml 의 metricLabelsAllowlist 가 적용되지 않은 것이다.
+
+# 배포된 대시보드가 최신인지 (로컬 파일 없이 되는 의미 검사 — 채점 직전용)
+CM=$(kubectl get cm wsc2026-grafana-dashboard -n observability -o jsonpath='{.data.dashboard\.json}')
+echo "$CM" | grep -c 'filter @message like'   # 1 — Application Logs 의 /v1/book 필터
+echo "$CM" | grep -c 'count by (label_eks'    # 1 — Available Nodes 노드그룹별 집계
+# 0 이 나오면 옛 대시보드가 올라가 있는 것이다 → step 1 task.tgz 재릴레이 후 step 5 재렌더·apply
 
 # Grafana LB / datasource / 대시보드 (mark 11-2)
 GRAFANA_LB=$(kubectl get svc -n observability monitoring-grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
