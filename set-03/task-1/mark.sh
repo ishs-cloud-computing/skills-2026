@@ -214,14 +214,22 @@ echo "  Node CPU (%) / Node Memory (%) / Available Nodes"
 echo "  Pod CPU / Pod Memory / Pending Pods / Pod Restarts"
 echo "  App Pod CPU / App Pod Memory / App Running / App Restarts / App Pending"
 echo "  Request Count / Response Time / Status Code / Application Logs"
+echo "  * 배부본 표기가 다르면(예: Status Codes / Alert) README step 5 의 TITLES 로 즉시 바꾼다"
 echo "모든 메트릭 및 로그는 빈값이 없어야 한다"
 echo "색상: CPU 80%↑ 빨강, 60~80% 노랑, 60%↓ 초록 / Restart 1↑ 경고"
 echo ""
+echo "특히 확인할 것:"
+echo "  Available Nodes  : 노드그룹 이름 타일 2개(wsc2026-addon-nodegroup / wsc2026-workload-ng)에"
+echo "                     각각 2 — 이름 없는 타일 1개(총합 4)로 보이면 KSM 노드 라벨이 안 나온 것이다"
+echo "  Application Logs : /v1/book 이외 경로(/nonexist, /delay)가 한 줄이라도 보이면 실패"
+echo "  Request Count / Response Time / Status Code : 세 패널 모두 No Data 가 아니어야 한다"
+echo ""
 # 정본: "Application Logs 패널 로그 형식 예시 (/v1/book을 제외한 로그가 있을 경우 오답처리)"
-# 판정은 형식 기준이다 — 공식 답변(errata/수정사항.txt 2번): "현재 파일 수정이 불가하여 수정은 되지
-# 않습니다. 로그는 과제지와 채점기준표에 있는 형식으로 채점합니다." 채점 스스로 error-gen/latency-gen 으로
-# 비-/v1/book 로그를 만들므로 문자 그대로는 자기모순이다. fluent-bit 을 /v1/book 전용으로 조이지 않는다.
-# 정정 2026-08-16: 패널 이름은 채점 대상 아님. Pod CPU/Memory 는 All Pod 기준.
+# 채점 스스로 error-gen/latency-gen 으로 비-/v1/book 액세스 로그를 만들므로 수집 단계에서 거를 수 없다 —
+# error-gen 의 404 가 wsc2026_errors_total(→ HighErrorRate 11-4, Status Code 4XX)의 유일한 공급원이다.
+# 따라서 fluent-bit 은 그대로 두고 Application Logs 패널의 Insights 쿼리에서만 /v1/book 을 필터한다
+# (dashboard.json id 20, 결정 로그 2026-08-22).
+# 정정 2026-08-16: Pod CPU/Memory 는 All Pod 기준.
 echo "Application Logs 패널 로그 형식 예시 (/v1/book 을 제외한 로그가 있을 경우 오답처리):"
 echo 'INFO {"level":"INFO","path":"/v1/book","status":"200","duration":"112.663323ms","method":"POST"}'
 echo

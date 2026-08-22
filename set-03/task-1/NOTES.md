@@ -47,6 +47,20 @@
     서브넷 맵 키는 리터럴 `wsc2026-...` 이고, 보간을 쓰는 곳은 IGW/RTB/NAT 태그뿐이다.
     클러스터·테이블·ECR·Lambda 이름도 `variables.tf` 기본값이지 tfvars 항목이 아니다
     (tfvars 에는 `player_number`·`bucket_suffix` 둘뿐, 버킷 이름은 `data.tf` 에서 조합).
+- **함정: bastion 의 `k8s/` 는 step 1 업로드 시점 스냅샷이다.** `dashboard.json` 을 고친 뒤
+  `task.tgz` 를 다시 릴레이하지 않으면 step 5 렌더가 조용히 옛 내용으로 ConfigMap 을 만든다.
+  에러가 전혀 없고 증상은 "패널이 안 고쳐진다" 뿐이라 원인을 엉뚱한 데서 찾게 된다
+  (2026-08-22 실제로 겪음 — Application Logs 필터가 안 걸린다고 판단했으나 배포본이
+  `d3b0313` 이전 버전이었다. 쿼리·문법·ConfigMap YAML 왕복 모두 정상이었다).
+  → README step 5 에 배포본↔원본 sha256 대조(CRLF 정규화), step 8 에 로컬 파일 없이 되는
+  의미 검사(`filter @message like`·`count by (label_eks` grep)를 넣어 즉시 드러나게 했다.
+  **주의: step 5 의 대조만으로는 부족하다.** 그건 bastion 로컬↔클러스터 비교라 아카이브가 낡으면
+  양쪽이 같이 낡아 해시가 일치하고 통과해버린다. 정작 끊기는 링크는 **본 PC ↔ bastion** 이다
+  (2026-08-22 재현: 재배포했는데 `configmap ... unchanged` 가 떴다 — 본 PC 에서 tar+cp 를 다시
+  돌리지 않아 S3 의 `task.tgz` 가 그대로였다). → step 1 업로드 직후와 step 4 추출 직후에
+  `dashboard.json` sha256 을 각각 찍어 눈으로 대조하게 했다. PowerShell `Get-FileHash` 는 대문자,
+  `sha256sum` 은 소문자라 `.ToLower()` 를 붙여야 표기가 맞는다.
+  `kubectl apply` 가 `unchanged` 를 뱉으면 그 자체가 "아카이브가 낡았다" 는 신호다.
 - 미해결:
   - ~~11-4 HighLatency 실발화 불가~~ → **2026-08-07 정정으로 채점 항목이 삭제됐다**(정정 로그).
     11-4 는 5종만 확인한다. 과제지 Alert 표의 HighLatency 규칙 자체는 그대로 요구되므로
@@ -56,6 +70,9 @@
   - **메트릭 실명을 배포 후 다시 확인해야 한다.** README step 8 에서 `:2021/metrics` 를 grep 해
     `prometheus-rules.yaml`·`dashboard.json` 의 이름과 대조한다. aws-for-fluent-bit 이미지에
     `log_to_metrics` 가 없으면 upstream `fluent/fluent-bit` 최신 안정 태그로 교체한다.
+  - **KSM 이 노드 라벨을 실제로 노출하는지 배포 후 확인해야 한다.** `Available Nodes` 와
+    `$nodegroup` 변수가 전적으로 `kube_node_labels{label_eks_amazonaws_com_nodegroup=...}` 에
+    의존한다. README step 8 에서 kube-state-metrics `/metrics` 를 grep 한다.
   - **접두어가 30% 변동으로 바뀌면 `name_prefix` 만으로 안 끝난다.**
     `grep -rl wsc2026 terraform eksctl k8s app | xargs sed -i 's/wsc2026/<새접두어>/g'` 로
     terraform 까지 포함해 일괄 치환해야 한다. 라벨 키 `wsc2026/node` 도 이 범위에 든다.
@@ -200,6 +217,78 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-22 패널·행 제목을 id 키 오버라이드로 언제든 바꿀 수 있게 (오탈자 대비)
+- 맥락: 같은 패널을 세 출처가 다르게 적는다. 어느 쪽이 오타인지 확정할 근거가 없고, 출제자는
+  게시된 파일을 직접 고치지 않고 댓글·텍스트로 변경을 안내하므로(작업 규칙 10) 당일 표기가
+  또 바뀔 수 있다. 실제로 갈리는 지점:
+  - id 19 — 채점지 본문 `Status Code` / 참고 사진 `Status Codes` / 과제지 `App Status Code`
+  - id 21(행) — 사진 `Alerts` / 과제지 Reference02 `Alert`
+  - id 9·14 — 과제지만 `restarts` 소문자(`All Pod restarts`·`App restarts`)
+  - id 2·3·4·6·7·8·17·18·20 — 과제지만 `All `/`App ` 접두어를 붙인다
+- 채택: 기본값은 **채점지 본문 표기**(최종 정정본이 필수 패널을 이름으로 열거하므로 가장 채점에
+  가깝다). 그 위에 `TITLES` 라는 **id→제목 JSON 오버라이드**를 README step 5 렌더 직전에 둔다.
+  `TITLES='{}'` 이 기본이라 평소엔 완전한 no-op 이고, 바뀔 때만 한 줄 채운다.
+  배포 후 수정 경로도 같은 블록 + ConfigMap 재생성으로 문서화했다 — 사이드카가 1분 내 재적재하므로
+  클러스터를 다시 세울 필요가 없다
+- **id 로 거는 이유**: 제목이 서로의 부분문자열이다(`Pod CPU` ⊂ `App Pod CPU`, `App Restarts` ⊂ … ).
+  `sed 's/Pod CPU/.../'` 는 App 패널까지 같이 바꾼다. `panels[].id` 는 파일 안에서 유일하고 고정이다
+- 기각:
+  - **Grafana 템플릿 변수로 제목을 파라미터화**(`title: "$status_title"`) → 보간이 실패하면 채점
+    화면에 `$status_title` 이 그대로 찍힌다. 채점 1.5점을 렌더링 운에 맡길 이유가 없다
+  - **제목만 담은 별도 소스 파일**(`panel-titles.json`) → `dashboard.json` 과 진실 원천이 둘로 갈려
+    한쪽만 고치는 드리프트가 생긴다. 오버라이드는 비어 있는 게 기본이라 드리프트가 없다
+  - **README 표 없이 코드만** → 당일 어느 id 를 건드릴지 찾는 데 시간이 든다. AI 보조가 없는
+    환경이라 세 출처 대조표를 런북에 그대로 실었다
+
+### 2026-08-22 대시보드 기준을 채점지 사진 → 최종 채점지 11-3 본문(16종 + 빈값 금지)으로 교체
+- 맥락: 최종 정정본 PDF 를 이미지로 재판독했다(텍스트 추출은 빨간 글자·취소선을 버려 못 쓴다).
+  11-3 의 **"메트릭과 로그 형식이 채점지 사진과 일치하는지 확인하며" 가 취소선으로 삭제**되고,
+  빨간 글자로 "**모든 메트릭 및 로그는 빈값이 없어야합니다**. 다음 구성 요소가 대쉬보드에 포함되어
+  있는지 확인합니다" + 필수 패널 16종이 들어갔다. 사진은 "(참고 사진)" 으로 격하됐다.
+  → 채점축이 *사진 대조* 에서 **① 16종 존재 ② 전 패널 비어있지 않음 ③ Application Logs 는
+  `/v1/book` 형식만** 으로 바뀌었다. 2026-07-29 결정("사진을 우선한다")의 전제가 사라졌다
+- 발견한 결함 5건과 채택안(`dashboard.json` 단독 수정):
+  1. **Application Logs 무필터** — Insights 쿼리에 필터가 없어 채점 스크립트의 `error-gen`(`/nonexist`)·
+     `latency-gen`(`/delay?ms=5000`) 액세스 로그가 그대로 출력됐다 → 오답처리.
+     `| filter @message like '"path":"/v1/book"'` 추가. `format.lua` 가 키 순서를 고정 출력하므로
+     부분문자열 매칭이 안정적이다. Logs Insights 의 `like` 는 **작은/큰따옴표로 감싸면 부분문자열,
+     슬래시로 감싸면 정규식**이다(AWS 문서 CWL_QuerySyntax-Filter). 패턴에 `"` 가 들어가므로 작은따옴표를
+     쓴다 — 정규식 형태를 쓰면 `/` 이스케이프 방식이 문서화돼 있지 않아 검증 불가라 피했다
+  2. **Available Nodes 붕괴 경로** — `sum by (label_eks_amazonaws_com_nodegroup)` + `=~"$nodegroup"`.
+     `=~".*"` 는 **라벨이 없는 시리즈도 매치**하므로 KSM `metricLabelsAllowlist` 가 안 먹으면 조인이
+     라벨을 못 붙이고 `sum by (없는 라벨)` 이 **이름 없는 타일 1개(총합 4)** 로 붕괴한다 — "각
+     노드그룹별 노드 수" 가 아니게 되는 정확한 경로다. `count by (...) (kube_node_labels{...,
+     label_eks_amazonaws_com_nodegroup!=""} and on (node) (kube_node_status_condition{...} == 1))`
+     로 교체. **`!=""` 가 방어선** — 라벨이 없으면 조용히 틀린 숫자 대신 패널이 비어 리허설에서 드러난다.
+     `textMode: value_and_name` + `orientation: horizontal` 로 그룹명 타일 2개 렌더를 고정
+  3. **Request Count / Response Time 이 No Data** — 트래픽이 끊기면 빈값. `or vector(0)` 추가
+  4. **Status Code 의 CloudWatch ELB 4XX/5XX 타깃** — 해당 코드가 한 번도 안 나면 CloudWatch 가
+     데이터포인트를 아예 주지 않아 빈 시리즈가 된다(2026-07-29 항목의 미검증 대가). 타깃 2종을
+     제거하고 패널 datasource 를 `-- Mixed --` → `prometheus` 로 환원. CloudWatch 연동 요구는
+     Application Logs 가 계속 충족한다
+  5. **Application Logs 패널 표시 옵션이 참고 사진과 달랐다** — `showTime: true` 가 타임스탬프 열을
+     앞에 붙여 각 줄이 `2026-…  INFO {"level":…}` 로 보였다. 채점지 예시는 `INFO {"level":…}` 로
+     시작하고 참고 사진에도 타임스탬프 열이 없다. `showTime`·`wrapLogMessage` 를 모두 `false` 로
+     내려 줄 전체가 채점지 예시와 문자 그대로 같아지게 했다
+- 참고 사진과 대조해 되돌린 것 1건: `Node Memory (%)` 범례를 `{{nodename}}` 으로 바꿨다가
+  `{{instance}}`(`192.168.2.111:9100`)로 되돌렸다. Node CPU 와 표기가 갈리는 게 어색해 통일했는데,
+  참고 사진이 이 패널만 instance 로 두고 있고 채점지 문구("노드별 Memory 사용률")는 둘 다 만족한다.
+  구성 일치를 우선했다
+- 보정 1건: `Pod Restarts` 를 `topk(10, ...)` 로 제한. `$namespace` 기본값이 All 이라(errata 2026-08-16
+  "모든 파드") 타일이 수십 개가 되어 뭉갠다. 재시작 상위 10개면 `crash-test` 가 항상 최상단이다
+- 기각:
+  - **fluent-bit 을 `/v1/book` 전용으로 조여 수집 단계에서 거른다** → `error-gen` 의 404 가
+    `wsc2026_errors_total` 의 유일한 공급원이라 HighErrorRate(11-4)와 Status Code 4XX 가 동반 사망한다.
+    `log_to_metrics` 3종 **뒤에** grep 을 넣으면 메트릭은 살릴 수 있지만, 대시보드 수정 때문에
+    1.5점짜리 알람 항목을 필터 순서 실수에 노출시킬 이유가 없다. 필터는 패널 쿼리에만 둔다
+  - **Pod/App Pod CPU·Memory 를 limit 대비 % 로 변경**(채점지 문구가 "사용률") → limit 미설정 파드가
+    NaN 이 되어 `$namespace=All` 에서 "빈값 없어야" 를 정면으로 위반한다. raw cores/bytes 유지
+  - **Pod Restarts 를 "리스타트 Pod 개수" 단일 숫자로 변경** → 어느 파드가 재시작했는지가 사라지고
+    재시작 1회 이상 경고 색상(과제지) 의미가 흐려진다. 파드별 타일 유지
+- 대가: `/v1/book/999`(Reference02 의 WARN 예시 경로) 도 패널에서 제외된다. 오답처리 조항이
+  "`/v1/book` 을 제외한 로그" 라 엄격 일치가 안전하고, 제공 바이너리는 그 경로를 만들지 않는다
+  (라우팅이 `/v1/book` Exact 하나뿐이라 404 는 `path=/nonexist` 형태로만 남는다)
 
 ### 2026-08-22 step 2 이미지 빌드 입력을 CloudShell 업로드 UI → S3 릴레이(book) + 붙여넣기(Dockerfile)
 - 맥락: set-07 task-1 방식으로 통일. 기존 런북은 `Dockerfile`·`book` 을 **Actions → Upload file**

@@ -83,12 +83,16 @@ terraform apply
 terraform output -json | Set-Content ..\outputs.json   # PS7 기본 UTF-8 no BOM → bastion jq OK
 
 # SSM 에는 파일 전송이 없어 S3 를 릴레이로 쓴다 (_transfer/ 는 step 9-3 에서 삭제).
-# bastion 홈은 유지되므로 이 전송은 1회면 된다.
+# bastion 홈은 유지되지만 이 아카이브는 업로드 시점 스냅샷이다 —
+# k8s/ 를 한 줄이라도 고쳤으면 아래 tar + cp 를 반드시 다시 돌린다. 안 그러면 step 5 가
+# 조용히 옛 내용으로 렌더하고, 에러 없이 "패널이 안 고쳐진다" 로만 보인다.
 $o = Get-Content ..\outputs.json | ConvertFrom-Json
 $BUCKET = $o.s3_bucket_name.value
 aws s3 cp ..\outputs.json "s3://$BUCKET/_transfer/outputs.json"
 tar czf "..\task.tgz" -C .. k8s
 aws s3 cp "..\task.tgz" "s3://$BUCKET/_transfer/task.tgz"
+# 이 해시를 step 4 의 sha256sum 출력과 대조한다 (본 PC ↔ bastion 전달 확인)
+(Get-FileHash ..\k8s\monitoring\dashboard.json -Algorithm SHA256).Hash.ToLower()
 # 이미지 빌드용 book(8.4MB) — CloudShell 업로드 UI 대신 릴레이로 넘긴다 (step 2)
 aws s3 cp ..\app\book "s3://$BUCKET/_transfer/book"
 ```
@@ -205,6 +209,10 @@ BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static'
 mkdir -p ~/wsc2026 && cd ~/wsc2026
 aws s3 cp "s3://$BUCKET/_transfer/task.tgz" . && tar xzf task.tgz
 aws s3 cp "s3://$BUCKET/_transfer/outputs.json" .
+# 받은 아카이브가 본 PC 의 현재 k8s/ 와 같은지 — step 1 마지막 줄 출력과 같아야 한다.
+# 다르면 본 PC 에서 tar + cp 를 다시 돌린다(고친 뒤 안 올린 것이다). step 5 의 대조는
+# bastion 로컬↔클러스터라 아카이브가 낡으면 양쪽이 같이 낡아 통과해버린다 — 여기가 유일한 대조 지점이다.
+sha256sum k8s/monitoring/dashboard.json
 
 cat > ~/.env <<EOF
 export AWS_DEFAULT_REGION=ap-northeast-2
@@ -246,10 +254,25 @@ for f in $(find * -name '*.yaml' ! -name 'kube-prometheus-stack-values.yaml'); d
   sed "${SED[@]}" "$f" > "rendered/$f"
 done
 
+# 패널·행 제목 오탈자 대응 — 채점지 표기가 우리 값과 다르면 TITLES 에만 적고 그대로 이어서 실행한다.
+# 기본값 {} 는 무변경(no-op)이다. 아래 "패널 제목 출처별 표기" 표에서 id 를 찾는다.
+# 예) TITLES='{"19":"Status Codes","21":"Alert"}'
+TITLES='{}'
+jq --argjson t "$TITLES" '.panels |= map(.title = ($t[(.id|tostring)] // .title))' \
+  monitoring/dashboard.json > /tmp/d.json && mv /tmp/d.json monitoring/dashboard.json
+jq -r '.panels[] | "  \(.id)\t\(.title)"' monitoring/dashboard.json   # 반영 결과 확인
+
 # dashboard.json 은 manifest 가 아니라 ConfigMap 으로 만들어 rendered/ 에 넣는다 (일괄 apply 대상)
 kubectl create configmap wsc2026-grafana-dashboard -n observability \
   --from-file=dashboard.json=monitoring/dashboard.json --dry-run=client -o yaml \
   | kubectl label --local -f - -o yaml grafana_dashboard=1 > rendered/monitoring/99-dashboard-cm.yaml
+
+# 배포된 ConfigMap 이 지금 이 dashboard.json 과 같은지 — 두 해시가 달라야 할 이유가 없다.
+# 다르면 bastion 의 k8s/ 트리가 낡은 것이다(step 1 의 task.tgz 를 다시 올려 다시 푼다).
+# CRLF 정규화: Windows 경유 전송이라 파일에 \r 이 붙어 있다.
+kubectl get cm wsc2026-grafana-dashboard -n observability \
+  -o jsonpath='{.data.dashboard\.json}' 2>/dev/null | tr -d '\r' | sha256sum   # 배포본(없으면 빈 해시)
+tr -d '\r' < monitoring/dashboard.json | sha256sum                            # 지금 렌더한 원본
 
 # 치환 후: 잔여 ${} 가 없어야 함 (출력 없음 = 정상)
 grep -rn '\${' rendered && echo '치환 누락!' || echo OK
@@ -263,6 +286,60 @@ kubectl run dns-test --rm -it --restart=Never --image=busybox \
   --overrides='{"spec":{"nodeSelector":{"wsc2026/node":"addon"}}}' \
   -- nslookup kubernetes.default.svc.wsc2026.skills.local
 ```
+
+#### 패널 제목 출처별 표기 (오탈자 의심 대응표)
+
+과제지 Reference02·채점지 본문 11-3·채점지 참고 사진이 같은 패널을 서로 다르게 적는다.
+**채점지 본문 표기를 기본값으로 쓴다.** 당일 배부본이 다르면 위 `TITLES` 에 `"id":"새 제목"` 을 넣는다.
+
+| id | 현재값 = 채점지 본문 | 참고 사진 | 과제지 Reference02 |
+|---:|---|---|---|
+| 1 | `Node` (행) | `Node` | `Node` |
+| 2 | `Node CPU (%)` | 동일 | `All Node CPU` |
+| 3 | `Node Memory (%)` | 동일 | `All Node Memory` |
+| 4 | `Available Nodes` | 동일 | `All Available Nodes` |
+| 5 | `Pod` (행) | `Pod` | `Pod` |
+| 6 | `Pod CPU` | 동일 | `All Pod CPU` |
+| 7 | `Pod Memory` | 동일 | `All Pod Memory` |
+| 8 | `Pending Pods` | 동일 | `All Pending Pods` |
+| 9 | `Pod Restarts` | 동일 | `All Pod restarts` (소문자 r) |
+| 10 | `Application Pod` (행) | 동일 | `Application Pod` |
+| 11 | `App Pod CPU` | 동일 | `App Pod CPU` |
+| 12 | `App Pod Memory` | 동일 | `App Pod Memory` |
+| 13 | `App Running` | 동일 | `App Running` |
+| 14 | `App Restarts` | 동일 | `App restarts` (소문자 r) |
+| 15 | `App Pending` | 동일 | `App Pending` |
+| 16 | `Application Traffic` (행) | 동일 | `Application Traffic` |
+| 17 | `Request Count` | 동일 | `App Request Count` |
+| 18 | `Response Time` | 동일 | `App Response Time` |
+| 19 | **`Status Code`** | **`Status Codes`** | `App Status Code` |
+| 20 | `Application Logs` | 동일 | `App Application Logs` |
+| 21 | **`Alerts`** (행) | **`Alerts`** | **`Alert`** |
+| 22 | `Active Alerts` | 동일 | (이름 없음 · "Alertmanager 알림 현황") |
+
+가장 갈리는 두 곳이 **19(`Status Code` / `Status Codes`)** 와 **21(`Alerts` / `Alert`)** 이다.
+
+**배포 후에 고쳐야 할 때** — 클러스터를 다시 세울 필요 없다. bastion 에서 `~/wsc2026/k8s` 로 가
+위 `TITLES` 블록만 값 채워 실행한 뒤 ConfigMap 을 다시 만들어 apply 하면 Grafana 사이드카가
+1분 안에 다시 읽어간다:
+
+> 단, **본 PC 에서 `dashboard.json` 을 고쳤다면 step 1 의 `tar` + `aws s3 cp` 를 먼저 다시 돌리고**
+> bastion 에서 `task.tgz` 를 다시 풀어야 한다. 아래 블록은 bastion 의 파일이 최신이라고 가정한다.
+> `kubectl apply` 가 `unchanged` 를 뱉으면 아카이브가 아직 낡은 것이다.
+
+```bash
+cd ~/wsc2026/k8s
+TITLES='{"19":"Status Codes"}'   # ← 바꿀 것만
+jq --argjson t "$TITLES" '.panels |= map(.title = ($t[(.id|tostring)] // .title))' \
+  monitoring/dashboard.json > /tmp/d.json && mv /tmp/d.json monitoring/dashboard.json
+kubectl create configmap wsc2026-grafana-dashboard -n observability \
+  --from-file=dashboard.json=monitoring/dashboard.json --dry-run=client -o yaml \
+  | kubectl label --local -f - -o yaml grafana_dashboard=1 \
+  | kubectl apply -f -
+```
+
+> id 로 거는 이유: 제목이 서로의 부분문자열이라(`Pod CPU` ⊂ `App Pod CPU`) `sed` 치환은
+> 엉뚱한 패널까지 바꾼다. `TITLES='{}'` 이면 아무것도 바뀌지 않으므로 평소엔 그대로 둔다.
 
 ### 6) [bastion] Helm 애드온 + k8s 리소스 일괄 apply
 
@@ -319,6 +396,18 @@ aws dynamodb scan --table-name wsc2026-book-table --max-items 1 --query 'Items[0
 FB_POD=$(kubectl get pods -n observability -l app=fluent-bit -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n observability "$FB_POD" -- curl -s localhost:2021/metrics | grep -o '^log_metric[a-z_0-9]*' | sort -u
 
+# KSM 노드 라벨 노출 확인 — Available Nodes 패널과 $nodegroup 변수가 이 라벨에만 의존한다
+KSM_POD=$(kubectl get pods -n observability -l app.kubernetes.io/name=kube-state-metrics -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n observability "$KSM_POD" -- wget -qO- localhost:8080/metrics | grep -m2 '^kube_node_labels'
+# → label_eks_amazonaws_com_nodegroup="wsc2026-addon-nodegroup" 이 보여야 한다.
+#   안 보이면 kube-prometheus-stack-values.yaml 의 metricLabelsAllowlist 가 적용되지 않은 것이다.
+
+# 배포된 대시보드가 최신인지 (로컬 파일 없이 되는 의미 검사 — 채점 직전용)
+CM=$(kubectl get cm wsc2026-grafana-dashboard -n observability -o jsonpath='{.data.dashboard\.json}')
+echo "$CM" | grep -c 'filter @message like'   # 1 — Application Logs 의 /v1/book 필터
+echo "$CM" | grep -c 'count by (label_eks'    # 1 — Available Nodes 노드그룹별 집계
+# 0 이 나오면 옛 대시보드가 올라가 있는 것이다 → step 1 task.tgz 재릴레이 후 step 5 재렌더·apply
+
 # Grafana LB / datasource / 대시보드 (mark 11-2)
 GRAFANA_LB=$(kubectl get svc -n observability monitoring-grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 curl -s -u admin:'Skills$#$@!' "http://$GRAFANA_LB/api/datasources" | jq -r '.[].name'   # alertmanager cloudwatch prometheus
@@ -326,6 +415,10 @@ curl -s -u admin:'Skills$#$@!' "http://$GRAFANA_LB/api/search?query=wsc2026" | j
 
 # CloudWatch 앱 로그 (Reference02 형식)
 aws logs tail /wsc2026/eks/book-app --since 10m | head -5
+
+# Application Logs 패널이 실제로 쓰는 필터 — /v1/book 라인만 돌아와야 한다 (mark 11-3 오답처리 조항)
+aws logs filter-log-events --log-group-name /wsc2026/eks/book-app \
+  --filter-pattern '"\"path\":\"/v1/book\""' --max-items 5 --query 'events[].message' --output text
 ```
 
 > **필수 제출 조건** — 과제지 11절: "동작의 확인을 위해 로그 및 메트릭을 1개 이상 발생시켜야 합니다."
