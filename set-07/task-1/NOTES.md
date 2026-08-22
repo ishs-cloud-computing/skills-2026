@@ -163,9 +163,19 @@ Grafana 절(과제지 p7 / 채점지 p13)은 **재배포본에서도 내용이 �
 - `Book App Ready Pods` 가 `w:4` 인 근거: 이미지 제목이 `Book App Ready ...` 로 잘려 있고,
   채점지가 "4번은 Book App Ready까지만 출력되어도 정답"이라고 그 잘림을 그대로 인정한다.
   `w:8` 로 두면 제목이 안 잘려서 오히려 이미지와 달라진다.
-- 색상은 일부러 맞추지 않았다. 채점지가 "선수가 색상, 대소문자 등을 다르게 구성한 것은 정답 처리"
-  라고 명시한다. 이미지의 phase 별 색(Failed=빨강 … Unknown=보라)은 시리즈별 override 가 있어야
-  나오는데 점수와 무관해서 넣지 않는다.
+- `range_seconds` 는 기본 600 을 6h(21600) 로 늘렸다. `delay_seconds` 만 고치면 트래픽이 끊긴 지
+  12분 뒤 시계열이 사라져 대시보드 기본 창(`now-1h`)에서 다시 No Data 가 된다 — 실제로 그렇게 됐다.
+  창을 6h 로 두면 시드 한 번으로 경기 내내 마지막 데이터포인트를 계속 내보낸다. 값이 오래된 건
+  문제가 안 된다("표시되는 값의 경우 채점 시 무시함"). 치명적인 상태는 No Data 하나뿐이다.
+- Pod Status 색은 결국 이미지대로 맞췄다(byName override: Failed=red / Pending=yellow /
+  Running=green / Succeeded=blue / Unknown=purple). 이미지에서 뽑은 RGB 가 Grafana classic
+  팔레트 이름색과 그대로 일치한다(#F2495C·#FADE2A·#73BF69·#5794F2·#B877D9). 채점상 색은 자유지만
+  수동 채점자가 이미지와 나란히 놓고 보는 항목이라 맞추는 쪽이 안전하다.
+  `Book App Ready Pods` 의 노란 `2` 는 아직 기본색이다 — 필요하면 override 하나 더 붙이면 된다.
+- 노드 4대(app 2 + addon 2)는 줄이지 않는다. Addon NG 가 안는 Deployment 가 operator·prometheus·
+  grafana·kube-state-metrics·cloudwatch-exporter·LBC×2·coredns×2·ebs-csi-controller×2 = 11 개이고
+  전 노드 DaemonSet 5 개가 더 붙어 16 개다. t3.medium 의 파드 상한이 17 이라 1 대로 줄이면 롤아웃
+  중 스케줄이 막힌다. 채점 6-2-A 는 app≥2·addon≥1 만 보므로 2/2 로도 만점이다.
 
 ### 2026-08-22 audit 정책 — `/index/*` 제거 + DynamoRead 를 액션 1개씩 분리
 - 맥락: 2026-08-21 항목이 `eks:DescribeCluster` 를 ARN 으로 좁히면서 "남는 와일드카드 리소스는

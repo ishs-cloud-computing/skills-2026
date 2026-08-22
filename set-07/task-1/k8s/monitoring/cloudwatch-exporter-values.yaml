@@ -26,6 +26,9 @@ serviceMonitor:
 config: |-
   region: ap-northeast-2
   period_seconds: 60
+  # 기본 600 이면 트래픽이 끊기고 12분 뒤 시계열이 사라져 패널이 No Data 가 된다.
+  # 6h 를 보면 시드 한 번으로 경기 내내 마지막 데이터포인트를 계속 내보낸다.
+  range_seconds: 21600
   set_timestamp: false
   metrics:
     - aws_namespace: AWS/ApplicationELB
