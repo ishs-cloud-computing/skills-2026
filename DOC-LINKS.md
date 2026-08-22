@@ -1,7 +1,7 @@
 # DOC-LINKS — 리소스별 문서·구현 색인
 
 코드블록을 고칠 때 **무엇을 어느 순서로 여는가**의 색인이다.
-대회장에는 AI 코딩 보조가 없고([DAY-OF](DAY-OF.md) 5절), 인터넷은 공식 문서와 AWS 웹 Q 만 열린다.
+대회장에는 AI 코딩 보조가 없고([DAY-OF](DAY-OF.md) 6절), 인터넷은 공식 문서와 AWS 웹 Q 만 열린다.
 모르는 인자 하나를 3분에 찾느냐 20분에 찾느냐가 그대로 점수다.
 
 **여는 순서는 항상 이 셋이다.**
@@ -202,7 +202,7 @@ jq -r '.definitions.ManagedNodeGroup.properties | keys[]' schema.json
 
 ## 5. 덧붙이기 스니펫 — 기존 문항을 건드리지 않고 얹는 것
 
-당일 변동은 기존 문제 교체가 아니라 **문항 추가**다([DAY-OF](DAY-OF.md) 1·2절).
+당일 변동은 기존 문제 교체가 아니라 **문항 추가**다([DAY-OF](DAY-OF.md) 1·3절).
 아래는 기존 리소스에 **한 줄~한 블록으로 붙는** 형태만 모았다. 붙인 뒤 `terraform plan` 으로 기존 리소스에 diff 가 없는지 확인하고 apply 한다.
 
 > 1과제 옵션 5개(KMS·WAF·Security·Lambda GET API·Observability)의 전체 키트는 `add-addon-kit` 브랜치의
@@ -326,7 +326,7 @@ New-Item -ItemType Directory set-XX/task-2/provided/module-5
 
 ## 6. 구현이 없는 카탈로그 — 맨몸 진입점
 
-2과제 모듈 카탈로그 13개 중 **8·9·10 은 완성 구현이 없다**([DAY-OF](DAY-OF.md) 2절).
+2과제 모듈 카탈로그 13개 중 **8·9·10 은 완성 구현이 없다**([DAY-OF](DAY-OF.md) 3절).
 이게 걸리면 시간을 여기에 먼저 배분한다. 아래가 가장 가까운 출발점이다.
 
 ### 8. RDS Connection — 사실상 재료가 있다
