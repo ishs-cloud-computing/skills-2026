@@ -6,7 +6,22 @@
   "schemaVersion": 39,
   "tags": ["wskorea26"],
   "time": { "from": "now-1h", "to": "now" },
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(kube_pod_info, namespace)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "refresh": 2,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
@@ -18,7 +33,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))",
+          "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", container!=\"\"}[5m]))",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]
@@ -33,7 +48,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\"})",
+          "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"$namespace\", container!=\"\"})",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]
@@ -64,7 +79,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (kube_pod_container_status_restarts_total)",
+          "expr": "sum by (namespace, pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]
@@ -79,7 +94,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (rate(container_network_receive_bytes_total[5m]))",
+          "expr": "sum by (namespace, pod) (rate(container_network_receive_bytes_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]

@@ -33,10 +33,10 @@
 | 4-1-A / 9-2-A | DynamoDB GSI 과제지 명시 | 수정완료 | 구현은 `terraform/dynamodb.tf:28-41`에 이미 존재. 과제지 전사본 `task.md` §7 에 GSI 줄 추가 |
 | 7-2-A | ALB 예상출력 `wskorea26-cf`×2 + `403` | 영향없음 | `terraform/alb.tf:84-120` 헤더 조건 규칙 2개 + listener default 403(`:72-79`), `mark.md`도 이미 최신본 |
 | 10-0 | Grafana 접속 게이트 신설 | 수정완료 | 채점지 `mark.md`·`mark.sh` 10절 교체. 접속 경로·계정은 `README.md:262-263`, `terraform/outputs.tf:76-78`과 이미 일치 |
-| 10-1-A | book app CPU/Memory | 영향없음 | `dashboard.json:21,36` `sum by (namespace, pod)` — 범례에 book app 파드가 그대로 나온다 |
-| 10-2-A | 실행중인 **book app** Pod 개수 | 수정완료 | `dashboard.json:52`가 클러스터 전역 합계라 book app 개수를 읽을 수 없었다. `namespace="wskorea26", pod=~"wskorea26-book-deploy-.*"` 로 한정 |
-| 10-3-A | book app 재시작 횟수 | 영향없음 | `dashboard.json:67` 범례에 book app 파드 포함 |
-| 10-4-A | book app 네트워크 수신량 | 영향없음 | `dashboard.json:82` 범례에 book app 파드 포함 |
+| 10-1-A | book app CPU/Memory | 영향없음 | `dashboard.json:36,51` `sum by (namespace, pod)` — 범례에 book app 파드가 그대로 나온다 |
+| 10-2-A | 실행중인 **book app** Pod 개수 | 수정완료 | `dashboard.json:67`이 클러스터 전역 합계라 book app 개수를 읽을 수 없었다. `namespace="wskorea26", pod=~"wskorea26-book-deploy-.*"` 로 한정 |
+| 10-3-A | book app 재시작 횟수 | 영향없음 | `dashboard.json:82` 범례에 book app 파드 포함 |
+| 10-4-A | book app 네트워크 수신량 | 영향없음 | `dashboard.json:97` 범례에 book app 파드 포함 |
 | — | HighLatency Alert 채점 항목 삭제 / 로그 `level` 필드 / DataSource 이름 / `booking_id` 예시값 | **대상 아님(set-03)** | 근거 파일 `수정사항.txt` 가 set-03 정정본이었다. 이 세트엔 Alert·로그 형식·DataSource 채점 항목 자체가 없다 → `set-03/errata/수정사항(1).txt` 로 이관, 판정은 `set-03/task-1/NOTES.md` |
 | — | `static/ PASS` 객체 채점 제외 (`6-1`) | **대상 아님(set-03)** | 이 세트 2-2-A(`mark.md:159`)는 `web/main/` 2개 객체만 보고 `--prefix "static/"` 명령 자체가 없다. set-03 6-1 항목이다 |
 | — | `created_at` 을 `date` 기준 1분 이내 검증 (`9-3`) | **대상 아님(set-03)** | 이 세트 9-3-A 는 400 코드 확인이다. set-03 9-3 항목이라 이 세트 9-2-A 의 "정확히 일치" 문구는 그대로 남는다 (위 미해결) |
@@ -168,6 +168,23 @@
 
 ---
 ## 결정 로그
+
+### 2026-08-22 [10-1~4] Grafana 대시보드에 namespace 변수 추가 — 기본값 All, 채점 동작은 불변
+- 맥락: 과제지 12·채점지 10-1~4 는 필터를 요구하지 않는다(요구하는 쪽은 set-03 task.md §11).
+  당일 30% 변동으로 "네임스페이스별 필터" 문항이 붙을 때 JSON 을 열지 않으려는 사전 대비다.
+- 채택: `templating` 에 `namespace` 쿼리 변수 1개(`includeAll` + `multi` + 기본값 `All`),
+  4개 패널 expr 에 `namespace=~"$namespace"` 추가. **`allValue: ".*"` 가 이 결정의 핵심**이다 —
+  All 의 치환값이 변수 쿼리 결과가 아니라 리터럴 `.*` 가 되어, 변수 쿼리가 실패해도 패널은
+  현재와 동일하게 동작한다. `=~".*"` 는 라벨 없는 시계열도 매치하므로 series 누락도 없다
+- 기각: `allValue` 없이 `includeAll` 만 → All 이 쿼리 결과 정규식으로 치환된다. 대시보드 로드
+  시점에 `label_values(kube_pod_info, namespace)` 가 비면 `namespace=~""` 가 되어 5패널이
+  동시에 No data → 수동 채점 5점 전멸. 넣을 거면 `allValue` 가 없는 형태로는 안 넣는다
+- Pod 개수 stat(`id:3`)은 변수에 연결하지 않는다 — 정본 10-2-A 가 book app 한정 개수를
+  요구하므로 필터에 따라 값이 흔들리면 안 된다 (2026-08-07 결정 유지)
+- 기본값 오염 걱정 없음: 대시보드는 ConfigMap + grafana sidecar provisioning 이고
+  provider `allowUiUpdates` 가 기본 false 라 UI 에서 저장해 덮어쓸 수 없다. 채점자는 항상 `All`
+- 대가: 채점 5점이 걸린 4패널 expr 을 건드렸다. 배포 리허설 때 상단 `Namespace: All` 바 표시와
+  4패널 데이터 유무를 눈으로 한 번 확인한다 (실배포 검증은 대회 계정에서만 가능)
 
 ### 2026-07-27 k8s manifest 를 rendered/ 로 일괄 렌더 후 폴더 단위 apply
 - 맥락: 파일별 인라인 Replace 파이프는 치환 누락·env 미선언을 조용히 통과시킴.
