@@ -1,106 +1,139 @@
-# vpc-flow-log 부착 스니펫
+# VPC Flow Log 부착 KIT
 
-**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+VPC Flow Log → CloudWatch Logs(또는 S3) 한 묶음.
 
-## USE WHEN
+## 이 KIT이 맞나
 
-VPC Flow Log → CloudWatch Logs(또는 S3) 한 묶음. 1과제 Security/Observability 옵션
-("VPC 트래픽 로그 수집", set-02/03/05/08/09 task-1 후보)과 set-02 task-2 m2/m4 의
-네트워크 로그 문항에 대응한다.
+- 과제지에 **"VPC 트래픽 로그"·"Flow Log"** → 맞다.
+- **애플리케이션 로그** → [observability](../observability/README.md) 경로 C · **API 호출 감사** → [cloudtrail-hardening](../cloudtrail-hardening/README.md).
+- 전부 신규 리소스라 기존 리소스 재생성이 없다.
+
+## 세트별 현재 상태
+
+| | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| Flow Log | **없음** | **없음** | `aws_flow_log.this` **있음** |
+| 로그 그룹 | — | — | `aws_cloudwatch_log_group.flowlog` |
+| IAM Role | — | — | `aws_iam_role.flowlog` + `aws_iam_role_policy.flowlog` |
+| 파일 | — | — | `flowlog.tf` |
+| CMK | — | — | Platform CMK 암호화 |
+| `vpc_id` output | 있음 | 있음 | 있음 |
+
+**set-07은 이미 완성본이다** — 이 KIT 대신 `set-07/task-1/terraform/flowlog.tf` 를 복사하는 쪽이 빠르다.
+
+## 복사할 파일
+
+| 원본 | 대상 | 내용 |
+| --- | --- | --- |
+| `flowlog.tf` | `set-XX/task-1/terraform/` | 로그 그룹(retention·선택 CMK) · IAM Role(trust `vpc-flow-logs.amazonaws.com`) · `aws_flow_log` |
+| `variables.tf` | `variables-flowlog-addon.tf` | `addon_flowlog_*` 변수 |
 
 ## CHANGE — 당일 고치는 값
 
-`terraform.tfvars` 에 넣는다. **필수 1개**는 채우지 않으면 apply 되지 않는다.
-
 | 변수 | 기본값 | 무엇 |
 | --- | --- | --- |
-| `addon_flowlog_vpc_id` | **필수** | Flow Log 을 붙일 기존 VPC ID. 직접 참조하려면 aws_vpc.<기존>.id 로 바꾼다 |
+| `addon_flowlog_vpc_id` | **필수** | 직접 참조 권장 (`aws_vpc.this.id`) |
 | `addon_flowlog_name` | `"vpc-flowlog"` | Flow Log·로그 그룹 Name 태그 |
-| `addon_flowlog_log_group_name` | `"/vpc/flowlog"` | CloudWatch 로그 그룹 이름. 과제지 명시 이름과 정확히 일치시킨다 |
-| `addon_flowlog_role_name` | `"vpc-flowlog-role"` | Flow Log 게시용 IAM Role 이름 (trust: vpc-flow-logs.amazonaws.com) |
-| `addon_flowlog_traffic_type` | `"ALL"` | 수집 트래픽 유형: ALL / ACCEPT / REJECT |
-| `addon_flowlog_retention_days` | `30` | 로그 그룹 보존 기간 (일) |
-| `addon_flowlog_kms_key_arn` | `""` | 로그 그룹 암호화 CMK ARN. 빈 문자열이면 AWS 관리 키 |
-| `addon_flowlog_aggregation_interval` | `600` | 집계 간격 (초). 60 또는 600 만 허용 |
+| `addon_flowlog_log_group_name` | `"/vpc/flowlog"` | **과제지 명시 이름과 정확히 일치** |
+| `addon_flowlog_role_name` | `"vpc-flowlog-role"` | 게시용 IAM Role 이름 |
+| `addon_flowlog_traffic_type` | `"ALL"` | ALL / ACCEPT / REJECT |
+| `addon_flowlog_retention_days` | `30` | 로그 그룹 보존 |
+| `addon_flowlog_kms_key_arn` | `""` | CMK ARN. 빈 문자열이면 AWS 관리 키 |
+| `addon_flowlog_aggregation_interval` | `600` | **60 또는 600만 허용** |
 
-## KEEP — 건드리지 않는다
-
-- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
-- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
-- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
-
-## CHECK — apply 전 계정·리전
+## CHECK · RUN
 
 ```powershell
-aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
-aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+aws sts get-caller-identity; aws configure get region
+terraform fmt; terraform init; terraform validate
+terraform plan; terraform apply
 ```
 
-## RUN
-
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
-
-```powershell
-terraform fmt
-terraform init                # -upgrade 는 쓰지 않는다
-terraform validate
-terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
-terraform apply
-```
-
-복사할 파일과 순서는 아래 본문을 따른다.
-
-## VERIFY / SCORE
-
-- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
-- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
-
-## 파일
-
-- `flowlog.tf` — 로그 그룹(retention·선택 CMK) · IAM Role(trust `vpc-flow-logs.amazonaws.com`) · `aws_flow_log`(VPC, CW Logs 목적지)
-- `variables.tf` — `addon_flowlog_*` 변수. 로그 그룹·Role 이름은 과제지 명시값으로 tfvars 에서 덮어쓴다
-
-## 부착 절차
-
-1. `flowlog.tf`·`variables.tf` 를 `set-XX/task-Y/terraform/` 으로 복사한다.
-2. `terraform.tfvars` 에 값을 넣는다. 기존 VPC 를 직접 참조하려면 `var.addon_flowlog_vpc_id` 를 `aws_vpc.<기존>.id` 로 바꾼다.
-
-   ```hcl
-   addon_flowlog_vpc_id         = "vpc-0123456789abcdef0"
-   addon_flowlog_name           = "skills-vpc-flowlog"
-   addon_flowlog_log_group_name = "/skills/vpc/flowlog"
-   addon_flowlog_role_name      = "skills-vpc-flowlog-role"
-   addon_flowlog_traffic_type   = "ALL"          # ALL / ACCEPT / REJECT
-   addon_flowlog_retention_days = 30
-   addon_flowlog_kms_key_arn    = ""             # CMK 요구 시 ARN
-   ```
-
-3. `terraform fmt` → `terraform validate` → `terraform plan` 으로 기존 리소스 diff 없음 확인 → `terraform apply`.
-4. 검증:
-
-   ```powershell
-   aws ec2 describe-flow-logs --filter Name=resource-id,Values=<VPC ID> --query 'FlowLogs[].[FlowLogId,FlowLogStatus,TrafficType,LogDestinationType,LogGroupName]' --output table
-   aws logs describe-log-streams --log-group-name /skills/vpc/flowlog --max-items 3   # 스트림은 트래픽 발생 후 ~10분
-   ```
-
-## 블록
-
-### S3 목적지 (과제지가 "S3 에 저장" 을 요구할 때)
-
-`flowlog.tf` 의 로그 그룹·IAM Role·Role 정책을 지우고 `aws_flow_log` 를 아래로 바꾼다.
-S3 목적지는 IAM Role 이 필요 없다 — 버킷 정책은 서비스가 자동으로 붙인다(기존 정책이 있으면 수동 추가 필요).
+## 1. CloudWatch Logs 목적지
 
 ```hcl
+# 파일: set-XX/task-1/terraform/flowlog.tf   (KIT에서 복사됨)
 resource "aws_flow_log" "addon" {
-  vpc_id                   = var.addon_flowlog_vpc_id
+  vpc_id                   = aws_vpc.this.id            # ← 직접 참조 권장
+  traffic_type             = var.addon_flowlog_traffic_type
+  iam_role_arn             = aws_iam_role.addon_flowlog.arn
+  log_destination_type     = "cloud-watch-logs"
+  log_destination          = aws_cloudwatch_log_group.addon_flowlog.arn
+  max_aggregation_interval = var.addon_flowlog_aggregation_interval
+  tags                     = { Name = var.addon_flowlog_name }
+}
+```
+
+```hcl
+# 파일: set-XX/task-1/terraform/outputs.tf
+output "flowlog_id"        { value = aws_flow_log.addon.id }
+output "flowlog_log_group" { value = aws_cloudwatch_log_group.addon_flowlog.name }
+```
+
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+| 세트 | 리소스 주소 | output |
+| --- | --- | --- |
+| set-02 | 새로 만든다 (`aws_flow_log.addon`) | 위 블록 추가 |
+| set-03 | 새로 만든다 | 위 블록 추가 |
+| set-07 | **`aws_flow_log.this` 가 이미 있다** | `output "flowlog_log_group" { value = aws_cloudwatch_log_group.flowlog.name }` |
+
+```powershell
+terraform output -raw vpc_id                # 세 세트 모두 있음
+terraform output -raw flowlog_log_group
+
+aws ec2 describe-flow-logs --filter "Name=resource-id,Values=$(terraform output -raw vpc_id)" `
+  --query "FlowLogs[].[FlowLogId,FlowLogStatus,TrafficType,LogDestinationType,LogGroupName]" --output table
+
+# 스트림은 트래픽 발생 후 최대 10분(집계 600초) 뒤에 생긴다
+aws logs describe-log-streams --log-group-name (terraform output -raw flowlog_log_group) --max-items 3
+aws logs tail (terraform output -raw flowlog_log_group) --since 15m | Select-Object -First 5
+```
+
+채점이 촉박하면 `addon_flowlog_aggregation_interval = 60` 으로 낮춘다.
+</details>
+
+## 2. 로그 그룹 CMK 암호화
+
+```hcl
+# 파일: set-XX/task-1/terraform/flowlog.tf
+# 기존 aws_cloudwatch_log_group 리소스 블록 *안에*
+kms_key_id = var.addon_flowlog_kms_key_arn
+```
+
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+| 세트 | 쓸 키 | 키 ARN output |
+| --- | --- | --- |
+| set-02 | `aws_kms_key.s3` 재사용 또는 addon CMK | **없음** — [kms](../kms/README.md) 0번 |
+| set-03 | `aws_kms_key.eks` / `.bucket` 등 | `eks_kms_arn` · `bucket_kms_arn` (있음) |
+| set-07 | `aws_kms_key.platform` (이미 이 구성) | `platform_kms_arn` (있음) |
+
+```powershell
+terraform output -raw platform_kms_arn      # set-07
+# → terraform.tfvars 의 addon_flowlog_kms_key_arn 에 넣는다
+
+aws logs describe-log-groups --log-group-name-prefix (terraform output -raw flowlog_log_group) `
+  --query "logGroups[].[logGroupName,kmsKeyId,retentionInDays]"
+```
+
+key policy에 `logs.<region>.amazonaws.com` 문장이 **필수**다 — 없으면 apply가 AccessDenied로 실패한다 ([kms](../kms/README.md) 3번).
+</details>
+
+## 3. S3 목적지 (과제지가 "S3에 저장"을 요구할 때)
+
+```hcl
+# 파일: set-XX/task-1/terraform/flowlog.tf
+# KIT의 로그 그룹·IAM Role·Role 정책을 지우고 aws_flow_log 를 이걸로 바꾼다
+resource "aws_flow_log" "addon" {
+  vpc_id                   = aws_vpc.this.id
   traffic_type             = var.addon_flowlog_traffic_type
   log_destination_type     = "s3"
-  log_destination          = "arn:aws:s3:::<버킷이름>/flowlog/"   # 또는 "${aws_s3_bucket.<기존>.arn}/flowlog/"
+  log_destination          = "${aws_s3_bucket.web.arn}/flowlog/"   # ← 세트별 주소
   max_aggregation_interval = var.addon_flowlog_aggregation_interval
 
   destination_options {
-    file_format                = "parquet"   # 과제지가 Athena 조회를 요구하면 parquet, 아니면 plain-text
+    file_format                = "parquet"   # Athena 조회 요구면 parquet, 아니면 plain-text
     per_hour_partition         = true
     hive_compatible_partitions = false
   }
@@ -109,21 +142,61 @@ resource "aws_flow_log" "addon" {
 }
 ```
 
-### 서브넷·ENI 단위 (VPC 대신)
+S3 목적지는 IAM Role이 필요 없다.
 
-```hcl
-# aws_flow_log 리소스 안에서 vpc_id 대신:
-subnet_id = "<subnet-id>"     # 또는 eni_id = "<eni-id>"
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+| 세트 | 쓸 버킷 | 주의 |
+| --- | --- | --- |
+| set-02 | `aws_s3_bucket.web` | 정적 호스팅 버킷과 섞인다 — **별도 버킷 권장** |
+| set-03 | `aws_s3_bucket.static` | 동일 |
+| set-07 | `aws_s3_bucket.web` | 동일 |
+
+```powershell
+terraform output -raw s3_bucket_name        # 세 세트 모두 있음
+aws s3 ls "s3://$(terraform output -raw s3_bucket_name)/flowlog/" --recursive | Select-Object -First 5
+
+aws ec2 describe-flow-logs --filter "Name=resource-id,Values=$(terraform output -raw vpc_id)" `
+  --query "FlowLogs[].[LogDestinationType,LogDestination,DestinationOptions]"
 ```
 
-## TROUBLESHOOT — 이 KIT 고유 함정
-- 전부 신규 리소스 — 기존 리소스 재생성 없음. `traffic_type`·`log_destination`·`max_aggregation_interval` 변경은 ⚠ Flow Log 재생성(ForceNew)이나 채점 영향 없음.
+**기존 버킷 정책이 있으면** `delivery.logs.amazonaws.com` 의 `s3:PutObject`/`s3:GetBucketAcl` 문장을 직접 추가해야 한다 (자동 부착은 정책이 없을 때만). 세 세트 모두 OAC 정책이 이미 있으므로 **수동 추가가 필요하다.**
+</details>
+
+<details><summary><b>서브넷·ENI 단위 (VPC 대신)</b></summary>
+
+```hcl
+# 파일: set-XX/task-1/terraform/flowlog.tf
+# aws_flow_log 리소스 안에서 vpc_id 대신 하나만 지정한다
+subnet_id = aws_subnet.this["priv-a"].id
+# 또는
+eni_id = "<eni-id>"
+```
+
+```powershell
+terraform output -json private_subnet_ids    # 세 세트 모두 있음 (map)
+
+aws ec2 describe-flow-logs --query "FlowLogs[].[ResourceId,FlowLogStatus]" --output table
+```
+</details>
+
+## VERIFY
+
+```powershell
+aws ec2 describe-flow-logs --filter "Name=resource-id,Values=$(terraform output -raw vpc_id)" `
+  --query "FlowLogs[].[FlowLogId,FlowLogStatus,TrafficType,LogDestinationType,LogGroupName]" --output table
+aws logs tail (terraform output -raw flowlog_log_group) --since 15m | Select-Object -First 5
+```
+
+## TROUBLESHOOT
+
+- `traffic_type`·`log_destination`·`max_aggregation_interval` 변경은 Flow Log **재생성**(ForceNew)이지만 채점 영향은 없다.
 - `vpc_id`/`subnet_id`/`eni_id` 는 **하나만** 지정한다.
-- 로그 그룹 CMK 암호화 요구 시 key policy 에 `logs.<region>.amazonaws.com` 문장이 **필수** — 없으면 apply 가 AccessDenied. kms/README 의 CloudWatch Logs 절 참고.
-- S3 목적지에 기존 버킷 정책이 있으면 `delivery.logs.amazonaws.com` 의 `s3:PutObject`/`s3:GetBucketAcl` 문장을 직접 추가해야 한다(자동 부착은 정책이 없을 때만).
-- 채점 스크립트는 보통 `describe-flow-logs` 로 `FlowLogStatus=ACTIVE`·`TrafficType`·`LogGroupName` 을 읽는다 — 로그 그룹 이름·traffic type 은 과제지 값과 정확히 맞춘다.
-- 첫 로그 스트림은 트래픽 발생 후 최대 10분(집계 600초) 뒤에 생긴다. 채점 시간이 촉박하면 `addon_flowlog_aggregation_interval = 60`.
+- 로그 그룹 CMK를 쓰면 key policy에 logs 서비스 문장이 필수다.
+- S3 목적지에 **기존 버킷 정책이 있으면 서비스 문장을 수동 추가**해야 한다.
+- 채점은 보통 `describe-flow-logs` 로 `FlowLogStatus=ACTIVE`·`TrafficType`·`LogGroupName` 을 읽는다 — 이름·traffic type을 과제지 값과 정확히 맞춘다.
+- 첫 로그 스트림은 트래픽 발생 후 최대 10분 뒤에 생긴다. 채점이 촉박하면 집계 간격을 60으로.
 
 ## 실전 구현 (참고용)
 
-- set-07 task-1 `terraform/flowlog.tf` — CW Logs 목적지 + Platform CMK 암호화
+- set-07 task-1 `terraform/flowlog.tf` — CW Logs 목적지 + Platform CMK 암호화 (**완성 복사 원본**)

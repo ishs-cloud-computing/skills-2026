@@ -1,111 +1,165 @@
-# cw-dashboard 부착 스니펫
+# CloudWatch 대시보드 부착 KIT
 
-**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+대시보드 한 장 — ALB · EKS(Container Insights) · Lambda · WAF 위젯을 변수로 골라 넣는다. dimension 변수가 빈 위젯은 자동으로 빠진다.
 
-## USE WHEN
+## 이 KIT이 맞나
 
-CloudWatch 대시보드 한 장 — ALB·RDS·ECS·EKS(Container Insights)·Lambda·WAF 위젯을 변수로 골라 넣는다.
-task-3 "모니터링 환경" 요구, set-08/09 task-1 ECS 대시보드 추가 문항, 1과제 Observability 옵션(대시보드 형)에 대응한다.
+- 과제지에 **"대시보드"·"모니터링 환경 구성"** → 맞다.
+- **Grafana 대시보드** 요구 → [grafana-panels](../grafana-panels/README.md) (set-03/07 `k8s/monitoring/dashboard.json` 과 무관하지 않다).
+- **경보** → [cw-alarms](../cw-alarms/README.md).
+- 대시보드 본문 변경은 in-place다.
+
+## 세트별 위젯 재료
+
+| dimension | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| ALB `arn_suffix` | `aws_lb.book.arn_suffix` | **없음** (LBC 생성 — CLI로) | `aws_lb.app.arn_suffix` |
+| Lambda 함수 | `aws_lambda_function.book` | `.book_get` | `.get_booking` |
+| EKS 클러스터 | `wskorea26-cluster` | `wsc2026-eks-cluster` | `unicorn-eks-cluster` |
+| WAF Web ACL | **없음** | `${var.name_prefix}-waf` (CLOUDFRONT) | `unicorn-waf` (CLOUDFRONT) |
+| RDS · ECS | **없음** | **없음** | **없음** |
+| 기존 대시보드 | **없음** | **없음** | **없음** |
+
+## 복사할 파일
+
+| 원본 | 대상 | 내용 |
+| --- | --- | --- |
+| `cw-dashboard.tf` | `set-XX/task-1/terraform/` | `aws_cloudwatch_dashboard` 1개. `templatefile` 로 JSON 렌더 |
+| `dashboard.json.tftpl` | **`.tf` 와 같은 디렉터리** (`path.module` 기준) | 위젯 JSON |
+| `variables.tf` | `variables-cwdash-addon.tf` | `addon_cwdash_*` 변수 |
 
 ## CHANGE — 당일 고치는 값
 
-`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
-
 | 변수 | 기본값 | 무엇 |
 | --- | --- | --- |
-| `addon_cwdash_name` | `"skills-dashboard"` | 대시보드 이름. 과제지 명시 이름과 정확히 일치시킨다 |
-| `addon_cwdash_region` | `"ap-northeast-2"` | ALB·RDS·ECS·EKS·Lambda 위젯이 읽는 메트릭 리전 (대시보드 자체는 리전 무관) |
-| `addon_cwdash_period` | `60` | 위젯 공통 집계 주기 (초) |
-| `addon_cwdash_alb_arn_suffix` | `""` | ALB LoadBalancer dimension (aws_lb.<기존>.arn_suffix = app/<이름>/<id>) |
-| `addon_cwdash_rds_instance_id` | `""` | RDS DBInstanceIdentifier dimension |
-| `addon_cwdash_ecs_cluster_name` | `""` | ECS ClusterName dimension. service 와 둘 다 비어 있지 않아야 위젯이 들어간다 |
-| `addon_cwdash_ecs_service_name` | `""` | ECS ServiceName dimension |
-| `addon_cwdash_eks_cluster_name` | `""` | EKS ContainerInsights ClusterName dimension (amazon-cloudwatch-observability addon 필요) |
-| `addon_cwdash_lambda_function_name` | `""` | Lambda FunctionName dimension |
-| `addon_cwdash_waf_acl_name` | `""` | WAF WebACL dimension (Web ACL 이름) |
-| `addon_cwdash_waf_metric_region` | `"us-east-1"` | WAF BlockedRequests 메트릭이 있는 리전. CLOUDFRONT scope 는 us-east-1, REGIONAL 은 ALB 리전 |
-| `addon_cwdash_waf_dimension_region` | `"Global"` | WAF Region dimension 값. CLOUDFRONT scope 는 Global, REGIONAL 은 리전 코드(ap-northeast-2) |
+| `addon_cwdash_name` | `"skills-dashboard"` | 대시보드 이름. 과제지 명시 이름과 정확히 일치 |
+| `addon_cwdash_region` | `"ap-northeast-2"` | 위젯이 읽는 메트릭 리전 (대시보드 자체는 리전 무관) |
+| `addon_cwdash_period` | `60` | 위젯 공통 집계 주기(초) |
+| `addon_cwdash_alb_arn_suffix` | `""` | **`app/<이름>/<id>`** — ARN 전체가 아니다 |
+| `addon_cwdash_rds_instance_id` | `""` | task-1에는 RDS가 없다 |
+| `addon_cwdash_ecs_cluster_name` / `_service_name` | `""` | task-1에는 ECS가 없다 |
+| `addon_cwdash_eks_cluster_name` | `""` | ContainerInsights ClusterName (addon 필요) |
+| `addon_cwdash_lambda_function_name` | `""` | Lambda FunctionName |
+| `addon_cwdash_waf_acl_name` | `""` | Web ACL 이름 |
+| `addon_cwdash_waf_metric_region` | `"us-east-1"` | CLOUDFRONT는 us-east-1, REGIONAL은 ALB 리전 |
+| `addon_cwdash_waf_dimension_region` | `"Global"` | CLOUDFRONT는 `Global`, REGIONAL은 `ap-northeast-2` |
 
-## KEEP — 건드리지 않는다
-
-- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
-- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
-- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
-
-## CHECK — apply 전 계정·리전
+## CHECK · RUN
 
 ```powershell
-aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
-aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+aws sts get-caller-identity; aws configure get region
+terraform fmt; terraform init; terraform validate
+terraform plan; terraform apply
 ```
 
-## RUN
+## 1. 대시보드 리소스
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+```hcl
+# 파일: set-XX/task-1/terraform/cw-dashboard.tf   (KIT에서 복사됨)
+resource "aws_cloudwatch_dashboard" "addon" {
+  dashboard_name = var.addon_cwdash_name
+  dashboard_body = templatefile("${path.module}/dashboard.json.tftpl", {
+    region                = var.addon_cwdash_region
+    period                = var.addon_cwdash_period
+    alb_arn_suffix        = var.addon_cwdash_alb_arn_suffix
+    eks_cluster_name      = var.addon_cwdash_eks_cluster_name
+    lambda_function_name  = var.addon_cwdash_lambda_function_name
+    waf_acl_name          = var.addon_cwdash_waf_acl_name
+    waf_metric_region     = var.addon_cwdash_waf_metric_region
+    waf_dimension_region  = var.addon_cwdash_waf_dimension_region
+  })
+}
+```
+
+```hcl
+# 파일: set-XX/task-1/terraform/outputs.tf
+output "dashboard_name" { value = aws_cloudwatch_dashboard.addon.dashboard_name }
+output "dashboard_url" {
+  value = "https://${var.region}.console.aws.amazon.com/cloudwatch/home?region=${var.region}#dashboards:name=${aws_cloudwatch_dashboard.addon.dashboard_name}"
+}
+```
+
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+세 세트 모두 CloudWatch 대시보드가 **없다** — 새로 만든다.
 
 ```powershell
-terraform fmt
-terraform init                # -upgrade 는 쓰지 않는다
-terraform validate
-terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
-terraform apply
+terraform output -raw dashboard_name
+terraform output -raw dashboard_url      # 브라우저로 열어 위젯에 데이터가 그려지는지 본다
+
+aws cloudwatch get-dashboard --dashboard-name (terraform output -raw dashboard_name) `
+  --query DashboardBody --output text | ConvertFrom-Json |
+  Select-Object -ExpandProperty widgets |
+  Select-Object type, @{n='title';e={$_.properties.title}}
 ```
 
-복사할 파일과 순서는 아래 본문을 따른다.
+위젯이 비어 보이면 dimension 오타다 — 아래 2번으로 실제 값과 대조한다.
+</details>
 
-## VERIFY / SCORE
+## 2. dimension 값 채우기
 
-- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
-- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
+```hcl
+# 파일: set-XX/task-1/terraform/terraform.tfvars
+addon_cwdash_name                 = "skills-dashboard"
+addon_cwdash_region               = "ap-northeast-2"
+addon_cwdash_alb_arn_suffix       = "app/wskorea26-alb/0123456789abcdef"
+addon_cwdash_eks_cluster_name     = "wskorea26-cluster"
+addon_cwdash_lambda_function_name = "wskorea26-book-func"
+addon_cwdash_waf_acl_name         = ""
+addon_cwdash_waf_metric_region    = "us-east-1"
+addon_cwdash_waf_dimension_region = "Global"
+```
 
-## 파일
+<details><summary><b>값 뽑기 — 세트별 (전부 output에서 나온다)</b></summary>
 
-- `cw-dashboard.tf` — `aws_cloudwatch_dashboard` 1개. `templatefile` 로 JSON 렌더
-- `dashboard.json.tftpl` — 위젯 JSON. dimension 변수가 빈 위젯은 `%{ if }` 로 빠진다. 제목 텍스트 위젯은 항상 들어간다
-- `variables.tf` — `addon_cwdash_*` 변수. 이름·리전·dimension 전부 변수
+```hcl
+# 파일: set-02/task-1/terraform/outputs.tf
+output "app_alb_arn_suffix"   { value = aws_lb.book.arn_suffix }
+output "lambda_function_name" { value = aws_lambda_function.book.function_name }
+output "cluster_name"         { value = var.cluster_name }
 
-## 부착 절차
+# 파일: set-03/task-1/terraform/outputs.tf
+output "lambda_function_name" { value = aws_lambda_function.book_get.function_name }
+output "waf_name"             { value = aws_wafv2_web_acl.wsc2026.name }
 
-1. 세 파일을 `set-XX/task-Y/terraform/` 으로 복사한다. `dashboard.json.tftpl` 은 `.tf` 와 **같은 디렉토리**에 둔다(`path.module` 기준).
-2. `terraform.tfvars` 에 값을 넣는다. 빈 문자열인 위젯은 생성되지 않는다. 기존 리소스를 직접 참조하려면 `cw-dashboard.tf` 의 `var.addon_cwdash_alb_arn_suffix` 를 `aws_lb.<기존>.arn_suffix` 로, `var.addon_cwdash_rds_instance_id` 를 `aws_db_instance.<기존>.identifier` 로 바꾼다.
-
-   ```hcl
-   addon_cwdash_name                 = "skills-dashboard"   # 과제지 명시 이름
-   addon_cwdash_region               = "ap-northeast-2"
-   addon_cwdash_alb_arn_suffix       = "app/skills-alb/0123456789abcdef"
-   addon_cwdash_rds_instance_id      = "skills-db"
-   addon_cwdash_ecs_cluster_name     = "skills-cluster"
-   addon_cwdash_ecs_service_name     = "skills-service"
-   addon_cwdash_eks_cluster_name     = "skills-eks"        # Container Insights addon 설치돼 있을 때만
-   addon_cwdash_lambda_function_name = "skills-func"
-   addon_cwdash_waf_acl_name         = "skills-waf"
-   addon_cwdash_waf_metric_region    = "us-east-1"         # REGIONAL 이면 ALB 리전
-   addon_cwdash_waf_dimension_region = "Global"            # REGIONAL 이면 "ap-northeast-2"
-   ```
-
-3. `terraform fmt` → `terraform validate` → `terraform plan` 으로 기존 리소스 diff 없음 확인 → `terraform apply`.
-4. 검증:
-
-   ```powershell
-   aws cloudwatch get-dashboard --dashboard-name skills-dashboard --query DashboardBody --output text | ConvertFrom-Json | Select-Object -ExpandProperty widgets | Select-Object type, @{n='title';e={$_.properties.title}}
-   ```
-
-   콘솔 CloudWatch → Dashboards 에서 위젯에 데이터가 그려지는지 본다(메트릭 없음 = dimension 오타).
-
-## 블록
-
-Terraform 없이 CLI 로 넣을 때(콘솔 JSON 편집 → 파일 저장 후):
+# 파일: set-07/task-1/terraform/outputs.tf
+output "app_alb_arn_suffix"   { value = aws_lb.app.arn_suffix }
+output "lambda_function_name" { value = aws_lambda_function.get_booking.function_name }
+output "waf_name"             { value = aws_wafv2_web_acl.unicorn.name }
+```
 
 ```powershell
-aws cloudwatch put-dashboard --dashboard-name skills-dashboard --dashboard-body file://dashboard.json
+terraform output -raw app_alb_arn_suffix      # → app/<이름>/<id>  ← 이 형태여야 한다
+terraform output -raw lambda_function_name
+terraform output -raw waf_name
+(terraform output -raw cluster_arn).Split('/')[-1]    # set-03/set-07 은 cluster_arn 이 있다
+
+# set-03 — LBC 가 만든 ALB 의 suffix (ARN 에서 'app/' 이하)
+$arn = aws elbv2 describe-load-balancers `
+  --query "LoadBalancers[?contains(LoadBalancerName,'k8s-')].LoadBalancerArn" --output text
+$arn.Substring($arn.IndexOf('app/'))
+
+# 실제로 존재하는 dimension 인지 대조 (여기 안 나오면 위젯이 빈다)
+aws cloudwatch list-metrics --namespace AWS/ApplicationELB `
+  --query "Metrics[0:3].Dimensions" --output json
+aws cloudwatch list-metrics --namespace ContainerInsights `
+  --query "Metrics[0:3].Dimensions" --output json
 ```
 
-`dashboard.json.tftpl` 을 손으로 렌더해 쓰려면 `${...}` 자리를 값으로 채우고 `%{ if }`·`%{ endif }` 줄을 지운다.
+| 세트 | WAF 위젯 | `waf_dimension_region` |
+| --- | --- | --- |
+| set-02 | 없음 → `addon_cwdash_waf_acl_name = ""` | — |
+| set-03 | CLOUDFRONT | `"Global"`, metric region `us-east-1` |
+| set-07 | CLOUDFRONT | `"Global"`, metric region `us-east-1` |
 
-위젯 한 개 추가(템플릿 안 `]` 앞에, 바로 앞 위젯 뒤에 `,` 로 이어서):
+`ContainerInsights` 네임스페이스는 `amazon-cloudwatch-observability` addon이 켜져야 생긴다 → [observability](../observability/README.md) 경로 A. 안 켜도 apply는 성공하고 위젯만 빈다.
+</details>
+
+## 3. 위젯 하나 추가
 
 ```json
+// 파일: set-XX/task-1/terraform/dashboard.json.tftpl
+// 템플릿 안 `]` 앞에, 바로 앞 위젯 뒤에 `,` 로 이어서
 {
   "type": "metric", "width": 12, "height": 6,
   "properties": {
@@ -115,15 +169,63 @@ aws cloudwatch put-dashboard --dashboard-name skills-dashboard --dashboard-body 
 }
 ```
 
-## TROUBLESHOOT — 이 KIT 고유 함정
-- 대시보드 본문 변경은 in-place. `dashboard_name` 변경은 ⚠ 재생성(이름이 식별자) — 채점 영향 없음.
-- 위젯 `x`·`y` 를 일부러 뺐다 — 넣으면 전 위젯에 넣어야 하고, 빈 위젯이 빠질 때 좌표가 겹친다. 자동 배치(순서대로 채움)로 둔다.
-- ALB `LoadBalancer` dimension 은 ARN 이 아니라 `app/<이름>/<id>` (`arn_suffix`). 이름만 넣으면 데이터가 안 뜬다.
-- WAF CLOUDFRONT scope 는 메트릭 리전 `us-east-1` + dimension `Region=Global`. REGIONAL 은 둘 다 ALB 리전. 대시보드 리소스 자체는 리전 무관이라 provider alias 가 필요 없다.
-- `ContainerInsights`(EKS) / `ECS/ContainerInsights` 네임스페이스는 addon(EKS) 또는 `containerInsights` setting(ECS) 이 켜져야 생긴다 — observability/ 키트 참고. 안 켜면 위젯이 비어 있을 뿐 apply 는 성공한다.
-- `templatefile` 은 `.tftpl` 안에서 `$${`·`%%{` 로 이스케이프해야 리터럴 `${` 를 쓸 수 있다. CloudWatch Math 표현식(`"expression": "..."`) 은 `$`을 안 쓰므로 무관.
-- 채점 스크립트가 위젯 개수·제목을 읽을 수 있다(task-3 "모니터링 환경" 류). 과제지가 지정한 메트릭이 있으면 위젯 제목을 그 문구로 맞춘다.
+<details><summary><b>값 뽑기 — 세트별 (자주 쓰는 메트릭 조합)</b></summary>
+
+| 위젯 | Namespace / MetricName | dimension |
+| --- | --- | --- |
+| ALB 5xx | `AWS/ApplicationELB` / `HTTPCode_Target_5XX_Count` | `LoadBalancer` = `app/<이름>/<id>` |
+| ALB 지연 | `AWS/ApplicationELB` / `TargetResponseTime` | 동일 |
+| Lambda 오류 | `AWS/Lambda` / `Errors` | `FunctionName` |
+| EKS 노드 CPU | `ContainerInsights` / `node_cpu_utilization` | `ClusterName` |
+| WAF 차단 | `AWS/WAFV2` / `BlockedRequests` | `WebACL`, `Region`, `Rule=ALL` |
+| CloudFront 요청 | `AWS/CloudFront` / `Requests` | `DistributionId`, `Region=Global` (us-east-1 메트릭) |
+
+```powershell
+# CloudFront 위젯을 넣을 때
+terraform output -raw cloudfront_id
+
+# 값이 실제로 있는지
+aws cloudwatch get-metric-statistics --namespace AWS/Lambda --metric-name Errors `
+  --dimensions Name=FunctionName,Value=(terraform output -raw lambda_function_name) `
+  --start-time (Get-Date).AddHours(-1).ToUniversalTime().ToString("s") `
+  --end-time (Get-Date).ToUniversalTime().ToString("s") --period 300 --statistics Sum
+```
+</details>
+
+<details><summary><b>Terraform 없이 CLI로 넣기 (콘솔에서 JSON 편집한 뒤)</b></summary>
+
+```powershell
+aws cloudwatch put-dashboard --dashboard-name skills-dashboard --dashboard-body file://dashboard.json
+
+# 되돌리기 — 현재 본문을 파일로 내려둔다
+aws cloudwatch get-dashboard --dashboard-name skills-dashboard --query DashboardBody --output text > dashboard.json
+```
+
+`dashboard.json.tftpl` 을 손으로 렌더하려면 `${...}` 자리를 값으로 채우고 `%{ if }`·`%{ endif }` 줄을 지운다.
+</details>
+
+## VERIFY
+
+```powershell
+$d = terraform output -raw dashboard_name
+aws cloudwatch get-dashboard --dashboard-name $d --query DashboardBody --output text |
+  ConvertFrom-Json | Select-Object -ExpandProperty widgets |
+  Select-Object type, @{n='title';e={$_.properties.title}}
+terraform output -raw dashboard_url
+```
+
+콘솔 CloudWatch → Dashboards에서 위젯에 데이터가 그려지는지 본다. **메트릭 없음 = dimension 오타**다.
+
+## TROUBLESHOOT
+
+- 대시보드 본문 변경은 in-place. `dashboard_name` 변경은 재생성이지만 채점 영향은 없다.
+- 위젯 `x`·`y` 를 일부러 뺐다 — 넣으면 전 위젯에 넣어야 하고, 빈 위젯이 빠질 때 좌표가 겹친다.
+- **ALB `LoadBalancer` dimension은 ARN이 아니라 `app/<이름>/<id>`** (`arn_suffix`).
+- WAF CLOUDFRONT scope는 메트릭 리전 `us-east-1` + dimension `Region=Global`. 대시보드 리소스 자체는 리전 무관이라 provider alias가 필요 없다.
+- `ContainerInsights` 네임스페이스는 addon이 켜져야 생긴다. 안 켜면 위젯이 빌 뿐 apply는 성공한다.
+- `templatefile` 은 `.tftpl` 안에서 `$${`·`%%{` 로 이스케이프해야 리터럴 `${` 를 쓸 수 있다.
+- 채점이 위젯 개수·제목을 읽을 수 있다 — 과제지가 지정한 메트릭이 있으면 **위젯 제목을 그 문구로** 맞춘다.
 
 ## 실전 구현 (참고용)
 
-없음 — 저장소 task-1 세트에 `aws_cloudwatch_dashboard` 는 없다. Grafana 대시보드는 set-03/07 task-1 `k8s/monitoring/dashboard.json`(CloudWatch 와 무관).
+없음 — 저장소 task-1 세트에 `aws_cloudwatch_dashboard` 는 없다. Grafana 대시보드는 set-02/03/07 task-1 `k8s/monitoring/dashboard.json` 이며 CloudWatch 대시보드와 별개다.

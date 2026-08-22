@@ -1,103 +1,66 @@
-# alb-hardening 부착 스니펫
+# ALB 강화 부착 KIT
 
-**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+기존 ALB에 액세스 로그 · 삭제 보호 · 헤더 검증 리스너 규칙 · HTTPS 리스너를 붙인다.
 
-## USE WHEN
+## 이 KIT이 맞나
 
-기존 ALB 에 액세스 로그·삭제 보호·헤더 검증 리스너 규칙·HTTPS 리스너를 붙이는 키트.
-1과제 Security/Observability 옵션 확장(set-08/09 task-1), set-02 m2 ALB 에 대응한다.
+- 과제지 기존 로드밸런서 문항 뒤에 **"액세스 로그를 S3에"·"삭제 보호"·"리스너 규칙"·"HTTP→HTTPS"** 가 붙었다 → 맞다.
+- **set-03에는 Terraform ALB가 없다.** LBC가 Ingress로 만든다 — 이 KIT의 Terraform 블록이 안 맞는다. 아래 4번(어노테이션)을 본다.
+
+## 세트별 현재 ALB 구성
+
+| | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| 앱 ALB | `aws_lb.book` (internet-facing) | **없음** — k8s Ingress(LBC) | `aws_lb.app` (**internal** + CloudFront VPC Origin) |
+| Grafana ALB | `aws_lb.grafana` | 없음 (Ingress 경로) | `aws_lb.grafana` |
+| 리스너 | `aws_lb_listener.book` (80) | Ingress annotation | `aws_lb_listener.app` (80) |
+| 리스너 규칙 | `.book_post` · `.book_lambda` (헤더 조건) | — | `.health`(10) · `.post`(20) |
+| 타깃 그룹 | `.book` · `.lambda` · `.grafana` | LBC 생성 | `.app` · `.lambda` · `.grafana` |
+| DNS output | `book_alb_dns` · `grafana_alb_dns` | **없음** | `alb_dns_name` · `grafana_alb_dns_name` |
+| TG ARN output | `app_target_group_arn` · `grafana_target_group_arn` | **없음** | `app_target_group_arn` · `grafana_target_group_arn` |
+| ALB ARN output | **없음** | — | **없음** |
+| 액세스 로그 | **없음** | 없음 | **없음** |
+| 삭제 보호 | **없음** | 없음 | **없음** |
+
+## 복사할 파일
+
+| 원본 | 대상 | 내용 |
+| --- | --- | --- |
+| `alb-hardening.tf` | `set-XX/task-1/terraform/` | 로그 버킷(SSE-S3) + 버킷 정책 · 헤더 조건 리스너 규칙(count) · HTTPS 리스너(count) |
+| `variables.tf` | `variables-albh-addon.tf` | `addon_albh_*` 변수 |
+
+로그만 필요하면 리스너 규칙·HTTPS 리소스 블록은 지워도 된다 (변수 기본값이 `""` 라 count 0으로도 안 생긴다).
+
+`access_logs` · `enable_deletion_protection` · `drop_invalid_header_fields` 는 파일이 아니라 기존 `aws_lb` 안에 넣는 **인자**다.
 
 ## CHANGE — 당일 고치는 값
 
-`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
-
 | 변수 | 기본값 | 무엇 |
 | --- | --- | --- |
-| `addon_albh_log_bucket_prefix` | `"skills-alb-logs"` | ALB 액세스 로그 버킷 이름 접두. 뒤에 -<account_id> 가 붙는다. 과제지 명시 이름이면 그대로 |
-| `addon_albh_log_prefix` | `"alb"` | access_logs.prefix 값. 빈 문자열이면 버킷 루트(AWSLogs/...) |
-| `addon_albh_listener_arn` | `""` | 헤더 조건 규칙을 붙일 기존 HTTP 리스너 ARN. 빈 문자열이면 규칙 생성 안 함. 직접 참조하려면 aws_lb_listener.<기존>.arn |
-| `addon_albh_target_group_arn` | `""` | 헤더 조건 규칙·HTTPS 리스너가 forward 할 타깃 그룹 ARN. 직접 참조하려면 aws_lb_target_group.<기존>.arn |
-| `addon_albh_rule_priority` | `1` | 헤더 조건 규칙 priority. 기존 규칙과 겹치지 않게 |
-| `addon_albh_header_name` | `"X-Origin-Verify"` | 오리진 검증 헤더 이름. CloudFront origin custom_header.name 과 동일 |
-| `addon_albh_header_value` | `""` | 오리진 검증 헤더 값. CloudFront origin custom_header.value 와 동일(20자 이상 요구 세트 있음) |
-| `addon_albh_alb_arn` | `""` | HTTPS 리스너를 붙일 기존 ALB ARN. 직접 참조하려면 aws_lb.<기존>.arn |
-| `addon_albh_certificate_arn` | `""` | HTTPS 리스너용 ACM 인증서 ARN(ALB 와 같은 리전). 빈 문자열이면 HTTPS 리스너 생성 안 함 |
+| `addon_albh_log_bucket_prefix` | `"skills-alb-logs"` | 로그 버킷 접두. 뒤에 `-<account_id>` |
+| `addon_albh_log_prefix` | `"alb"` | `access_logs.prefix`. **끝에 `/` 를 넣지 않는다** |
+| `addon_albh_listener_arn` | `""` | 규칙을 붙일 기존 HTTP 리스너 ARN. 직접 참조 권장 |
+| `addon_albh_target_group_arn` | `""` | 규칙·HTTPS 리스너가 forward할 타깃 그룹 ARN |
+| `addon_albh_rule_priority` | `1` | 규칙 priority. 기존 규칙과 겹치지 않게 |
+| `addon_albh_header_name` | `"X-Origin-Verify"` | 오리진 검증 헤더 이름 |
+| `addon_albh_header_value` | `""` | CloudFront `custom_header.value` 와 **바이트 단위 동일** |
+| `addon_albh_alb_arn` | `""` | HTTPS 리스너를 붙일 ALB ARN |
+| `addon_albh_certificate_arn` | `""` | ACM ARN (**ALB와 같은 리전**). 빈 문자열이면 HTTPS 리스너 생성 안 함 |
 
-## KEEP — 건드리지 않는다
-
-- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
-- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
-- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
-
-## CHECK — apply 전 계정·리전
+## CHECK · RUN
 
 ```powershell
-aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
-aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
-```
-
-## RUN
-
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
-
-```powershell
-terraform fmt
-terraform init                # -upgrade 는 쓰지 않는다
-terraform validate
-terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
+aws sts get-caller-identity; aws configure get region
+terraform fmt; terraform init; terraform validate
+terraform plan        # aws_lb 가 update in-place 인지 확인
 terraform apply
 ```
 
-복사할 파일과 순서는 아래 본문을 따른다.
-
-## VERIFY / SCORE
-
-- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
-- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
-
-## 파일
-
-- `alb-hardening.tf` — 로그 버킷(SSE-S3) + 버킷 정책(ELB 계정 + logdelivery 서비스 principal) · 헤더 조건 리스너 규칙(`count`, 리스너 ARN 있을 때만) · HTTPS 리스너(`count`, ACM ARN 있을 때만)
-- `variables.tf` — `addon_albh_*` 변수. 기존 리소스(리스너·타깃 그룹·ALB ARN)는 변수로 받는다
-
-`access_logs`·`enable_deletion_protection`·`drop_invalid_header_fields` 는 기존 `aws_lb` 안에 넣는 인자라 README 블록.
-
-## 부착 절차
-
-1. `alb-hardening.tf`·`variables.tf` 를 `set-XX/task-Y/terraform/` 으로 복사한다. 로그만 필요하면 리스너 규칙·HTTPS 리소스 블록은 지워도 된다(변수 기본값이 "" 라 count 0 으로도 안 생긴다).
-2. 기존 `aws_lb` 리소스 안에 필요한 블록(아래)을 넣는다. `access_logs` 는 로그 버킷 정책 뒤에 적용돼야 하므로 `aws_lb` 에 `depends_on = [aws_s3_bucket_policy.addon_alb_logs]` 추가.
-3. `terraform.tfvars`. 기존 리소스를 직접 참조하려면 `var.addon_albh_listener_arn` 을 `aws_lb_listener.<기존>.arn` 으로 바꾼다.
-
-   ```hcl
-   addon_albh_log_bucket_prefix = "skills-alb-logs"      # 과제지 명시 이름
-   addon_albh_log_prefix        = "alb"
-   addon_albh_listener_arn      = "arn:aws:elasticloadbalancing:ap-northeast-2:<ACCOUNT>:listener/app/skills-alb/<id>/<id>"
-   addon_albh_target_group_arn  = "arn:aws:elasticloadbalancing:ap-northeast-2:<ACCOUNT>:targetgroup/skills-tg/<id>"
-   addon_albh_rule_priority     = 1
-   addon_albh_header_name       = "X-Origin-Verify"
-   addon_albh_header_value      = "<CloudFront custom_header 와 같은 값>"
-   addon_albh_alb_arn           = ""                    # HTTPS 리스너 쓸 때만
-   addon_albh_certificate_arn   = ""                    # ACM ARN (같은 리전)
-   ```
-
-4. `terraform fmt` → `terraform validate` → `terraform plan` 으로 `aws_lb` 가 **update in-place** 인지 확인 → `terraform apply`.
-5. 검증:
-
-   ```powershell
-   aws elbv2 describe-load-balancer-attributes --load-balancer-arn <ALB ARN> --query "Attributes[?starts_with(Key,'access_logs') || Key=='deletion_protection.enabled' || Key=='routing.http.drop_invalid_header_fields.enabled']"
-   aws elbv2 describe-rules --listener-arn <리스너 ARN> --query 'Rules[].[Priority,Conditions[0].HttpHeaderConfig.HttpHeaderName,Actions[0].Type]' --output table
-   curl.exe -s -o NUL -w "%{http_code}`n" http://<ALB DNS>/                                   # 403
-   curl.exe -s -o NUL -w "%{http_code}`n" -H "X-Origin-Verify: <값>" http://<ALB DNS>/health  # 200
-   aws s3 ls s3://skills-alb-logs-<ACCOUNT>/alb/AWSLogs/ --recursive | Select-Object -First 3   # 5분 주기 기록, 첫 파일 ELBAccessLogTestFile
-   ```
-
-## 블록
-
-### 액세스 로그 · 삭제 보호 · 잘못된 헤더 드롭
+## 1. 액세스 로그 · 삭제 보호 · 잘못된 헤더 드롭
 
 ```hcl
-# aws_lb 리소스 안에:
+# 파일: set-XX/task-1/terraform/alb.tf
+# 기존 aws_lb 리소스 블록 *안에* (전부 in-place)
 access_logs {
   bucket  = aws_s3_bucket.addon_alb_logs.id
   prefix  = var.addon_albh_log_prefix
@@ -106,12 +69,48 @@ access_logs {
 
 enable_deletion_protection = true
 drop_invalid_header_fields = true
+
+# 버킷 정책이 먼저 있어야 access_logs 적용이 성공한다
+depends_on = [aws_s3_bucket_policy.addon_alb_logs]
 ```
 
-### 리스너 기본 403 (CloudFront 미경유 차단)
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+| 세트 | 붙일 `aws_lb` | ALB ARN output |
+| --- | --- | --- |
+| set-02 | `aws_lb.book` (+ 요구되면 `aws_lb.grafana` 도) | **없음** — 아래 블록 추가 |
+| set-03 | **Terraform ALB 없음** — 4번(어노테이션)으로 | — |
+| set-07 | `aws_lb.app` (+ `aws_lb.grafana`) | **없음** — 아래 블록 추가 |
 
 ```hcl
-# 기존 aws_lb_listener(HTTP 80) 의 default_action 을 교체:
+# 파일: set-02/task-1/terraform/outputs.tf
+output "app_alb_arn"     { value = aws_lb.book.arn }
+output "grafana_alb_arn" { value = aws_lb.grafana.arn }
+output "alb_log_bucket"  { value = aws_s3_bucket.addon_alb_logs.id }
+
+# 파일: set-07/task-1/terraform/outputs.tf
+output "app_alb_arn"     { value = aws_lb.app.arn }
+output "grafana_alb_arn" { value = aws_lb.grafana.arn }
+output "alb_log_bucket"  { value = aws_s3_bucket.addon_alb_logs.id }
+```
+
+```powershell
+$alb = terraform output -raw app_alb_arn
+aws elbv2 describe-load-balancer-attributes --load-balancer-arn $alb `
+  --query "Attributes[?starts_with(Key,'access_logs') || Key=='deletion_protection.enabled' || Key=='routing.http.drop_invalid_header_fields.enabled']"
+
+# 로그는 5분 주기. 첫 파일은 ELBAccessLogTestFile
+aws s3 ls "s3://$(terraform output -raw alb_log_bucket)/alb/AWSLogs/" --recursive | Select-Object -First 3
+```
+
+**로그 버킷 정책이 없거나 틀리면 `access_logs` 적용 자체가 `InvalidConfigurationRequest: Access Denied for bucket` 으로 실패한다.**
+</details>
+
+## 2. 리스너 기본 403 (CloudFront 미경유 차단)
+
+```hcl
+# 파일: set-XX/task-1/terraform/alb.tf
+# 기존 aws_lb_listener(HTTP 80) 의 default_action 을 *교체* (in-place)
 default_action {
   type = "fixed-response"
   fixed_response {
@@ -122,13 +121,46 @@ default_action {
 }
 ```
 
-forward 는 `alb-hardening.tf` 의 `aws_lb_listener_rule.addon_origin_verify`(헤더 조건)가 담당한다.
-POST/GET 분기가 필요하면 규칙을 둘로 나누고 `http_request_method` 조건을 추가한다(set-02 task-1 `alb.tf`).
+forward는 `alb-hardening.tf` 의 `aws_lb_listener_rule.addon_origin_verify`(헤더 조건)가 담당한다. POST/GET 분기가 필요하면 규칙을 둘로 나누고 `http_request_method` 조건을 추가한다(set-02 패턴).
 
-### HTTP → HTTPS 리다이렉트 (ACM 있을 때)
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+| 세트 | 리스너 | 현재 default_action | 주의 |
+| --- | --- | --- | --- |
+| set-02 | `aws_lb_listener.book` | 이미 403 fixed-response | 헤더 조건 규칙 2개가 이미 있다 |
+| set-03 | Ingress | — | 4번으로 |
+| set-07 | `aws_lb_listener.app` | internal ALB + VPC Origin이라 헤더 검증 불필요 | 규칙 10·20 사용 중 |
 
 ```hcl
-# 기존 aws_lb_listener(HTTP 80) 의 default_action 을 교체:
+# 파일: set-XX/task-1/terraform/outputs.tf
+output "app_listener_arn" { value = aws_lb_listener.book.arn }   # set-07 은 aws_lb_listener.app.arn
+```
+
+```powershell
+terraform output -raw app_listener_arn
+aws elbv2 describe-rules --listener-arn (terraform output -raw app_listener_arn) `
+  --query "Rules[].[Priority,Conditions[0].HttpHeaderConfig.HttpHeaderName,Actions[0].Type]" --output table
+
+# 동작 확인 (set-02)
+$dns = terraform output -raw book_alb_dns
+curl.exe -s -o NUL -w "%{http_code}`n" "http://$dns/"                                    # 403
+curl.exe -s -o NUL -w "%{http_code}`n" -H "X-Origin-Verify: <값>" "http://$dns/health"   # 200
+```
+
+**set-02는 규칙 개수를 채점한다** (`HttpHeaderConfig.Values[]` 출력 줄 수). 규칙을 추가하면 채점이 깨질 수 있다.
+
+set-07의 앱 ALB는 **internal** 이라 로컬 curl로 못 친다. CloudFront 도메인으로 확인한다:
+
+```powershell
+curl.exe -s -o NUL -w "%{http_code}`n" "https://$(terraform output -raw cloudfront_domain)/"
+```
+</details>
+
+## 3. HTTP → HTTPS 리다이렉트 (ACM 있을 때만)
+
+```hcl
+# 파일: set-XX/task-1/terraform/alb.tf
+# 기존 aws_lb_listener(HTTP 80) 의 default_action 을 *교체*
 default_action {
   type = "redirect"
   redirect {
@@ -139,24 +171,86 @@ default_action {
 }
 ```
 
-HTTPS 리스너 본체는 `alb-hardening.tf` 의 `aws_lb_listener.addon_https`(`addon_albh_certificate_arn` 주입 시 생성).
+HTTPS 리스너 본체는 `alb-hardening.tf` 의 `aws_lb_listener.addon_https` (`addon_albh_certificate_arn` 주입 시 생성).
 
-## TROUBLESHOOT — 이 KIT 고유 함정
-- `access_logs`·`enable_deletion_protection`·`drop_invalid_header_fields` 는 ALB 속성이라 **in-place**. 리스너 `default_action` 교체도 in-place. 규칙 `priority` 변경은 ⚠ 재생성(채점 영향 없음).
-- **로그 버킷 정책이 없거나 틀리면 `access_logs` 적용 자체가 `InvalidConfigurationRequest: Access Denied for bucket` 로 실패한다.** 경로는 `<prefix>/AWSLogs/<account>/*` 정확히. `prefix` 끝에 `/` 를 넣지 않는다(ALB 가 붙인다).
-- principal 은 리전에 따라 다르다 — 2022-08 이전 리전은 `data.aws_elb_service_account`(ELB 계정 ID), 이후 신규 리전은 `logdelivery.elasticloadbalancing.amazonaws.com`. 스니펫은 둘 다 넣었다. 신규 리전(ap-southeast-3·4 등)에서는 data source 가 에러 → data 블록과 첫 statement 를 지운다. provider 6.x 에서 data source 유지 확인(v6.31 문서).
-- 로그 버킷 암호화는 **SSE-S3(AES256)만**. 세트 공통 CMK 로 바꾸면 apply 는 되지만 로그가 안 쌓인다.
-- `enable_deletion_protection = true` 면 `terraform destroy` 가 ALB 에서 막힌다. teardown 전에 `false` 로 apply 하거나 콘솔에서 끈다. 런북 teardown 절에 한 줄 추가.
-- `drop_invalid_header_fields` 는 채점 curl 에 영향 없음(유효하지 않은 헤더 이름만 드롭).
-- 헤더 조건 `values` 는 대소문자 구분. CloudFront `custom_header` 값과 **바이트 단위 동일**해야 한다. 값을 바꾸면 배포 갱신(3~5분) 동안 403 이 섞인다.
-- `http_header_name` 은 대소문자 무시(`X-Origin-Verify` == `x-origin-verify`), 채점 스크립트가 describe-rules 출력 문자열을 비교하면 과제지 표기대로 쓴다.
-- set-02 mark 7-2 는 `HttpHeaderConfig.Values[]` 출력 줄 수를 센다 — 규칙 개수를 과제지대로 유지(추가 규칙이 채점을 깨뜨릴 수 있음).
-- HTTPS 리스너는 ACM 인증서가 **같은 리전**에 있어야 한다(CloudFront 용 us-east-1 인증서는 ALB 에 못 붙인다). 대회 계정에 도메인이 없으면 HTTPS 리스너 문항은 사실상 출제되지 않는다 — 변수 기본값 "" 로 꺼 둔다.
-- 로그 버킷이 이미 있으면(`BucketAlreadyOwnedByYou`) `addon_albh_log_bucket_prefix` 를 바꾼다. 기존 버킷 삭제 시도 금지.
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+ACM 인증서는 **ALB와 같은 리전**(ap-northeast-2)에 있어야 한다. CloudFront용 us-east-1 인증서는 ALB에 못 붙인다.
+
+```powershell
+aws acm list-certificates --region ap-northeast-2 `
+  --query "CertificateSummaryList[].[DomainName,CertificateArn]" --output table
+```
+
+**세 세트 모두 ACM 인증서가 없다.** 대회 계정에 도메인이 없으면 이 문항은 사실상 출제되지 않는다 — `addon_albh_certificate_arn = ""` 로 꺼 둔다.
+</details>
+
+## 4. set-03 — Ingress 어노테이션으로 같은 것을 한다
+
+set-03의 ALB는 LBC가 만드므로 Terraform 인자가 아니라 **어노테이션**이다. Terraform으로 걸면 LBC 동기화 때 벗겨진다.
+
+```yaml
+# 파일: set-03/task-1/k8s/app/05-ingress.yaml   (metadata.annotations 안)
+alb.ingress.kubernetes.io/load-balancer-attributes: >-
+  access_logs.s3.enabled=true,
+  access_logs.s3.bucket=<로그 버킷 이름>,
+  access_logs.s3.prefix=alb,
+  deletion_protection.enabled=true,
+  routing.http.drop_invalid_header_fields.enabled=true
+alb.ingress.kubernetes.io/wafv2-acl-arn: "<Web ACL ARN>"
+```
+
+<details><summary><b>값 뽑기 — set-03</b></summary>
+
+로그 버킷은 Terraform(이 KIT)이 만들고, 이름만 어노테이션에 넣는다:
+
+```hcl
+# 파일: set-03/task-1/terraform/outputs.tf
+output "alb_log_bucket" { value = aws_s3_bucket.addon_alb_logs.id }
+output "waf_arn"        { value = aws_wafv2_web_acl.wsc2026.arn }
+```
+
+```powershell
+terraform output -raw alb_log_bucket
+terraform output -raw waf_arn
+
+# LBC 가 만든 ALB 주소·ARN
+kubectl get ingress -A -o jsonpath='{.items[*].status.loadBalancer.ingress[0].hostname}'
+aws elbv2 describe-load-balancers `
+  --query "LoadBalancers[?contains(LoadBalancerName,'k8s-')].[LoadBalancerName,LoadBalancerArn]" --output table
+
+# 어노테이션 반영 확인 (LBC 로그에 에러가 없어야 한다)
+kubectl -n kube-system logs deploy/aws-load-balancer-controller --tail=50
+```
+
+로그 버킷 정책의 `aws:SourceArn` 은 LBC가 만든 ALB ARN이라 apply 시점에 모른다 — 정책을 계정 단위(`arn:aws:elasticloadbalancing:ap-northeast-2:<account>:loadbalancer/app/*`)로 넓히거나, ALB 생성 후 2차 apply로 좁힌다.
+</details>
+
+## VERIFY
+
+```powershell
+$alb = terraform output -raw app_alb_arn
+aws elbv2 describe-load-balancer-attributes --load-balancer-arn $alb `
+  --query "Attributes[?starts_with(Key,'access_logs') || Key=='deletion_protection.enabled']"
+aws elbv2 describe-rules --listener-arn (terraform output -raw app_listener_arn) --output table
+aws s3 ls "s3://$(terraform output -raw alb_log_bucket)/alb/AWSLogs/" --recursive | Select-Object -First 3
+```
+
+## TROUBLESHOOT
+
+- `access_logs` · `enable_deletion_protection` · `drop_invalid_header_fields` 는 ALB 속성이라 **in-place**. 리스너 `default_action` 교체도 in-place. 규칙 `priority` 변경은 재생성이지만 채점 영향은 없다.
+- **로그 버킷 정책이 없거나 틀리면 `access_logs` 적용이 실패한다.** 경로는 `<prefix>/AWSLogs/<account>/*` 정확히. `prefix` 끝에 `/` 를 넣지 않는다.
+- principal은 리전에 따라 다르다 — 2022-08 이전 리전은 `data.aws_elb_service_account`, 이후 신규 리전은 `logdelivery.elasticloadbalancing.amazonaws.com`. KIT은 둘 다 넣었다. ap-northeast-2는 구 리전이라 그대로 동작한다.
+- 로그 버킷 암호화는 **SSE-S3(AES256)만**. 세트 공통 CMK로 바꾸면 apply는 되지만 로그가 안 쌓인다.
+- `enable_deletion_protection = true` 면 `terraform destroy` 가 ALB에서 막힌다. teardown 전에 `false` 로 apply한다.
+- 헤더 조건 `values` 는 대소문자 구분 — CloudFront `custom_header` 값과 바이트 단위 동일해야 한다. 값을 바꾸면 배포 갱신(3~5분) 동안 403이 섞인다.
+- `http_header_name` 자체는 대소문자 무시지만, 채점이 `describe-rules` 출력 문자열을 비교하면 **과제지 표기대로** 쓴다.
+- `drop_invalid_header_fields` 는 채점 curl에 영향이 없다 (유효하지 않은 헤더 이름만 드롭).
+- 로그 버킷이 이미 있으면(`BucketAlreadyOwnedByYou`) `addon_albh_log_bucket_prefix` 를 바꾼다.
 
 ## 실전 구현 (참고용)
 
 - set-02 task-1 `terraform/alb.tf` — 기본 403 + 헤더 조건 규칙 2개(POST/GET 분기)
-- set-08 task-1 `terraform/alb.tf`·`cloudfront.tf` — `random_password` 헤더 값 + 단일 헤더 규칙
-- set-07 task-1 `terraform/alb.tf` — internal ALB + VPC Origin(헤더 검증 불필요)
-- 액세스 로그·삭제 보호·HTTPS 리스너 실전 구현은 없음
+- set-07 task-1 `terraform/alb.tf` — internal ALB + CloudFront VPC Origin (헤더 검증 불필요)
+- set-03 task-1 `k8s/app/05-ingress.yaml` — LBC 어노테이션 방식
+- 액세스 로그 · 삭제 보호 · HTTPS 리스너는 실전 구현이 없다.
