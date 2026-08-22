@@ -132,7 +132,7 @@ aws ecr describe-image-scan-findings --repository-name wskorea26-book-repo --ima
 `envsubst` 대체 — cluster.yaml 의 `${VAR}` 를 현재 env 값으로 치환한다:
 
 ```powershell
-cd eksctl
+cd ../eksctl
 $c = Get-Content cluster.yaml -Raw
 
 # 치환 전: cluster.yaml 이 요구하는 env 가 전부 선언됐는지 검사
