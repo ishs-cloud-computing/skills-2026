@@ -42,14 +42,13 @@ README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7·9·10 �
 
 ### 0) [본 PC·PowerShell] 도구 준비 + 콘솔 자격증명 로그인 + 사전 변수
 
-> **모든 단계를 지급받은 root 로 수행한다.** 채점도 root 콘솔 세션으로 진행되므로(채점지에 IAM 사용자를
-> 만들라는 지시가 없다) 클러스터 생성자·KMS·S3 신원이 채점 셸과 어긋나지 않는다.
-> 액세스 키는 만들지 않는다 — `aws login` 이 콘솔 자격증명으로 임시 크레덴셜을 받는다.
+> **모든 단계를 지급받은 IAM 계정으로 수행한다.** 
+> 클러스터 생성자·KMS·S3 신원이 채점 셸과 어긋나지 않는다.
 
 ```powershell
 aws --version                          # 2.32.0 이상 (aws login 요건)
 
-# 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행 (default 프로파일)
+# 파워유저 : console에서 발급한 AcessKey로 로그인 
 aws configure              # region = ap-northeast-2
 
 # local .env.ps1 — 셸 재시작에도 재사용 (작업 규칙 6, .gitignore 등록됨)
