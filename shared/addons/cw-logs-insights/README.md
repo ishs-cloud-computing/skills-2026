@@ -1,89 +1,95 @@
-# cw-logs-insights 부착 스니펫
+# CloudWatch Logs Insights 부착 KIT
 
-**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+저장 쿼리(`aws_cloudwatch_query_definition`) 묶음 — 앱 로그(status·경로·지연) 5개 + WAF 로그(룰·UA·경로·IP별 BLOCK) 6개. 쿼리 원문은 아래 블록에 있어 콘솔에 그대로 붙여 넣어도 된다.
 
-## USE WHEN
+## 이 KIT이 맞나
 
-CloudWatch Logs Insights 저장 쿼리(`aws_cloudwatch_query_definition`) 묶음 — 앱 로그(status·경로·지연) 5개 + WAF 로그(룰·UA·경로·IP 별 BLOCK 집계) 6개.
-task-3 "로그 쿼리 추가" 류 문항, 1과제 Observability 옵션(로그 분석 형), set-08/09 task-1 ECS 로그 분석 추가 문항에 대응한다.
-쿼리 원문은 아래 "블록" 절 — Terraform 없이 콘솔에 붙여 넣어도 된다.
+- 과제지에 **"로그 쿼리"·"저장된 쿼리"·"로그 분석"** → 맞다.
+- **경보** → [cw-alarms](../cw-alarms/README.md) · **대시보드** → [cw-dashboard](../cw-dashboard/README.md).
+- 전부 신규 리소스라 기존 리소스 재생성이 없다.
+
+## 세트별 쿼리 대상 로그 그룹
+
+| | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| 앱 로그 그룹 | `aws_cloudwatch_log_group.pod_logs` | `.book_app` | `.book_app` |
+| Lambda 로그 그룹 | `.book_lambda` | `.book_function` | `.get_booking` |
+| WAF 로그 그룹 | **없음** (WAF 자체 없음) | **없음** (로깅 미구성) | `aws_cloudwatch_log_group.waf` = `aws-waf-logs-unicorn` (**us-east-1**) |
+| 앱 로그 수집 | Fluent Bit (`k8s/monitoring/`) | Fluent Bit (`k8s/logging/`) | Fluent Bit (`k8s/logging/`) |
+| 기존 저장 쿼리 | **없음** | **없음** | **없음** |
+
+## 복사할 파일
+
+| 원본 | 대상 | 내용 |
+| --- | --- | --- |
+| `cw-logs-insights.tf` | `set-XX/task-1/terraform/` | 쿼리 원문(locals) + `aws_cloudwatch_query_definition` 2묶음 (앱: 기본 리전 / WAF: `aws.use1`) |
+| `variables.tf` | `variables-cwli-addon.tf` | `addon_cwli_*` 변수 |
+
+WAF 쿼리를 쓰면 provider alias `use1` 이 필요하다 — set-03·set-07은 **이미 있고**, set-02는 없으니 추가한다. REGIONAL scope WAF면 `provider = aws.use1` 줄을 지운다.
 
 ## CHANGE — 당일 고치는 값
 
-`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
-
 | 변수 | 기본값 | 무엇 |
 | --- | --- | --- |
-| `addon_cwli_name_prefix` | `"skills"` | 저장 쿼리 이름 접두. 콘솔에는 <접두>/app/..., <접두>/waf/... 폴더로 보인다. 과제지가 이름을 지정하면 그 값 |
-| `addon_cwli_app_log_group_names` | `[]` | 앱 로그 쿼리 대상 로그 그룹 (ECS awslogs `/ecs/<앱>` · Container Insights `/aws/containerinsights/<클러스터>/application` 등). 비어 있으면 앱 쿼리를 만들지 않는다 |
-| `addon_cwli_waf_log_group_names` | `[]` | WAF 로그 그룹 (`aws-waf-logs-*`). CLOUDFRONT scope 는 us-east-1 에 있으므로 쿼리 정의도 aws.use1 로 만든다. 비어 있으면 WAF 쿼리를 만들지 않는다 |
+| `addon_cwli_name_prefix` | `"skills"` | 저장 쿼리 이름 접두. 콘솔에 `<접두>/app/...` 폴더로 보인다. `/` 는 폴더 구분자 |
+| `addon_cwli_app_log_group_names` | `[]` | 앱 쿼리 대상. 비어 있으면 앱 쿼리를 만들지 않는다 |
+| `addon_cwli_waf_log_group_names` | `[]` | WAF 로그 그룹(`aws-waf-logs-*`). 비어 있으면 WAF 쿼리를 만들지 않는다 |
 
-## KEEP — 건드리지 않는다
-
-- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
-- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
-- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
-
-## CHECK — apply 전 계정·리전
+## CHECK · RUN
 
 ```powershell
-aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
-aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+aws sts get-caller-identity; aws configure get region
+terraform fmt; terraform init; terraform validate
+terraform plan; terraform apply
 ```
 
-## RUN
+## 0. 대상 로그 그룹 지정
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+```hcl
+# 파일: set-XX/task-1/terraform/terraform.tfvars
+addon_cwli_name_prefix         = "skills"
+addon_cwli_app_log_group_names = ["/aws/containerinsights/wskorea26-cluster/application"]
+addon_cwli_waf_log_group_names = []     # set-07 만 ["aws-waf-logs-unicorn"]
+```
+
+<details><summary><b>값 뽑기 — 세트별</b></summary>
+
+tfvars에 손으로 적지 말고 output에서 뽑는다:
+
+```hcl
+# 파일: set-02/task-1/terraform/outputs.tf
+output "app_log_group"    { value = aws_cloudwatch_log_group.pod_logs.name }
+output "lambda_log_group" { value = aws_cloudwatch_log_group.book_lambda.name }
+
+# 파일: set-03/task-1/terraform/outputs.tf   (app_log_group 은 이미 있다)
+output "lambda_log_group" { value = aws_cloudwatch_log_group.book_function.name }
+
+# 파일: set-07/task-1/terraform/outputs.tf
+output "app_log_group"    { value = aws_cloudwatch_log_group.book_app.name }
+output "lambda_log_group" { value = aws_cloudwatch_log_group.get_booking.name }
+output "waf_log_group"    { value = aws_cloudwatch_log_group.waf.name }
+```
 
 ```powershell
-terraform fmt
-terraform init                # -upgrade 는 쓰지 않는다
-terraform validate
-terraform plan                # 기존 리소스에 replace/delete 가 보이면 중단
-terraform apply
+terraform output -raw app_log_group
+terraform output -raw lambda_log_group
+terraform output -raw waf_log_group          # set-07 만
+
+# 계정에 실제로 있는 로그 그룹 목록 (Container Insights 를 켰다면 여기 뜬다)
+aws logs describe-log-groups --query "logGroups[].logGroupName" --output table
+aws logs describe-log-groups --region us-east-1 `
+  --log-group-name-prefix aws-waf-logs- --query "logGroups[].logGroupName"
 ```
 
-복사할 파일과 순서는 아래 본문을 따른다.
+또는 `.tf` 안에서 직접 참조로 바꾼다:
 
-## VERIFY / SCORE
+```hcl
+# 파일: set-XX/task-1/terraform/cw-logs-insights.tf
+log_group_names = [aws_cloudwatch_log_group.book_app.name]   # ← 세트별 주소
+```
+</details>
 
-- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
-- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
-
-## 파일
-
-- `cw-logs-insights.tf` — 쿼리 원문(locals) + `aws_cloudwatch_query_definition` 2묶음(앱: 기본 리전 / WAF: `aws.use1`)
-- `variables.tf` — `addon_cwli_*` 변수. 로그 그룹 이름 2종(list) + 이름 접두
-
-## 부착 절차
-
-1. 두 파일을 `set-XX/task-Y/terraform/` 으로 복사한다. WAF 쿼리를 쓰면 provider alias `use1` 필요 — 없으면 `versions.tf` 에 추가(waf/README 의 블록). REGIONAL scope WAF(로그 그룹이 기본 리전)면 `addon_waf` 리소스의 `provider = aws.use1` 줄을 지운다.
-2. `terraform.tfvars` 에 로그 그룹 이름을 넣는다. 빈 list 인 묶음은 만들지 않는다. 기존 리소스를 직접 참조하려면 `var.addon_cwli_app_log_group_names` 를 `[aws_cloudwatch_log_group.<기존>.name]` 으로 바꾼다.
-
-   ```hcl
-   addon_cwli_name_prefix         = "skills"
-   addon_cwli_app_log_group_names = ["/ecs/skills-app"]                       # EKS: ["/aws/containerinsights/skills-eks/application"]
-   addon_cwli_waf_log_group_names = ["aws-waf-logs-skills-waf"]               # us-east-1 (CLOUDFRONT)
-   ```
-
-3. `terraform fmt` → `terraform validate` → `terraform plan` 으로 기존 리소스 diff 없음 확인 → `terraform apply`.
-4. 검증 — 저장 쿼리 존재 + 실제 실행:
-
-   ```powershell
-   aws logs describe-query-definitions --query-definition-name-prefix skills/ --query 'queryDefinitions[].name'
-   aws logs describe-query-definitions --query-definition-name-prefix skills/waf --region us-east-1 --query 'queryDefinitions[].name'
-
-   # 실행 (콘솔: CloudWatch → Logs Insights → Saved queries → skills/...). CLI:
-   $q = aws logs start-query --log-group-name /ecs/skills-app --start-time ([DateTimeOffset]::UtcNow.AddHours(-1).ToUnixTimeSeconds()) --end-time ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) --query-string 'parse @message /status=(?<status>[0-9]{3})/ | filter ispresent(status) | stats count() as cnt by status | sort status asc' --query queryId --output text
-   aws logs get-query-results --query-id $q
-   ```
-
-## 블록
-
-콘솔 Logs Insights 에 그대로 붙여 넣는 원문. `.tf` 의 locals 와 같다.
-
-### 앱 로그 (`/ecs/<앱>` · `/aws/containerinsights/<클러스터>/application`) — 형식 `... path=/x status=404 duration=12 ...`
+## 1. 앱 로그 쿼리 — 형식 `... path=/x status=404 duration=12 ...`
 
 status 분포:
 
@@ -131,9 +137,33 @@ filter @message like /(?i)(error|exception|panic|fatal|timeout)/
 | limit 100
 ```
 
-JSON 로그(`{"status":404,"path":"/x","duration_ms":12}`)면 parse 없이 필드를 바로 쓴다 — `filter status >= 500 | stats count() by path`. Container Insights 는 앱 stdout 이 `log` 필드 안에 문자열로 들어가므로 위 regex parse 가 그대로 맞는다.
+<details><summary><b>값 뽑기 — 세트별 (parse 를 맞추는 게 먼저다)</b></summary>
 
-### WAF 로그 (`aws-waf-logs-*`, CLOUDFRONT 는 us-east-1)
+**앱 로그 형식은 세트마다 다르다.** 위 regex는 예시다 — 실제 한 줄을 먼저 본다:
+
+```powershell
+$lg = terraform output -raw app_log_group
+aws logs tail $lg --since 15m | Select-Object -First 5
+
+# 쿼리를 CLI 로 바로 실행해 본다
+$q = aws logs start-query --log-group-name $lg `
+  --start-time ([DateTimeOffset]::UtcNow.AddHours(-1).ToUnixTimeSeconds()) `
+  --end-time ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) `
+  --query-string 'parse @message /status=(?<status>[0-9]{3})/ | filter ispresent(status) | stats count() as cnt by status | sort status asc' `
+  --query queryId --output text
+aws logs get-query-results --query-id $q
+
+# 저장 쿼리가 만들어졌는지
+aws logs describe-query-definitions --query-definition-name-prefix skills/ `
+  --query "queryDefinitions[].name"
+```
+
+JSON 로그면 parse 없이 필드를 바로 쓴다 — `filter status >= 500 | stats count() by path`.
+
+Fluent Bit이 CloudWatch로 보내는 경우 앱 stdout이 `log` 필드 안 문자열로 들어가므로 위 regex parse가 그대로 맞는다. Container Insights를 켰다면 `/aws/containerinsights/<클러스터>/application` 이 추가로 생긴다.
+</details>
+
+## 2. WAF 로그 쿼리 (`aws-waf-logs-*`, CLOUDFRONT는 us-east-1)
 
 action 추이(5분):
 
@@ -150,7 +180,7 @@ filter action = "BLOCK"
 | sort cnt desc
 ```
 
-UA 별 BLOCK (UA 는 `httpRequest.headers[]` 안이라 parse 필수):
+UA별 BLOCK (UA는 `httpRequest.headers[]` 안이라 parse 필수):
 
 ```
 filter action = "BLOCK"
@@ -178,7 +208,7 @@ filter action = "BLOCK"
 | limit 20
 ```
 
-COUNT 룰 매칭(승격 판단용 — top-level `action` 에 COUNT 는 없다):
+COUNT 룰 매칭(승격 판단용 — top-level `action` 에 COUNT는 없다):
 
 ```
 filter ispresent(nonTerminatingMatchingRules.0.ruleId)
@@ -186,21 +216,62 @@ filter ispresent(nonTerminatingMatchingRules.0.ruleId)
 | sort cnt desc
 ```
 
-조사용 변형: 위 쿼리의 `filter action = "BLOCK"` 뒤에 `and httpRequest.uri like /^\/v1\//`(정상 경로만) 또는 `and ua like /gobuster|zap|wpscan|sqlmap|nikto/` 를 이어 붙인다. regex 리터럴 안의 `/` 는 `\/`.
+<details><summary><b>값 뽑기 — 세트별 (WAF 로그가 있는 세트는 set-07뿐)</b></summary>
 
-## TROUBLESHOOT — 이 KIT 고유 함정
-- 전부 신규 리소스 — 기존 리소스 재생성 없음. `name` 변경은 in-place(query_definition_id 유지).
-- **쿼리 정의는 리전 리소스다.** 로그 그룹이 있는 리전에 만들어야 콘솔 Saved queries 에 보인다 — CLOUDFRONT WAF 로그는 us-east-1 이라 `aws.use1`.
-- `log_group_names` 의 로그 그룹은 apply 시점에 없어도 생성은 된다(검증 안 함). 단 실행 시 로그 그룹이 없으면 `ResourceNotFoundException`.
-- 앱 로그 형식은 세트마다 다르다 — 기본 regex 는 set-08 앱(`path=/x status=404 duration=...`) 실측. 먼저 `fields @message | limit 5` 로 한 줄 보고 parse 를 맞춘다. `duration` 단위(ms/s)·접미사 유무는 **확인 필요** — 숫자 뒤에 `ms` 가 붙으면 `[0-9.]+` 가 숫자만 잡으므로 그대로 동작한다.
-- 문법 함정(task-3 실측): `stats ... by` 한 명령을 여러 줄로 나누면 `MalformedQueryException` — 명령 단위로 한 줄. `sort bin(5m)` 불가 → `by bin(5m) as t | sort t asc`. regex 리터럴 `/.../` 안의 `/` 는 `\/` 이스케이프.
-- WAF 로그에 요청 body 는 없다. body 매칭 룰은 `terminatingRuleMatchDetails`/`matchedData` 토큰으로만 본다. `count-rules` 쿼리는 `nonTerminatingMatchingRules.0`(첫 요소)만 센다 — 다중 매칭 요청은 누락.
-- ALB access log 는 S3 전용(Athena 대상) — Logs Insights 로 못 본다. 과제지가 "ALB 로그 쿼리" 를 요구하면 ALB 앞단이 아니라 앱 로그(ECS awslogs / Container Insights) 를 대상으로 잡는다.
-- 과제지가 저장 쿼리 이름을 지정하면 `addon_cwli_name_prefix` 가 아니라 locals 의 key 까지 그 이름으로 맞춘다(이름 정확 일치). `/` 는 콘솔 폴더 구분자다.
-- 저장 쿼리 파라미터(`{{param}}`)는 콘솔 전용 — `query_string` 에 넣으면 그대로 문자열이라 API 실행이 깨진다. 조사값은 수동 치환.
+| 세트 | WAF 로그 그룹 | 리전 | 준비 |
+| --- | --- | --- | --- |
+| set-02 | 없음 | — | [waf](../waf/README.md) 로 Web ACL부터 |
+| set-03 | **없음** (Web ACL은 있으나 로깅 미구성) | us-east-1 | [waf](../waf/README.md) 3번으로 로깅 먼저 |
+| set-07 | `aws-waf-logs-unicorn` | **us-east-1** | 그대로 쓸 수 있다 |
+
+```powershell
+# set-07
+$waf = terraform output -raw waf_log_group
+aws logs tail $waf --region us-east-1 --since 15m | Select-Object -First 3
+
+$q = aws logs start-query --region us-east-1 --log-group-name $waf `
+  --start-time ([DateTimeOffset]::UtcNow.AddHours(-1).ToUnixTimeSeconds()) `
+  --end-time ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) `
+  --query-string 'filter action = "BLOCK" | stats count() as cnt by terminatingRuleId | sort cnt desc' `
+  --query queryId --output text
+aws logs get-query-results --query-id $q --region us-east-1
+
+# 저장 쿼리도 us-east-1 에 만들어진다
+aws logs describe-query-definitions --region us-east-1 `
+  --query-definition-name-prefix skills/waf --query "queryDefinitions[].name"
+```
+
+**쿼리 정의는 리전 리소스다** — 로그 그룹이 있는 리전에 만들어야 콘솔 Saved queries에 보인다.
+
+조사용 변형: `filter action = "BLOCK"` 뒤에 `and httpRequest.uri like /^\/v1\//` 또는 `and ua like /gobuster|zap|wpscan|sqlmap|nikto/` 를 이어 붙인다. regex 리터럴 안의 `/` 는 `\/`.
+</details>
+
+## VERIFY
+
+```powershell
+aws logs describe-query-definitions --query-definition-name-prefix skills/ --query "queryDefinitions[].name"
+aws logs describe-query-definitions --query-definition-name-prefix skills/waf --region us-east-1 --query "queryDefinitions[].name"
+```
+
+콘솔: CloudWatch → Logs Insights → Saved queries → `skills/...`
+
+## TROUBLESHOOT
+
+- **쿼리 정의는 리전 리소스다.** CLOUDFRONT WAF 로그는 us-east-1이라 `aws.use1` 로 만든다.
+- `log_group_names` 의 로그 그룹은 apply 시점에 없어도 생성은 된다(검증 안 함). 단 실행 시 없으면 `ResourceNotFoundException`.
+- **앱 로그 형식은 세트마다 다르다.** `aws logs tail` 로 한 줄 보고 parse를 맞춘다.
+- 문법 함정(task-3 실측): `stats ... by` 한 명령을 여러 줄로 나누면 `MalformedQueryException` — 명령 단위로 한 줄. `sort bin(5m)` 불가 → `by bin(5m) as t | sort t asc`. regex 리터럴 안 `/` 는 `\/`.
+- WAF 로그에 **요청 body는 없다.** body 매칭 룰은 `terminatingRuleMatchDetails`/`matchedData` 토큰으로만 본다. `count-rules` 쿼리는 `nonTerminatingMatchingRules.0`(첫 요소)만 세므로 다중 매칭은 누락된다.
+- **ALB access log는 S3 전용**(Athena 대상)이라 Logs Insights로 못 본다. "ALB 로그 쿼리" 요구면 앱 로그를 대상으로 잡는다.
+- 과제지가 저장 쿼리 이름을 지정하면 `addon_cwli_name_prefix` 뿐 아니라 locals의 key까지 그 이름으로 맞춘다(이름 정확 일치).
+- 저장 쿼리 파라미터(`{{param}}`)는 **콘솔 전용**이다. `query_string` 에 넣으면 API 실행이 깨진다.
 
 ## 실전 구현 (참고용)
 
-- task-3 `NOTES.md` "Logs Insights 쿼리 세트" — WAF 쿼리 라이브 검증 기록 (쿼리 파일은 삭제됨, 원문은 이 README 가 재구성본)
+- task-3 `NOTES.md` "Logs Insights 쿼리 세트" — WAF 쿼리 라이브 검증 기록
 - task-3 `terraform/waf.tf` — WAF 로그 그룹(us-east-1) + logging_configuration
-- set-08 task-1 `terraform/cloudwatch.tf` — 앱 로그 형식·메트릭 필터 패턴(`%status=4[0-9][0-9]%`)
+- set-07 task-1 `terraform/cloudwatch.tf` — WAF 로그 그룹 + 리소스 정책 (그대로 쿼리 대상)
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

@@ -8,7 +8,7 @@ CloudFront + S3(정적 웹) + EKS(book 앱) + Lambda(예매 조회) + DynamoDB +
 
 ## 값 대조표
 
-> [DAY-OF.md 8절 값 대조표](../../DAY-OF.md#8-값-대조표) 로 이동했다.
+> [DAY-OF.md 8절 값 대조표](../../DAY-OF.md#10-값-대조표) 로 이동했다.
 
 ## 디렉토리 구조
 

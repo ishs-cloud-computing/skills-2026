@@ -1,124 +1,224 @@
-# Security (IRSA · Pod Identity · OIDC) 부착 스니펫
+# Security 부착 KIT — IRSA · Pod Identity · OIDC
 
-**STATUS:** `DOC-ONLY` — 부착 파일 없이 README 스니펫만. 문법 검증 대상 아니다.
+Pod에 IAM 권한을 주는 방식을 정하고 붙인다. Terraform 파일 복사가 없는 **판정 + 명령 KIT**이다.
 
-## USE WHEN
+## 이 KIT이 맞나 — 방식 판정을 먼저 한다
 
-1과제 Security 옵션의 핵심은 "Pod 에 IAM 권한을 어떻게 주는가"다. 방식 판정부터 한다.
+| 채점 스크립트가 보는 것 | 방식 |
+| --- | --- |
+| ServiceAccount의 `eks.amazonaws.com/role-arn` **annotation을 읽는다** | **IRSA** (`withOIDC: true` + `iam.serviceAccounts`) |
+| Role의 존재·정책 내용만 읽는다 / Pod 안에서 API 호출이 되는지만 본다 | **Pod Identity** (기본값) |
+
+과제지가 "OIDC"를 명시해도 판정은 같다 — OIDC provider는 IRSA의 전제 조건이다.
+
+**Pod Identity는 annotation을 만들지 않는다.** annotation을 읽는 채점 항목이면 Pod Identity는 무조건 0점이다. 판정을 확정한 뒤에만 손을 댄다.
+
+## 세트별 현재 방식
+
+| 세트 | 클러스터 | 방식 | 앱 SA / 네임스페이스 |
+| --- | --- | --- | --- |
+| set-02 | `wskorea26-cluster` | **IRSA** (`withOIDC: true`) | `wskorea26-book-sa` / `wskorea26` |
+| set-03 | `wsc2026-eks-cluster` | **Pod Identity** | `wsc2026-book-sa` / `wsc2026` |
+| set-07 | `unicorn-eks-cluster` | **Pod Identity** | `unicorn-book-app-sa` / `unicorn` |
+
+리전은 세 세트 모두 `ap-northeast-2`.
 
 ## CHANGE — 당일 고치는 값
 
-Terraform 변수 없음. 고칠 값은 아래 본문의 스니펫에서 직접 바꾼다.
+Terraform 변수 없음. 아래 스니펫의 이름·네임스페이스를 과제지 값으로 직접 바꾼다. **Role 이름이 과제지에 명시되면 정확히 일치시킨다** — 채점 스크립트가 Role을 직접 읽는다.
 
-## KEEP — 건드리지 않는다
-
-- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
-- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
-- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
-
-## CHECK — apply 전 계정·리전
-
-```powershell
-aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
-aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
-```
-
-## RUN
-
-이 KIT은 **COPY** 방식이다. 파일을 대상 세트의 `k8s/`·`eksctl/` 구성으로 복사해 병합한다. 이 addon 디렉터리 자체는 독립 `apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
-
-```powershell
-kubectl config current-context   # 채점 대상 클러스터가 맞는지
-kubectl apply -f <복사한 파일>    # 적용 순서는 아래 본문을 따른다
-kubectl get pods -A
-```
-
-복사할 파일과 순서는 아래 본문을 따른다.
-
-## VERIFY / SCORE
-
-- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
-- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
-
-## 방식 판정 (CLAUDE.md 규칙)
-
-- 기본값: **Pod Identity**.
-- 채점 스크립트가 ServiceAccount 의 `eks.amazonaws.com/role-arn` **annotation 을 직접 읽으면 IRSA**.
-  Pod Identity 는 그 annotation 을 만들지 않아 무조건 미충족이다 (set-08 task-2 채점 4-2 실례).
-- 과제지가 "OIDC" 를 명시해도 같은 판정 — OIDC provider 는 IRSA 의 전제 조건이다.
-
-## 신규 클러스터 (cluster.yaml 에 블록 추가)
-
-IRSA — set-08 task-2 module-4 `eksctl/cluster.yaml` 원본:
+## 1. IRSA — 신규 클러스터
 
 ```yaml
+# 파일: set-XX/task-1/eksctl/cluster.yaml
 iam:
-  withOIDC: true
+  withOIDC: true                    # 없으면 eksctl 이 OIDC provider 부재로 실패한다
   serviceAccounts:
     - metadata:
         name: <SA이름>
         namespace: <네임스페이스>
       attachPolicyARNs:
-        - "${POLICY_ARN}"   # terraform output 치환. 재조립 금지 — ARN 그대로 쓴다
+        - "${POLICY_ARN}"           # ARN 그대로 주입. 문자열 재조립 금지
 ```
 
-Pod Identity — set-07 task-1 `eksctl/cluster.yaml` 원본:
+<details><summary><b>값 뽑기 — 세트별 (policy ARN)</b></summary>
+
+| 세트 | policy 리소스 | output |
+| --- | --- | --- |
+| set-02 | `aws_iam_policy.book_app` · `.lbc` · `.fluent_bit` | `book_app_policy_arn` · `lbc_policy_arn` · `fluent_bit_policy_arn` (**이미 있음**) |
+| set-03 | `aws_iam_policy.book_pod` · `.lbc` · `.fluentbit` · `.grafana` | **없음** — Pod Identity 구성이라 role ARN만 노출된다. 아래 블록 추가 |
+| set-07 | `aws_iam_policy.lbc` (나머지는 inline `aws_iam_role_policy`) | **없음** — 아래 블록 추가 |
+
+```hcl
+# 파일: set-03/task-1/terraform/outputs.tf
+output "policy_arns" {
+  value = {
+    book_pod  = aws_iam_policy.book_pod.arn
+    lbc       = aws_iam_policy.lbc.arn
+    fluentbit = aws_iam_policy.fluentbit.arn
+    grafana   = aws_iam_policy.grafana.arn
+  }
+}
+
+# 파일: set-07/task-1/terraform/outputs.tf
+output "policy_arns" {
+  value = { lbc = aws_iam_policy.lbc.arn }
+}
+```
+
+```powershell
+# set-02 — 그대로 env 로
+$env:BOOK_APP_POLICY_ARN   = terraform output -raw book_app_policy_arn
+$env:LBC_POLICY_ARN        = terraform output -raw lbc_policy_arn
+$env:FLUENT_BIT_POLICY_ARN = terraform output -raw fluent_bit_policy_arn
+
+# set-03 / set-07 — map 이라 -json 으로 꺼낸다
+terraform output -json policy_arns
+$env:POLICY_ARN = (terraform output -json policy_arns | ConvertFrom-Json).lbc
+```
+
+set-07처럼 정책이 inline(`aws_iam_role_policy`)이면 ARN이 없다 — IRSA로 가려면 관리형 정책(`aws_iam_policy`)으로 먼저 빼야 한다.
+</details>
+
+## 2. Pod Identity — 신규 클러스터
 
 ```yaml
+# 파일: set-XX/task-1/eksctl/cluster.yaml
 iam:
   podIdentityAssociations:
     - namespace: <네임스페이스>
       serviceAccountName: <SA이름>
-      roleARN: "${ROLE_ARN}"   # trust = pods.eks.amazonaws.com
+      roleARN: "${ROLE_ARN}"        # trust principal = pods.eks.amazonaws.com
 addons:
-  - name: eks-pod-identity-agent   # 없으면 association 이 있어도 자격증명이 안 나온다
+  - name: eks-pod-identity-agent    # 없으면 association 이 있어도 자격증명이 안 나온다
 ```
 
-## 기존 클러스터에 당일 부착 (재생성 금지)
+<details><summary><b>값 뽑기 — 세트별 (role ARN)</b></summary>
+
+| 세트 | role 리소스 | output |
+| --- | --- | --- |
+| set-02 | 없음 (IRSA 구성) | — |
+| set-03 | `aws_iam_role.book_pod` · `.lbc` · `.fluentbit` · `.grafana` | `pod_identity_role_arns` (map, **이미 있음**) |
+| set-07 | `aws_iam_role.book_app` · `.fluentbit` · `.cwexporter` · `.lbc` · `.ebs_csi` | `pod_identity_role_arns` (map, **이미 있음**) |
 
 ```powershell
-# IRSA — OIDC provider 없으면 먼저 연동
-eksctl utils associate-iam-oidc-provider --cluster <클러스터> --region <리전> --approve
-eksctl create iamserviceaccount --cluster <클러스터> --region <리전> `
-  --namespace <ns> --name <sa> --attach-policy-arn <POLICY_ARN> `
-  --role-name <과제지_지정_Role_이름> --approve
-# SA 가 이미 있으면 --override-existing-serviceaccounts 추가
+# map output 이므로 -json + ConvertFrom-Json
+$roles = terraform output -json pod_identity_role_arns | ConvertFrom-Json
 
-# Pod Identity
-eksctl create addon --cluster <클러스터> --region <리전> --name eks-pod-identity-agent
-eksctl create podidentityassociation --cluster <클러스터> --region <리전> `
-  --namespace <ns> --service-account-name <sa> --role-arn <ROLE_ARN>
+# set-03
+$env:BOOK_POD_ROLE_ARN  = $roles.book_pod
+$env:LBC_ROLE_ARN       = $roles.lbc
+$env:FLUENTBIT_ROLE_ARN = $roles.fluentbit
+$env:GRAFANA_ROLE_ARN   = $roles.grafana
+
+# set-07
+$env:BOOK_APP_ROLE_ARN   = $roles.book_app
+$env:LBC_ROLE_ARN        = $roles.lbc
+$env:FLUENTBIT_ROLE_ARN  = $roles.fluentbit
+$env:CWEXPORTER_ROLE_ARN = $roles.cwexporter
 ```
 
-부착 후 Pod 를 재시작해야 자격증명이 주입된다: `kubectl rollout restart deployment/<이름>`.
+set-02를 Pod Identity로 바꿔야 하면 role이 없다 — `aws_iam_policy.book_app` 을 붙일 role을 새로 만들고 아래 output을 추가한다:
 
-## Role·Policy 는 Terraform 에서
+```hcl
+# 파일: set-02/task-1/terraform/outputs.tf
+output "pod_identity_role_arns" {
+  value = { book_app = aws_iam_role.book_app_pod.arn }
+}
+```
+</details>
 
-- Role 이름이 과제지에 명시되면 정확히 일치시킨다 — 채점 스크립트가 Role 을 직접 읽는다.
-- Pod Identity 용 trust: principal `pods.eks.amazonaws.com` + `sts:AssumeRole`·`sts:TagSession`.
-  본 클러스터 한정 조건까지 거는 패턴은 set-07 task-1 `terraform/iam.tf` 참고.
-- IRSA 용 trust(OIDC federated) 는 eksctl `create iamserviceaccount` 가 만들어 주므로
-  Terraform 으로는 policy 만 만들고 ARN 을 넘기는 쪽이 빠르다. Role 이름까지 지정된 경우
-  `--role-name` 으로 준다.
-
-## 검증
+## 3. 이미 만든 클러스터에 당일 부착 (재생성 금지)
 
 ```powershell
-# IRSA — annotation 존재가 채점 형태
+# ---- IRSA ----
+eksctl utils associate-iam-oidc-provider --cluster <클러스터> --region ap-northeast-2 --approve
+eksctl create iamserviceaccount --cluster <클러스터> --region ap-northeast-2 `
+  --namespace <ns> --name <sa> --attach-policy-arn $env:POLICY_ARN `
+  --role-name <과제지_지정_Role_이름> --approve `
+  --override-existing-serviceaccounts      # SA 가 이미 있을 때 필수
+
+# ---- Pod Identity ----
+eksctl create addon --cluster <클러스터> --region ap-northeast-2 --name eks-pod-identity-agent
+eksctl create podidentityassociation --cluster <클러스터> --region ap-northeast-2 `
+  --namespace <ns> --service-account-name <sa> --role-arn $env:ROLE_ARN
+```
+
+부착 후 **Pod를 재시작해야 자격증명이 주입된다**: `kubectl rollout restart deployment/<이름> -n <ns>`
+
+<details><summary><b>값 뽑기 — 세트별 (그대로 붙여넣는 형태)</b></summary>
+
+```powershell
+# set-02 (IRSA)
+eksctl create iamserviceaccount --cluster wskorea26-cluster --region ap-northeast-2 `
+  --namespace wskorea26 --name wskorea26-book-sa `
+  --attach-policy-arn (terraform output -raw book_app_policy_arn) `
+  --approve --override-existing-serviceaccounts
+kubectl rollout restart deployment -n wskorea26
+
+# set-03 (Pod Identity)
+$roles = terraform output -json pod_identity_role_arns | ConvertFrom-Json
+eksctl create podidentityassociation --cluster wsc2026-eks-cluster --region ap-northeast-2 `
+  --namespace wsc2026 --service-account-name wsc2026-book-sa --role-arn $roles.book_pod
+kubectl rollout restart deployment -n wsc2026
+
+# set-07 (Pod Identity)
+$roles = terraform output -json pod_identity_role_arns | ConvertFrom-Json
+eksctl create podidentityassociation --cluster unicorn-eks-cluster --region ap-northeast-2 `
+  --namespace unicorn --service-account-name unicorn-book-app-sa --role-arn $roles.book_app
+kubectl rollout restart deployment -n unicorn
+```
+</details>
+
+## 4. Role·Policy는 Terraform에서 만든다
+
+- Pod Identity trust: principal `pods.eks.amazonaws.com` + `sts:AssumeRole`·`sts:TagSession`. 본 클러스터 한정 조건까지 거는 패턴은 **set-07 task-1 `terraform/iam.tf`** 참고.
+- IRSA trust(OIDC federated)는 `eksctl create iamserviceaccount` 가 만들어 준다. Terraform으로는 **policy만** 만들고 ARN을 넘기는 쪽이 빠르다. Role 이름까지 지정된 경우 `--role-name` 으로 준다.
+
+<details><summary><b>값 뽑기 — 세트별 (클러스터 ARN·계정)</b></summary>
+
+| 세트 | `cluster_arn` output | `account_id` output |
+| --- | --- | --- |
+| set-02 | **없음** — 아래 블록 추가 | 있음 |
+| set-03 | 있음 | 있음 |
+| set-07 | 있음 | 있음 |
+
+```hcl
+# 파일: set-02/task-1/terraform/outputs.tf
+output "cluster_arn" { value = local.cluster_arn }
+```
+
+```powershell
+terraform output -raw cluster_arn
+terraform output -raw account_id
+# OIDC provider URL (IRSA trust 의 sub 조건에 쓰인다)
+aws eks describe-cluster --name <클러스터> --region ap-northeast-2 `
+  --query "cluster.identity.oidc.issuer" --output text
+```
+</details>
+
+## VERIFY
+
+```powershell
+# IRSA — annotation 존재 자체가 채점 형태
 kubectl get sa <sa> -n <ns> -o jsonpath='{.metadata.annotations.eks\.amazonaws\.com/role-arn}'
+
 # Pod Identity
-aws eks list-pod-identity-associations --cluster-name <클러스터> --region <리전>
+aws eks list-pod-identity-associations --cluster-name <클러스터> --region ap-northeast-2
+
 # 공통 — Pod 안에서 실제 신원 확인
 kubectl exec deploy/<이름> -n <ns> -- aws sts get-caller-identity
 ```
 
-## TROUBLESHOOT — 이 KIT 고유 함정
+## TROUBLESHOOT
 
-- **Pod Identity 로 "정정"하지 말 것.** 채점이 `eks.amazonaws.com/role-arn` annotation 을 읽는 항목이면 Pod Identity 는 무조건 0점이다. 위 "방식 판정" 을 먼저 확정한 뒤 손을 댄다.
-- `withOIDC: true` 없이 `iam.serviceAccounts` 만 넣으면 `eksctl` 이 OIDC provider 부재로 실패한다. 기존 클러스터면 `eksctl utils associate-iam-oidc-provider` 를 먼저 돌린다.
-- ServiceAccount 가 이미 있으면 `eksctl create iamserviceaccount` 가 충돌한다 — `--override-existing-serviceaccounts` 를 붙인다. 클러스터를 다시 만들지 않는다.
-- annotation 을 붙여도 **이미 떠 있는 Pod 에는 적용되지 않는다.** SA 변경 후 해당 Deployment 를 `kubectl rollout restart` 해야 새 토큰이 주입된다.
-- Role 의 신뢰 정책 `sub` 조건은 `system:serviceaccount:<namespace>:<sa-name>` 이 정확히 일치해야 한다. namespace 를 틀리면 `AssumeRoleWithWebIdentity` 가 조용히 거부된다.
+- **Pod Identity로 "정정"하지 말 것.** annotation을 읽는 항목이면 0점이다. 방식 판정을 먼저 확정한다.
+- `withOIDC: true` 없이 `iam.serviceAccounts` 만 넣으면 eksctl이 OIDC provider 부재로 실패한다. 기존 클러스터면 `eksctl utils associate-iam-oidc-provider` 를 먼저 돌린다.
+- ServiceAccount가 이미 있으면 `eksctl create iamserviceaccount` 가 충돌한다 — `--override-existing-serviceaccounts`. **클러스터를 다시 만들지 않는다.**
+- annotation을 붙여도 **이미 떠 있는 Pod에는 적용되지 않는다.** `kubectl rollout restart` 필수.
+- Role 신뢰 정책의 `sub` 조건은 `system:serviceaccount:<namespace>:<sa-name>` 이 정확히 일치해야 한다. namespace를 틀리면 `AssumeRoleWithWebIdentity` 가 조용히 거부된다.
+- `eks-pod-identity-agent` addon이 없으면 association이 있어도 Pod에 자격증명이 안 나온다.
 
-공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md).
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).
