@@ -27,6 +27,7 @@ app/
 ```
 
 제공자료(`book`, `index.html`, `main.jpeg`)는 `../../shared/provided/task-1/` 를 수정 없이 그대로 사용한다.
+S3 정적 업로드(`s3.tf`)는 이 경로를 직접 읽고, 이미지 빌드는 `book` 을 S3 릴레이로 CloudShell 에 넘긴다.
 
 ## 배포 순서 (모두 본 PC 에서 실행)
 
@@ -77,19 +78,34 @@ export GRAFANA_ADMIN_PASSWORD='$(terraform output -raw grafana_admin_password)'
 EOF
 
 source ../.env   # 새 터미널로 이어서 할 땐 task-1 에서 `source .env` 만 다시 실행
+
+# CloudShell 은 파일 업로드가 수동 UI 뿐이고 VPC environment 는 업로드 자체가 막혀 있다.
+# 붙여넣을 수 없는 book 바이너리(8.4MB)만 S3 릴레이로 넘긴다 — step 2 끝에서 지운다.
+aws s3 cp ../../../shared/provided/task-1/book "s3://$BUCKET/_transfer/book"
 ```
 
 ### 2) 컨테이너 이미지 빌드 & ECR push (태그 `stable`) — 기본 CloudShell
 
 로컬엔 Docker 가 없으므로 빌드는 **기본 CloudShell**(인터넷 O, docker 내장)에서 한다.
 VPC CloudShell(§9)은 인터넷이 없어 alpine 베이스를 못 받으니 쓰지 않는다.
-`shared/provided/task-1/book` 과 `app/Dockerfile` 을 **Actions → Upload file** 로 올린다(홈 `~` 에 저장). 빌드 블록은 모든 플랫폼 동일하다:
+업로드 UI 는 쓰지 않는다 — `book` 은 step 1 이 S3 `_transfer/` 로 올려둔 걸 내려받고,
+텍스트인 `app/Dockerfile` 은 터미널에 붙여넣는다. 빌드 블록은 모든 플랫폼 동일하다:
 
 ```bash
-# [기본 CloudShell] — book, Dockerfile 업로드 후
+# [기본 CloudShell] — 콘솔 로그인 자격증명을 그대로 물려받는다 (aws configure 불필요)
 export AWS_DEFAULT_REGION=ap-northeast-2
+NUM=103                                  # 비번호로 교체
+BUCKET=wskorea26-concert-bucket-$NUM     # terraform 의 s3_bucket_name 과 같은 규칙
+mkdir -p ~/build && cd ~/build
+aws s3 cp "s3://$BUCKET/_transfer/book" .   # 제공 바이너리 (수정 금지)
+
+# Dockerfile 은 텍스트라 붙여넣는다. 아래 첫 줄까지 실행 → app/Dockerfile 전문 붙여넣기 → DOCKEREOF 입력
+cat > Dockerfile <<'DOCKEREOF'
+# ← 본 PC 의 app/Dockerfile 전문을 그대로 붙여넣는다 (이 주석 줄은 지운다)
+DOCKEREOF
+wc -l Dockerfile   # 23 — 원본과 줄 수가 같아야 한다
+
 ECR=$(aws ecr describe-repositories --repository-names wskorea26-book-repo --query 'repositories[0].repositoryUri' --output text)
-mkdir -p ~/build && mv ~/book ~/Dockerfile ~/build/ && cd ~/build
 aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR%/*}"
 docker build -t "$ECR:stable" .   # CloudShell=amd64 네이티브, 단일아키(스캔 호환)
 docker push "$ECR:stable"
@@ -100,6 +116,9 @@ aws ecr wait image-scan-complete --repository-name wskorea26-book-repo --image-i
     aws ecr wait image-scan-complete --repository-name wskorea26-book-repo --image-id imageTag=stable; }
 aws ecr describe-image-scan-findings --repository-name wskorea26-book-repo --image-id imageTag=stable \
   --query 'imageScanFindings.findingSeverityCounts'   # CRITICAL/HIGH 키가 없어야 함
+
+# 릴레이 정리 — 이 버킷은 채점 대상이다 (mark 2-1)
+aws s3 rm "s3://$BUCKET/_transfer/book"
 ```
 
 ### 3) EKS 클러스터 (eksctl)

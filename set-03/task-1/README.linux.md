@@ -53,6 +53,8 @@ BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
 aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
 tar czf ../task.tgz -C .. k8s
 aws s3 cp ../task.tgz "s3://$BUCKET/_transfer/task.tgz"
+# 이미지 빌드용 book(8.4MB) — CloudShell 업로드 UI 대신 릴레이로 넘긴다 (step 2)
+aws s3 cp ../app/book "s3://$BUCKET/_transfer/book"
 ```
 
 ### 2) → README.md step 2 (일반 CloudShell — 이미지 빌드/푸시)

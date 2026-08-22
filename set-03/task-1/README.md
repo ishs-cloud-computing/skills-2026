@@ -89,18 +89,32 @@ $BUCKET = $o.s3_bucket_name.value
 aws s3 cp ..\outputs.json "s3://$BUCKET/_transfer/outputs.json"
 tar czf "..\task.tgz" -C .. k8s
 aws s3 cp "..\task.tgz" "s3://$BUCKET/_transfer/task.tgz"
+# 이미지 빌드용 book(8.4MB) — CloudShell 업로드 UI 대신 릴레이로 넘긴다 (step 2)
+aws s3 cp ..\app\book "s3://$BUCKET/_transfer/book"
 ```
 
 ### 2) [일반 CloudShell] 컨테이너 이미지 빌드 & ECR push (v1.0.0 단일 태그)
 
-> 콘솔에서 **일반 CloudShell**(VPC environment 아님)을 열고 **Actions → Upload file** 로 `app/` 의
-> `Dockerfile` 과 `book` 두 파일을 올린다. CloudShell 은 콘솔 로그인 자격증명을 그대로 물려받으므로
+> 콘솔에서 **일반 CloudShell**(VPC environment 아님)을 연다. 업로드 UI 는 쓰지 않는다 —
+> `book` 은 step 1 이 S3 `_transfer/` 로 올려둔 걸 내려받고, 텍스트인 `app/Dockerfile` 은
+> 터미널에 붙여넣는다. CloudShell 은 콘솔 로그인 자격증명을 그대로 물려받으므로
 > `aws configure` 가 필요 없다 — root 로 로그인한 콘솔에서 열기만 하면 된다.
 
 ```bash
 aws configure set default.region ap-northeast-2
 aws sts get-caller-identity --query Arn --output text   # arn:aws:iam::<계정ID>:root
-mkdir -p ~/book-image && mv ~/Dockerfile ~/book ~/book-image/ && cd ~/book-image
+
+BUCKET=$(aws s3api list-buckets --query "Buckets[?starts_with(Name,'wsc2026-static-')].Name | [0]" --output text)
+echo "$BUCKET"    # step 1 의 s3_bucket_name 과 같아야 한다
+mkdir -p ~/book-image && cd ~/book-image
+aws s3 cp "s3://$BUCKET/_transfer/book" .   # 제공 바이너리 (수정 금지)
+
+# Dockerfile 은 텍스트라 붙여넣는다. 아래 첫 줄까지 실행 → app/Dockerfile 전문 붙여넣기 → DOCKEREOF 입력
+cat > Dockerfile <<'DOCKEREOF'
+# ← 본 PC 의 app/Dockerfile 전문을 그대로 붙여넣는다 (이 주석 줄은 지운다)
+DOCKEREOF
+sed -i 's/\r$//' Dockerfile   # Windows 클립보드가 붙이는 CRLF 가드
+wc -l Dockerfile              # 24 — 원본과 줄 수가 같아야 한다
 
 ECR=$(aws ecr describe-repositories --repository-names wsc2026-book-ecr --query 'repositories[0].repositoryUri' --output text)
 aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin "${ECR%/*}"
