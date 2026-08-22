@@ -26,12 +26,19 @@ serviceMonitor:
 config: |-
   region: ap-northeast-2
   period_seconds: 60
+  # 기본 600 이면 트래픽이 끊기고 12분 뒤 시계열이 사라져 패널이 No Data 가 된다.
+  # 6h 를 보면 시드 한 번으로 경기 내내 마지막 데이터포인트를 계속 내보낸다.
+  range_seconds: 21600
   set_timestamp: false
   metrics:
     - aws_namespace: AWS/ApplicationELB
       aws_metric_name: TargetResponseTime
       aws_dimensions: [LoadBalancer, TargetGroup]
-      aws_statistics: [p50, p95, p99]
+      # 백분위수는 aws_statistics(Sum/Average/… enum)가 아니라 여기로 넣어야
+      # aws_applicationelb_target_response_time_p50/p95/p99 시계열이 생긴다.
+      aws_extended_statistics: [p50, p95, p99]
+      # 기본 600 이면 [now-1200, now-600] 만 조회해 채점 직전 시드 트래픽이 안 잡힌다.
+      delay_seconds: 120
     - aws_namespace: AWS/ApplicationELB
       aws_metric_name: RequestCount
       aws_dimensions: [LoadBalancer, TargetGroup]
