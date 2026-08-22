@@ -50,7 +50,7 @@ README.linux.md          # 본 PC 가 Linux 일 때의 step 0·1·3·7·9·10 �
 aws --version                          # 2.32.0 이상 (aws login 요건)
 
 # 브라우저에서 root 로 콘솔에 로그인해 둔 상태에서 실행 (default 프로파일)
-aws login              # region = ap-northeast-2
+aws configure              # region = ap-northeast-2
 
 # local .env.ps1 — 셸 재시작에도 재사용 (작업 규칙 6, .gitignore 등록됨)
 @'
