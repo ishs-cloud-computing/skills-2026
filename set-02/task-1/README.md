@@ -279,6 +279,7 @@ echo "Login  : $env:GRAFANA_ADMIN_USER / $env:GRAFANA_ADMIN_PASSWORD"
 ```bash
 # [CloudShell VPC Environment] — CloudShell 은 Linux 이므로 bash
 rm -rf ~/.aws && aws configure   # default region: ap-northeast-2
+
 cat > ~/mark.sh <<'MARKEOF'
 # ← 본 PC 의 mark.sh 내용을 그대로 붙여넣기
 MARKEOF
