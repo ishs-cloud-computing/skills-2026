@@ -12,6 +12,7 @@
 > **대회 당일 실행 강령은 [DAY-OF.md](DAY-OF.md).** 종이 과제지 대조, 신규 문항 매핑,
 > 배부 바이너리 교체, Amazon Q 컨텍스트 템플릿, 채점 직전 점검을 순서대로 담았다.
 > 문제지 표현으로 KIT을 찾을 때는 [QUICK-REFERENCE.md](QUICK-REFERENCE.md), 전체 기준은 [KIT-INDEX.md](KIT-INDEX.md)를 사용한다.
+> 리소스 이름이 과제지·채점지·구현에서 어긋나 보일 때는 [NAMING-AUDIT.md](NAMING-AUDIT.md)를 먼저 본다 — 어느 출처가 정본인지와 그 판정을 세트별로 모아뒀다.
 
 
 
