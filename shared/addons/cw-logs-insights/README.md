@@ -1,16 +1,41 @@
 # cw-logs-insights 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 CloudWatch Logs Insights 저장 쿼리(`aws_cloudwatch_query_definition`) 묶음 — 앱 로그(status·경로·지연) 5개 + WAF 로그(룰·UA·경로·IP 별 BLOCK 집계) 6개.
 task-3 "로그 쿼리 추가" 류 문항, 1과제 Observability 옵션(로그 분석 형), set-08/09 task-1 ECS 로그 분석 추가 문항에 대응한다.
 쿼리 원문은 아래 "블록" 절 — Terraform 없이 콘솔에 붙여 넣어도 된다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_cwli_name_prefix` | `"skills"` | 저장 쿼리 이름 접두. 콘솔에는 <접두>/app/..., <접두>/waf/... 폴더로 보인다. 과제지가 이름을 지정하면 그 값 |
+| `addon_cwli_app_log_group_names` | `[]` | 앱 로그 쿼리 대상 로그 그룹 (ECS awslogs `/ecs/<앱>` · Container Insights `/aws/containerinsights/<클러스터>/application` 등). 비어 있으면 앱 쿼리를 만들지 않는다 |
+| `addon_cwli_waf_log_group_names` | `[]` | WAF 로그 그룹 (`aws-waf-logs-*`). CLOUDFRONT scope 는 us-east-1 에 있으므로 쿼리 정의도 aws.use1 로 만든다. 비어 있으면 WAF 쿼리를 만들지 않는다 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +43,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -159,8 +188,7 @@ filter ispresent(nonTerminatingMatchingRules.0.ruleId)
 
 조사용 변형: 위 쿼리의 `filter action = "BLOCK"` 뒤에 `and httpRequest.uri like /^\/v1\//`(정상 경로만) 또는 `and ua like /gobuster|zap|wpscan|sqlmap|nikto/` 를 이어 붙인다. regex 리터럴 안의 `/` 는 `\/`.
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 전부 신규 리소스 — 기존 리소스 재생성 없음. `name` 변경은 in-place(query_definition_id 유지).
 - **쿼리 정의는 리전 리소스다.** 로그 그룹이 있는 리전에 만들어야 콘솔 Saved queries 에 보인다 — CLOUDFRONT WAF 로그는 us-east-1 이라 `aws.use1`.
 - `log_group_names` 의 로그 그룹은 apply 시점에 없어도 생성은 된다(검증 안 함). 단 실행 시 로그 그룹이 없으면 `ResourceNotFoundException`.

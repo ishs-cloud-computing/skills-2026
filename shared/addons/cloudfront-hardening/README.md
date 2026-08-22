@@ -1,15 +1,39 @@
 # cloudfront-hardening 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 `aws_cloudfront_distribution` 에 로그·지역 제한·에러 페이지·추가 동작·오리진 검증 헤더를 붙이는 블록 모음.
 1과제 Security/Observability 옵션 확장(set-02/08/09 task-1), set-07 m2 CDN 에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_cfh_log_bucket_prefix` | `"skills-cf-logs"` | CloudFront 표준 로그 버킷 이름 접두. 뒤에 -<account_id> 가 붙는다. 과제지 명시 이름이면 그대로 |
+| `addon_cfh_log_prefix` | `"cloudfront/"` | 로그 객체 키 접두(logging_config.prefix). 끝에 / 포함 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +41,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -164,8 +192,7 @@ realtime_log_config_arn = aws_cloudfront_realtime_log_config.addon.arn
 
 스트림·역할은 이 키트에 없다(과제지가 요구할 때만 — 비용·리소스 감점 대상).
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 위 블록은 전부 배포 **in-place update**. 재생성 유발 인자 없음. 단 `origin {}` 의 `origin_id` 변경은 캐시 동작 참조가 깨져 실패한다.
 - **표준 로그 버킷은 ACL 필수**: `BucketOwnerEnforced`(2023-04 이후 기본) 버킷에 로그를 보내면 배포 갱신이 `InvalidArgument: The S3 bucket that you specified for CloudFront logs does not enable ACL access` 로 실패한다. 기존 정적 호스팅 버킷을 로그 대상으로 쓰지 말고 `cloudfront-logs.tf` 버킷을 쓴다. ACL 없이 가려면 표준 로그 v2(`aws_cloudwatch_log_delivery_source/destination/delivery`, 확인 필요)인데 리소스 3개가 더 든다.
 - 로그 버킷은 us-east-1 제약 없음(일부 opt-in 리전 제외). `logging_config.bucket` 은 `bucket_domain_name`(`<버킷>.s3.amazonaws.com`)이지 `bucket_regional_domain_name` 이 아니다.

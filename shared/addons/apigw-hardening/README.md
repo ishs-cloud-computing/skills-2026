@@ -1,15 +1,46 @@
 # apigw-hardening 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 API Gateway REST 확장 문항(액세스 로그·X-Ray·실행 로그/메트릭/스로틀·usage plan 제한·요청 모델·
 커스텀 게이트웨이 응답·CORS)을 **기존 REST API 스테이지**에 붙인다. 대응 후보: set-05 task-2 module-4-rest-api.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 2개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_apigwhard_api_name` | **필수** | 기존 REST API 이름. 로그 그룹·역할 이름의 접두가 된다 |
+| `addon_apigwhard_rest_api_id` | **필수** | 기존 aws_api_gateway_rest_api ID |
+| `addon_apigwhard_stage_name` | `"prod"` | 기존 스테이지 이름 (method settings 대상) |
+| `addon_apigwhard_log_retention_days` | `7` | 액세스 로그 그룹 보존 기간(일) |
+| `addon_apigwhard_throttle_burst` | `100` | 스테이지 메서드 throttling burst |
+| `addon_apigwhard_throttle_rate` | `50` | 스테이지 메서드 throttling rate (req/s) |
+| `addon_apigwhard_logging_level` | `"INFO"` | 실행 로그 수준 OFF/ERROR/INFO. OFF 가 아니면 aws_api_gateway_account 역할 필수 |
+| `addon_apigwhard_cors_resource_id` | `""` | CORS OPTIONS 메서드를 붙일 기존 aws_api_gateway_resource ID. 비우면 CORS 리소스 생성 안 함 |
+| `addon_apigwhard_cors_origin` | `"*"` | Access-Control-Allow-Origin 값 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +48,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -152,8 +187,7 @@ gateway_response 를 추가·수정했으면 deployment `triggers` 에 `.id` 를
 OPTIONS 프리플라이트는 키트가 만든다. 실제 GET/POST 응답에도 `Access-Control-Allow-Origin` 이 필요하면
 Lambda proxy 응답 `headers` 에 넣는다(통합 응답 매핑은 proxy 통합에 적용되지 않는다).
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - `aws_api_gateway_account` 는 **리전당 계정 1개** 싱글턴. 같은 리전의 다른 모듈이 이미 만들었으면 이 키트의 블록을 지우거나 `terraform import aws_api_gateway_account.addon_apigwhard api-gateway-account`. `logging_level != OFF` 인 method_settings 는 이 역할 없이는 `CloudWatch Logs role ARN must be set` 로 실패.
 - `access_log_settings.destination_arn` 은 로그 그룹 ARN **그대로**(`:*` 붙이면 실패). 이름을 `/aws/apigateway/` 로 시작하지 않아도 되나 콘솔 관례.
 - 스테이지·usage plan·method_settings 변경은 **in-place**. 새 메서드(OPTIONS)·model·gateway_response·통합 변경은 **deployment 재생성**이 있어야 반영 — `triggers.redeployment` 에 id 추가. `create_before_destroy = true` 가 이미 있어 stage 는 끊기지 않는다.

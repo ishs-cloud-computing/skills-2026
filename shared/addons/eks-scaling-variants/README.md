@@ -1,15 +1,40 @@
 # eks-scaling-variants 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 2과제 EKS Scaling 모듈(Karpenter + KEDA + Fargate/Addon NG)에 당일 추가되는 하위 문항용 변형 모음.
 set-05 m1 · set-07 m3 · set-08 m4 에 대응한다. 1과제에는 스케일링 문항이 없다(출제지침).
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 1개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_ekscale_cluster_name` | **필수** | EKS 클러스터 이름. interruption 큐 이름 기본값이자 helm settings.clusterName |
+| `addon_ekscale_queue_name` | `""` | Karpenter interruption SQS 큐 이름. 빈 문자열이면 클러스터 이름을 쓴다 (공식 CloudFormation 관례). helm settings.interruptionQueue 와 일치 |
+| `addon_ekscale_karpenter_role_name` | `""` | Karpenter 컨트롤러 IAM Role 이름 (eksctl iamserviceaccount 가 만든 역할). 비우면 정책만 만들고 attach 하지 않는다 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +42,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -99,8 +128,7 @@ CoreDNS 를 Fargate 에 올릴 때 — cluster.yaml `addons` 안에:
     {"computeType": "Fargate"}
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - NodePool `requirements`·`taints`·`limits`·`disruption` 변경은 in-place(기존 노드는 drift 로 순차 교체). EC2NodeClass `amiSelectorTerms`·`blockDeviceMappings` 변경도 in-place 지만 **노드 전부 교체**가 일어난다 — 채점 직전엔 건드리지 않는다.
 - ScaledObject 수정은 in-place. `scaleTargetRef` 의 Deployment 에 `replicas` 를 명시해 두면 KEDA/HPA 와 싸운다 — Deployment 에서 replicas 를 지운다.
 - spot 을 쓰려면 계정에 `AWSServiceRoleForEC2Spot` 가 있어야 한다: `aws iam create-service-linked-role --aws-service-name spot.amazonaws.com` (이미 있으면 에러 무시). 컨트롤러 정책의 `spot-instances-request/*` 리소스·`ec2:DescribeSpotPriceHistory` 는 set-05/07/08 정책에 이미 있다.

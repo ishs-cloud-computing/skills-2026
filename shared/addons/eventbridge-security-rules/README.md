@@ -1,16 +1,54 @@
 # eventbridge-security-rules 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 EventBridge 보안 룰 패턴 모음(루트 로그인·IAM 변경·SG 인바운드·EC2 변경/상태·EBS 생성·GuardDuty·스케줄)
 + SNS 직접 타깃 또는 공통 Lambda 알림 핸들러 + (선택) GuardDuty detector + (선택) AWS Config recorder·관리형 룰·SSM 자동 복구.
 2과제 이벤트 모듈(set-02 m3, set-08 m3)과 1과제 Security 옵션("보안 이벤트 감지·통지") 추가 문항에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_evb_rules` | `{` | 만들 룰: key(eventbridge.tf 의 addon_evb_patterns 키) → 룰 이름(과제지 명시값). 필요한 키만 남긴다. 키: root_login iam_change sg_ingress ec2_modify ec2_state ebs_create guardduty |
+| `addon_evb_schedule_rules` | `{}` | 스케줄 룰: 룰 이름 → schedule_expression (rate(5 minutes) / cron(0 9 * * ? *)) |
+| `addon_evb_ec2_states` | `["stopped", "terminated"]` | ec2_state 룰이 잡을 상태 목록 (pending running stopping stopped shutting-down terminated) |
+| `addon_evb_guardduty_min_severity` | `4` | guardduty 룰 최소 severity (numeric >=). 4=Medium 7=High |
+| `addon_evb_target_type` | `"sns"` | 룰 타깃: sns(토픽 직접) 또는 lambda(공통 알림 핸들러 → SNS) |
+| `addon_evb_sns_topic_name` | `"security-alert-topic"` | 알림 SNS 토픽 이름. 과제지 명시 이름과 정확히 일치시킨다 |
+| `addon_evb_email` | `""` | email 구독 주소. 빈 문자열이면 구독 안 만듦 |
+| `addon_evb_lambda_name` | `"security-alert-handler"` | 알림 Lambda 함수 이름 (target_type = lambda 일 때) |
+| `addon_evb_lambda_runtime` | `"python3.12"` | Lambda 런타임. 과제지 명시 버전과 정확히 일치 |
+| `addon_evb_guardduty_enabled` | `false` | GuardDuty detector 생성 여부 (리전당 1개 — 이미 켜져 있으면 false) |
+| `addon_evb_config_enabled` | `false` | Config recorder·delivery channel·버킷 생성 여부 (리전당 recorder 1개 — 이미 있으면 false 로 두고 룰만) |
+| `addon_evb_config_bucket_prefix` | `"config-logs"` | Config 딜리버리 버킷 이름 접두 (<prefix>-<account_id>) |
+| `addon_evb_config_role_name` | `"config-recorder-role"` | Config recorder IAM Role 이름 |
+| `addon_evb_config_resource_types` | `["AWS::EC2::Instance", "AWS::EC2::SecurityGroup"]` | recorder 기록 대상 리소스 타입. 빈 목록이면 all_supported |
+| `addon_evb_config_rules` | `{` | Config 관리형 룰: key → {name(과제지 명시), source_identifier, input_parameters, resource_types}. 필요한 것만 남긴다 (빈 맵이면 룰 없음) |
+| `addon_evb_remediation_rule_key` | `""` | SSM 자동 복구를 붙일 Config 룰 key (예: ssh). 빈 문자열이면 복구 없음. 예시 SSM 문서는 AWS-DisablePublicAccessForSecurityGroup — 다른 룰이면 config.tf 의 target_id·parameter 수정 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +56,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -118,8 +160,7 @@ requestParameters = { instanceType = { value = [{ anything-but = "t3.micro" }] }
 
 `aws_sns_topic.addon_evb` 를 지우고 `local.addon_evb_target_arn` 의 토픽 ARN 을 `var.<기존 토픽 ARN>` 으로 바꾼다. 기존 토픽에도 `events.amazonaws.com` Publish 허용 토픽 정책이 **필수**.
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 전부 신규 리소스 — 기존 리소스 재생성 없음. 룰 `name` 변경은 ⚠ 재생성(이름이 식별자), 패턴·타깃은 in-place.
 - **`AWS API Call via CloudTrail` 패턴(root_login·iam_change·sg_ingress·ec2_modify)은 해당 리전에 management 이벤트를 기록 중인 활성 Trail 이 없으면 절대 발화하지 않는다.** cloudtrail-hardening 키트 또는 기존 Trail 확인(`aws cloudtrail describe-trails`, `get-trail-status` → `IsLogging=true`). State-change·EBS·GuardDuty·스케줄은 Trail 불필요.
 - IAM·ConsoleLogin 은 글로벌 서비스 이벤트 — **us-east-1 에 Trail 이 있거나 Trail 의 `include_global_service_events = true`** 여야 다른 리전 룰로 전달된다. root_login/iam_change 룰은 us-east-1 에 만드는 게 가장 확실(provider alias 필요 — versions.tf 에 `use1` 추가).

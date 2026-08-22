@@ -1,15 +1,46 @@
 # alb-hardening 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 ALB 에 액세스 로그·삭제 보호·헤더 검증 리스너 규칙·HTTPS 리스너를 붙이는 키트.
 1과제 Security/Observability 옵션 확장(set-08/09 task-1), set-02 m2 ALB 에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_albh_log_bucket_prefix` | `"skills-alb-logs"` | ALB 액세스 로그 버킷 이름 접두. 뒤에 -<account_id> 가 붙는다. 과제지 명시 이름이면 그대로 |
+| `addon_albh_log_prefix` | `"alb"` | access_logs.prefix 값. 빈 문자열이면 버킷 루트(AWSLogs/...) |
+| `addon_albh_listener_arn` | `""` | 헤더 조건 규칙을 붙일 기존 HTTP 리스너 ARN. 빈 문자열이면 규칙 생성 안 함. 직접 참조하려면 aws_lb_listener.<기존>.arn |
+| `addon_albh_target_group_arn` | `""` | 헤더 조건 규칙·HTTPS 리스너가 forward 할 타깃 그룹 ARN. 직접 참조하려면 aws_lb_target_group.<기존>.arn |
+| `addon_albh_rule_priority` | `1` | 헤더 조건 규칙 priority. 기존 규칙과 겹치지 않게 |
+| `addon_albh_header_name` | `"X-Origin-Verify"` | 오리진 검증 헤더 이름. CloudFront origin custom_header.name 과 동일 |
+| `addon_albh_header_value` | `""` | 오리진 검증 헤더 값. CloudFront origin custom_header.value 와 동일(20자 이상 요구 세트 있음) |
+| `addon_albh_alb_arn` | `""` | HTTPS 리스너를 붙일 기존 ALB ARN. 직접 참조하려면 aws_lb.<기존>.arn |
+| `addon_albh_certificate_arn` | `""` | HTTPS 리스너용 ACM 인증서 ARN(ALB 와 같은 리전). 빈 문자열이면 HTTPS 리스너 생성 안 함 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +48,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -106,8 +141,7 @@ default_action {
 
 HTTPS 리스너 본체는 `alb-hardening.tf` 의 `aws_lb_listener.addon_https`(`addon_albh_certificate_arn` 주입 시 생성).
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - `access_logs`·`enable_deletion_protection`·`drop_invalid_header_fields` 는 ALB 속성이라 **in-place**. 리스너 `default_action` 교체도 in-place. 규칙 `priority` 변경은 ⚠ 재생성(채점 영향 없음).
 - **로그 버킷 정책이 없거나 틀리면 `access_logs` 적용 자체가 `InvalidConfigurationRequest: Access Denied for bucket` 로 실패한다.** 경로는 `<prefix>/AWSLogs/<account>/*` 정확히. `prefix` 끝에 `/` 를 넣지 않는다(ALB 가 붙인다).
 - principal 은 리전에 따라 다르다 — 2022-08 이전 리전은 `data.aws_elb_service_account`(ELB 계정 ID), 이후 신규 리전은 `logdelivery.elasticloadbalancing.amazonaws.com`. 스니펫은 둘 다 넣었다. 신규 리전(ap-southeast-3·4 등)에서는 data source 가 에러 → data 블록과 첫 statement 를 지운다. provider 6.x 에서 data source 유지 확인(v6.31 문서).

@@ -1,16 +1,48 @@
 # lattice-hardening 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 VPC Lattice 서비스에 IAM 인증·액세스 로그·헤더 기반 라우팅·SG 제한을 얹는다.
 2과제 Lattice 모듈(set-05 task-2 module-2-vpc-lattice, set-08 task-2 module-2-lattice) 의 당일 추가 문항
 ("서비스에 IAM 인증 적용", "액세스 로그를 CloudWatch/S3 로", "version 헤더로 v1/v2 분기 + 가중치", "Lattice 경유 외 접근 차단") 에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 1개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_lattice_service_id` | **필수** | 기존 VPC Lattice 서비스 ID(svc-...) 또는 ARN. 같은 state 면 aws_vpclattice_service.this.id 로 바꾼다 |
+| `addon_lattice_service_name` | `"wsc-app-service"` | 기존 서비스 이름. 로그 그룹 이름 접두로 쓴다 |
+| `addon_lattice_auth_principal_arns` | `[]` | Invoke 를 허용할 IAM principal ARN 목록. 비어 있으면 같은 계정의 모든 인증된 principal 허용 |
+| `addon_lattice_log_retention_days` | `7` | 액세스 로그 그룹 보존 일수 |
+| `addon_lattice_log_s3_bucket_arn` | `""` | S3 로도 액세스 로그를 보내려면 버킷 ARN. 빈 문자열이면 CloudWatch Logs 만 |
+| `addon_lattice_listener_id` | `""` | 기존 리스너 ID(listener-...). 같은 state 면 aws_vpclattice_listener.http.listener_id 로 바꾼다. 빈 문자열이면 룰을 만들지 않는다 |
+| `addon_lattice_header_name` | `"version"` | 라우팅 기준 헤더 이름 |
+| `addon_lattice_v1_target_group_id` | `""` | v1 대상 그룹 ID(tg-...). 같은 state 면 aws_vpclattice_target_group.v1.id |
+| `addon_lattice_v2_target_group_id` | `""` | v2 대상 그룹 ID(tg-...). 같은 state 면 aws_vpclattice_target_group.v2.id |
+| `addon_lattice_rule_priority_base` | `10` | 헤더 룰 priority 시작값 (v1 = base, v2 = base+10). 기존 룰과 겹치지 않게 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +50,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -159,8 +195,7 @@ ingress {
 
 클라이언트 SG egress 도 같은 prefix list + 리스너 포트만으로 좁힐 수 있다 (set-08 `sg.tf`).
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - **재생성 없음**: `auth_type`·auth policy·로그 구독·리스너 룰·association SG 는 전부 in-place. TG `type`·`config` 변경만 ⚠ 재생성.
 - `auth_type = "AWS_IAM"` 뒤에는 클라이언트가 **SigV4 서명**을 해야 한다 — 평범한 `curl` 은 403. 채점 스크립트가 익명 curl 로 확인하는 항목이 있으면 충돌한다. 과제지 요구 범위를 먼저 확인한다. 테스트는 `awscurl --service vpc-lattice-svcs --region <리전> <URL>` 또는 SDK.
 - auth policy 의 `principals = ["*"]` 는 `aws:PrincipalAccount` 조건이 있어야 "인증된 계정 내 principal" 이 된다 — 조건 없이 `*` 면 익명도 허용돼 IAM 인증 의미가 없다. 스니펫은 ARN 목록이 비면 자동으로 조건을 건다.

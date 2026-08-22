@@ -1,16 +1,52 @@
 # lambda-get-api 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 1과제 옵션 "Lambda GET API": DynamoDB 조회 Lambda(쿼리스트링 필수값 400·없으면 404 JSON·응답 필드 순서 고정)
 + 노출 방식 (a) ALB → Lambda / (b) Function URL + CloudFront / (c) API Gateway REST.
 대응 후보: set-08/09 task-1 신규 Lambda 문항, 기존 Lambda 세트(set-02/03/05/07)의 추가 쿼리 API.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 3개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_lamget_function_name` | **필수** | Lambda 함수 이름. 과제지 명시 이름과 정확히 일치시킨다. 역할·정책·로그 그룹 이름이 여기서 파생된다 |
+| `addon_lamget_table_name` | **필수** | 조회 대상 기존 DynamoDB 테이블 이름 |
+| `addon_lamget_table_arn` | **필수** | 조회 대상 기존 DynamoDB 테이블 ARN (최소권한 리소스 한정) |
+| `addon_lamget_runtime` | `"python3.13"` | Lambda 런타임. 과제지 명시 버전으로 |
+| `addon_lamget_key_name` | `"booking_id"` | 쿼리스트링 필수 파라미터 = 테이블 PK(또는 GSI PK) 속성 이름. 없으면 400 |
+| `addon_lamget_index_name` | `""` | GSI 이름. 비우면 테이블 PK GetItem, 채우면 GSI Query(최신 1건) |
+| `addon_lamget_fields` | `["booking_id", "client_id", "username", "email", "concert_name", "created_at"]` | 200 응답 JSON 필드 순서. 채점지 예상 출력 순서와 동일하게 |
+| `addon_lamget_table_kms_key_arn` | `""` | 테이블이 CMK(SSE-KMS)면 키 ARN — 역할에 Decrypt 부여. 빈 문자열이면 생략 |
+| `addon_lamget_log_retention_days` | `30` | 로그 그룹 보존 기간(일) |
+| `addon_lamget_alb_listener_arn` | `""` | 규칙을 붙일 기존 ALB 리스너 ARN. 비우면 ALB 블록(alb-lambda.tf) 전체 생성 안 함 |
+| `addon_lamget_alb_rule_priority` | `30` | 리스너 규칙 priority. 기존 규칙(origin-verify·/health 등)과 겹치지 않게 |
+| `addon_lamget_alb_path` | `"/v1/book"` | GET 으로 Lambda 에 보낼 경로 패턴 |
+| `addon_lamget_alb_header_name` | `""` | CloudFront origin-verify 커스텀 헤더 이름. 기존 규칙이 헤더를 검사하면 같은 값으로. 비우면 조건 생략 |
+| `addon_lamget_alb_header_value` | `""` | origin-verify 헤더 값 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +54,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -153,8 +193,7 @@ ordered_cache_behavior {
 `aws_lambda_permission`(`apigateway.amazonaws.com`, `${execution_arn}/*/*`) → deployment → stage).
 `index.py` 는 API GW proxy 이벤트(`queryStringParameters`)도 같은 코드로 처리한다. 스테이지 강화는 apigw-hardening 키트.
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - **응답 필드 순서**가 채점 항목이다(set-03 mark 9-3, set-02 mark 9-2). `addon_lamget_fields` 를 채점지 예상 출력 순서대로. 값은 `ensure_ascii=False` 로 비ASCII 그대로 출력.
 - `statusDescription` 은 ALB 통합 응답에만 필요하고 `index.py` 가 `requestContext.elb` 유무로 자동 판단한다. Function URL·API GW 이벤트에는 넣지 않는다.
 - ALB 는 쿼리스트링을 URL 디코딩하지 않는다 → `unquote_plus`. 공백 포함 값(`2ND%20TINY_CON`) 채점이 있다.

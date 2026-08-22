@@ -1,16 +1,52 @@
 # ec2-asg-alb 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 단일 EC2 + ALB 구성에 Launch Template + Auto Scaling Group + CPU target tracking 을 얹어 고가용성 변형에 대응한다.
 2과제 분석 모듈(set-02 task-2 module-2-analytics) 의 당일 추가 문항("EC2 를 Auto Scaling 으로", "ALB 뒤 2대 이상 + CPU 스케일링") 용.
 1과제는 인프라 스케일링 문항이 출제되지 않으므로 2과제 전용이다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 3개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_asg_subnet_ids` | **필수** | ASG 배치 서브넷 ID 목록 (기존 프라이빗 서브넷, 2AZ 이상). 같은 state 면 [aws_subnet.this[\ |
+| `addon_asg_security_group_ids` | **필수** | 인스턴스 SG ID 목록 (기존 앱 SG). 같은 state 면 [aws_security_group.app.id] 로 바꾼다 |
+| `addon_asg_instance_profile_name` | **필수** | 기존 인스턴스 프로파일 이름 (SSM·앱 권한). 같은 state 면 aws_iam_instance_profile.app.name 으로 바꾼다 |
+| `addon_asg_name` | `"wsc2026-app-asg"` | Auto Scaling Group 이름. 과제지 명시 이름과 정확히 일치시킨다 |
+| `addon_asg_instance_name` | `"wsc2026-app"` | ASG 가 띄우는 인스턴스 Name 태그 (propagate_at_launch) |
+| `addon_asg_instance_type` | `"t3.small"` | 인스턴스 타입 |
+| `addon_asg_target_group_arns` | `[]` | 기존 ALB 대상 그룹 ARN 목록. 같은 state 면 [aws_lb_target_group.app.arn] 로 바꾼다 |
+| `addon_asg_user_data_base64` | `""` | base64 인코딩된 user data. tfvars 는 함수를 못 쓰므로 보통 ec2-asg.tf 의 local 에서 base64encode(templatefile(...)) 로 덮어쓴다 |
+| `addon_asg_min_size` | `2` | 최소 인스턴스 수 |
+| `addon_asg_max_size` | `4` | 최대 인스턴스 수 |
+| `addon_asg_desired_capacity` | `2` | 희망 인스턴스 수 |
+| `addon_asg_health_check_grace_period` | `300` | ELB 헬스체크 유예(초). user_data 설치 시간보다 길게 |
+| `addon_asg_cpu_target` | `50` | target tracking 목표 평균 CPU(%) |
+| `addon_asg_root_volume_size` | `30` | 루트 볼륨 크기(GiB) |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +54,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -77,8 +117,7 @@ predefined_metric_specification {
 target_value = 100
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - **기존 단일 EC2 를 지우지 않는다**(당일 변동은 추가 방식). TG 에 기존 인스턴스 + ASG 인스턴스가 같이 등록된다. 기존 채점 항목이 "인스턴스 1대" 를 세거나 Name 태그로 1대를 고르면 `addon_asg_instance_name` 을 기존 인스턴스와 **다른 이름** 으로 둔다.
 - user data 가 NAT 경유 pip 설치를 하면 `health_check_grace_period` 를 설치 시간보다 길게(기본 300) 둔다 — 짧으면 ELB 헬스체크 실패로 인스턴스가 계속 교체된다.
 - Launch Template 은 `name_prefix` + `create_before_destroy` 라 변경 시 새 버전이 만들어지고 ASG 는 `$Latest` 를 따른다. 기존 인스턴스는 자동 교체되지 않는다 — 교체가 필요하면 `aws autoscaling start-instance-refresh --auto-scaling-group-name <이름>`.

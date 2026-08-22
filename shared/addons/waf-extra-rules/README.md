@@ -1,15 +1,50 @@
 # waf-extra-rules 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 Web ACL 에 **룰 블록**을 추가하는 템플릿 모음. Web ACL 자체를 새로 만드는 건 `shared/addons/waf/`.
 1과제 WAF 옵션 확장(set-02/03/05/07/08/09 task-1), task-3 WAF 추가 룰, set-07 m2 CDN WAF 에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_wafx_name` | `"skills-waf"` | 룰을 붙일 Web ACL 이름. rules.tf 예시 ACL 과 regex set·metric 이름 접두에 쓴다. 과제지 명시 이름과 정확히 일치 |
+| `addon_wafx_scope` | `"REGIONAL"` | REGIONAL(ALB/API GW) 또는 CLOUDFRONT. CLOUDFRONT 면 rules.tf 의 리소스 전부에 provider = aws.use1 추가 |
+| `addon_wafx_block_body` | `"Request blocked by WAF"` | 차단 응답 본문 문자열. 과제지가 403 + 지정 문자열을 요구할 때 그대로 넣는다 |
+| `addon_wafx_common_count_rules` | `["SizeRestrictions_BODY"]` | AWSManagedRulesCommonRuleSet 중 COUNT 로 강등할 룰 이름(오탐 방지). 예: SizeRestrictions_BODY, NoUserAgent_HEADER |
+| `addon_wafx_api_path_regexes` | `["^/v1/.*$", "^/health$"]` | 검사 대상 경로 regex 목록(regex pattern set). 여기 없는 경로는 WAF 가 판정하지 않는다 |
+| `addon_wafx_rate_limit` | `100` | rate-based rule 임계 요청 수(evaluation window 당 IP 기준). 최소 10 |
+| `addon_wafx_rate_window_sec` | `60` | rate-based rule 평가 윈도(초). 60/120/300/600 만 허용 |
+| `addon_wafx_rate_path_regex` | `"^/v1/.*$"` | rate-based rule 의 scope_down 경로 regex(인라인). 빈 문자열이면 전 경로 |
+| `addon_wafx_geo_country_codes` | `["CN", "RU"]` | geo_match 로 차단할 ISO 3166-1 alpha-2 국가 코드 |
+| `addon_wafx_post_body_strings` | `["admin", "sysop"]` | POST body 에 포함되면 차단할 문자열(LOWERCASE 변환 후 CONTAINS) |
+| `addon_wafx_header_name` | `"x-api-key"` | 헤더 조건 룰이 검사할 헤더 이름(소문자) |
+| `addon_wafx_header_value` | `"changeme"` | 헤더 조건 룰의 기대 값. 이 값과 다르면(없으면) 차단 |
+| `addon_wafx_ua_regexes` | `["sqlmap", "nikto", "nmap", "masscan"]` | 차단할 User-Agent regex 목록(LOWERCASE 변환 후 검사). 스캐너 UA 패턴 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +52,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -371,8 +410,7 @@ logging_filter {
 }
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 룰 추가·수정은 Web ACL **in-place update**. 단 `name`·`scope` 변경은 ⚠ 재생성(연결도 끊긴다).
 - **regex pattern set 은 Web ACL 과 같은 scope·리전**이어야 한다. CLOUDFRONT 면 set 도 `provider = aws.use1`. 세트 `regular_expression` 은 최대 10개. 빈 목록은 API 가 거부한다 — 룰을 끌 땐 세트 내용이 아니라 룰을 지운다(task-3 은 `__disabled__` 자리표시자 사용).
 - CLOUDFRONT scope 리소스(Web ACL·regex set·로그 그룹)는 전부 us-east-1. provider alias `use1` 필요 — 없으면 `versions.tf` 에 추가(`shared/addons/waf/README` 블록). 누락 시 plan 은 통과하고 apply 에서 WAFInvalidParameterException.

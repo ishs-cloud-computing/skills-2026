@@ -1,16 +1,43 @@
 # ecr-hardening 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 ECR 리포지토리에 scan on push·불변 태그(예외 필터)·CMK 암호화를 붙이고,
 lifecycle policy(untagged 만료·태그 N개 유지)와 pull-through cache 를 새 리소스로 붙인다.
 1과제 ECR 옵션(전 세트 task-1 ECR), set-07 m3, set-08 m4 후보에 대응.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 1개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_ecr_repository_name` | **필수** | lifecycle policy 를 붙일 기존 리포지토리 이름 (aws_ecr_repository.<기존>.name) |
+| `addon_ecr_untagged_expire_days` | `1` | untagged 이미지 만료 일수 (push 후 경과 기준) |
+| `addon_ecr_keep_image_count` | `10` | 유지할 태그 이미지 개수 — 초과분은 오래된 순으로 만료 |
+| `addon_ecr_keep_tag_prefixes` | `[]` | 유지 규칙을 특정 태그 접두어(예: [\ |
+| `addon_ecr_pull_through_upstreams` | `{}` | pull-through cache 규칙 {prefix = upstream URL}. 빈 맵이면 생성 안 함. 익명 pull 가능한 업스트림만 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +45,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -89,8 +120,7 @@ encryption_configuration {
 force_delete = true
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - `encryption_configuration` 은 **⚠ 재생성**(이미지 전부 소실 → 재 push 필요). 기존 리포에 CMK 를 요구하면 재생성 + 이미지 재 push 시간을 배점과 비교한다. `terraform plan` 에 `must be replaced` 가 뜨는지 반드시 본다. 나머지 블록과 lifecycle policy·pull-through 는 in-place/신규.
 - `IMMUTABLE` 에서 같은 태그 재 push 는 `ImageTagAlreadyExistsException`. 런북이 `latest` 를 두 번 push 하면 예외 필터에 `latest` 가 있어야 한다. 예외 필터는 최대 5개, `filter_type` 은 `WILDCARD` 만.
 - lifecycle policy 는 리포당 1개 — 이미 있으면 이 리소스가 **덮어쓴다**. 평가는 비동기(보통 24시간 이내)라 apply 직후 이미지가 안 지워진다. 채점은 정책 텍스트(`get-lifecycle-policy`)를 본다. 미리보기: `aws ecr start-lifecycle-policy-preview --repository-name <리포>` → `get-lifecycle-policy-preview`.

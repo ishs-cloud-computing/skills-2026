@@ -1,15 +1,46 @@
 # secrets-manager 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 Secrets Manager 시크릿(JSON 키 맵, CMK 선택) + 읽기 IAM 정책·Role 연결 + 자동 회전(선택) 한 묶음.
 set-07 task-1(과제지 4번 Secrets Manager), set-08 m1(DocDB 접속 정보), set-03 task-1(Grafana 계정) 후보에 대응.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 2개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_secret_name` | **필수** | 시크릿 이름. 과제지 명시 이름(지급 앱이 상수로 읽는 이름)과 정확히 일치시킨다 |
+| `addon_secret_values` | **필수** | 시크릿 JSON 키/값 맵. 예: { username = \ |
+| `addon_secret_kms_key_arn` | `""` | 암호화 CMK ARN (kms 키트 aws_kms_key.addon.arn). 빈 문자열이면 AWS 관리 키 aws/secretsmanager |
+| `addon_secret_recovery_window_days` | `0` | 삭제 유예 일수. 0 = 즉시 삭제(재생성 가능), 7~30 = 유예 |
+| `addon_secret_read_policy_name` | `"skills-secret-read"` | 읽기 IAM 정책 이름 |
+| `addon_secret_reader_role_names` | `[]` | 읽기 정책을 붙일 기존 IAM Role 이름 목록 (aws_iam_role.<기존>.name). 빈 목록이면 정책만 만든다 |
+| `addon_secret_rotation_lambda_arn` | `""` | 회전 Lambda 함수 ARN. 빈 문자열이면 회전 리소스를 만들지 않는다 |
+| `addon_secret_rotation_days` | `30` | 자동 회전 주기 (일) |
+| `addon_secret_rotate_immediately` | `false` | 회전 설정 시 즉시 1회 회전. Lambda 가 검증되지 않았으면 false |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +48,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -83,8 +118,7 @@ statement {
 }
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 전부 신규 리소스 — 기존 리소스 재생성 없음. 시크릿 `name` 변경은 ⚠ 재생성. `secret_string` 변경은 새 버전(AWSCURRENT 이동)이며 in-place.
 - **이름 재사용**: `recovery_window_in_days` 7~30 으로 지운 시크릿은 그 기간 동안 같은 이름으로 못 만든다(`InvalidRequestException: scheduled for deletion`). 기본 0. 콘솔로 지운 것이 걸려 있으면 `aws secretsmanager delete-secret --secret-id <이름> --force-delete-without-recovery`.
 - 지급 앱이 시크릿 이름·JSON 키 이름을 상수로 읽는다(set-08 m1: `username/password/host`, host 는 scheme·port 없는 hostname). 키 이름 오타는 앱 기능 검증 전체 실패.

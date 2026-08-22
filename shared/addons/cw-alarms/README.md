@@ -1,15 +1,45 @@
 # cw-alarms 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 CloudWatch 메트릭 필터 → 알람 → SNS 통지 한 묶음. 1과제 Observability 옵션("오류 알람·통지",
 set-02/03/05/07/09 task-1 후보), task-3 장애 감지 알람, 2과제 Lambda·EC2 알람 모듈에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_cwalarm_sns_topic_name` | `"skills-alarm-topic"` | 알람 통지 SNS 토픽 이름. 과제지 명시 이름과 정확히 일치시킨다 |
+| `addon_cwalarm_email` | `""` | 이메일 구독 주소. 빈 문자열이면 구독을 만들지 않는다 (과제지 무요구 시 비워 둔다) |
+| `addon_cwalarm_log_group_name` | `""` | 메트릭 필터를 걸 기존 로그 그룹 이름 (ECS awslogs·Container Insights application 등). 빈 문자열이면 로그 알람을 만들지 않는다 |
+| `addon_cwalarm_metric_namespace` | `"Skills/CloudComputing/Task1"` | 로그 메트릭 네임스페이스. 채점 스크립트가 읽는 값이면 과제지 그대로 |
+| `addon_cwalarm_log_filters` | `{` | 로그 메트릭 필터·알람 묶음. key 는 terraform 식별자, 이름 3종은 과제지 명시값과 정확히 일치. pattern 은 앱 로그 형식에 맞춘다 |
+| `addon_cwalarm_metric_alarms` | `{}` | 서비스 메트릭 알람 묶음. README 의 tfvars 예시에서 필요한 항목만 골라 넣는다. dimensions 값(ALB suffix·DB 식별자 등)은 기존 리소스 값 |
+| `addon_cwalarm_waf_cloudfront_name` | `""` | CLOUDFRONT scope Web ACL 이름. 빈 문자열이면 us-east-1 알람·토픽을 만들지 않는다 |
+| `addon_cwalarm_waf_blocked_threshold` | `100` | WAF BlockedRequests 알람 임계값 (period 당 Sum) |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +47,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -74,8 +108,7 @@ alarm_actions = [aws_sns_topic.addon_alarm.arn]
 ok_actions    = [aws_sns_topic.addon_alarm.arn]
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 전부 신규 리소스 — 기존 리소스 재생성 없음. 알람 `alarm_name`·필터 `name`·SNS `name` 변경은 ⚠ 재생성(이름이 식별자)이나 채점 영향 없음.
 - **ALARM 상태 확인은 실제 오류를 내야 한다**: 4xx 는 없는 경로 GET 한 번, 5xx 는 앱이 내 주는 경로가 있는지 과제지 확인. 메트릭 반영까지 1~3분(채점 대기 항목당 최대 3분 — set-08 task-1 mark).
 - `treat_missing_data = notBreaching` 이라 평시 OK. 채점 스크립트가 `INSUFFICIENT_DATA` 가 아닌 `OK` 를 요구하는 경우에 맞춘 값이다.

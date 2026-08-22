@@ -1,20 +1,45 @@
 # Security (IRSA · Pod Identity · OIDC) 부착 스니펫
 
+**STATUS:** `DOC-ONLY` — 부착 파일 없이 README 스니펫만. 문법 검증 대상 아니다.
+
+## USE WHEN
+
 1과제 Security 옵션의 핵심은 "Pod 에 IAM 권한을 어떻게 주는가"다. 방식 판정부터 한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 세트의 `k8s/`·`eksctl/`(또는 기존 구성)으로 복사해 병합한다. 이 addon 디렉터리 자체는 독립 `apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+Terraform 변수 없음. 고칠 값은 아래 본문의 스니펫에서 직접 바꾼다.
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
-kubectl config current-context
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
-- 기본 RUN에 `destroy`/`delete`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 세트의 `k8s/`·`eksctl/` 구성으로 복사해 병합한다. 이 addon 디렉터리 자체는 독립 `apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+kubectl config current-context   # 채점 대상 클러스터가 맞는지
+kubectl apply -f <복사한 파일>    # 적용 순서는 아래 본문을 따른다
+kubectl get pods -A
+```
+
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 방식 판정 (CLAUDE.md 규칙)
 
@@ -87,3 +112,13 @@ aws eks list-pod-identity-associations --cluster-name <클러스터> --region <�
 # 공통 — Pod 안에서 실제 신원 확인
 kubectl exec deploy/<이름> -n <ns> -- aws sts get-caller-identity
 ```
+
+## TROUBLESHOOT — 이 KIT 고유 함정
+
+- **Pod Identity 로 "정정"하지 말 것.** 채점이 `eks.amazonaws.com/role-arn` annotation 을 읽는 항목이면 Pod Identity 는 무조건 0점이다. 위 "방식 판정" 을 먼저 확정한 뒤 손을 댄다.
+- `withOIDC: true` 없이 `iam.serviceAccounts` 만 넣으면 `eksctl` 이 OIDC provider 부재로 실패한다. 기존 클러스터면 `eksctl utils associate-iam-oidc-provider` 를 먼저 돌린다.
+- ServiceAccount 가 이미 있으면 `eksctl create iamserviceaccount` 가 충돌한다 — `--override-existing-serviceaccounts` 를 붙인다. 클러스터를 다시 만들지 않는다.
+- annotation 을 붙여도 **이미 떠 있는 Pod 에는 적용되지 않는다.** SA 변경 후 해당 Deployment 를 `kubectl rollout restart` 해야 새 토큰이 주입된다.
+- Role 의 신뢰 정책 `sub` 조건은 `system:serviceaccount:<namespace>:<sa-name>` 이 정확히 일치해야 한다. namespace 를 틀리면 `AssumeRoleWithWebIdentity` 가 조용히 거부된다.
+
+공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md).

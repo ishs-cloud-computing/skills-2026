@@ -1,15 +1,41 @@
 # s3-hardening 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 S3 버킷에 버전 관리·수명주기·서버 액세스 로그·EventBridge 알림·OAC 정책·Object Lock 을 붙이는 키트.
 1과제 Static hosting 버킷 보강(전 세트 task-1), set-02 m1/m4 S3 모듈에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_s3h_bucket_name` | `"skills-static-bucket"` | 보강 대상 기존 버킷 이름. 직접 참조하려면 aws_s3_bucket.<기존>.id 로 바꾼다 |
+| `addon_s3h_lifecycle_rules` | `{` | 수명주기 규칙 map. key=규칙 id. prefix 빈 문자열=전체, 0=해당 동작 없음 |
+| `addon_s3h_log_bucket_prefix` | `"skills-s3-access-logs"` | 서버 액세스 로그 대상 버킷 이름 접두. 뒤에 -<account_id> 가 붙는다 |
+| `addon_s3h_log_prefix` | `"s3/"` | 서버 액세스 로그 객체 키 접두(target_prefix). 끝에 / 포함 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +43,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -144,8 +174,7 @@ resource "aws_s3_bucket_object_lock_configuration" "addon" {
 }
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - versioning·lifecycle·logging·notification·정책은 전부 **별도 리소스 = in-place**. 기존 `aws_s3_bucket` 재생성 없음. `object_lock_enabled` 만 ⚠ 재생성(기존 버킷은 AWS Support 요청 없이는 불가).
 - **버전 관리는 켜면 못 끈다**(Suspended 만 가능). teardown 시 `force_destroy = true` 가 없으면 버전 객체 때문에 삭제 실패 → 기존 버킷 리소스에 `force_destroy = true` 를 같이 넣는다(in-place).
 - 수명주기 `transition` 은 **STANDARD_IA·ONEZONE_IA 최소 30일**. 0~29 로 쓰면 apply 가 `InvalidArgument` 로 실패. 즉시 전환 요구면 `GLACIER_IR`. `expiration.days` 는 `transition.days` 보다 커야 한다.

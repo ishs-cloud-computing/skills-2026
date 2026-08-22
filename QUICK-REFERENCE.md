@@ -21,6 +21,6 @@
 | REST API · API Gateway 신규 구성 | Lambda GET API | [lambda-get-api](shared/addons/lambda-get-api/README.md) |
 | CloudWatch Alarm | CloudWatch alarms | [cw-alarms](shared/addons/cw-alarms/README.md) |
 
-여기에 없으면 [KIT-INDEX.md](KIT-INDEX.md)를 본다.
+여기에 없으면 [KIT-INDEX.md](KIT-INDEX.md)를 본다. 위 표는 `irsa`(부착 파일 없는 README 스니펫)를 빼면 전부 `terraform validate` 통과본이다 — 상태 정의는 [KIT-INDEX Status](KIT-INDEX.md#status-가-뜻하는-것).
 
 열 파일을 정했으면 KIT README의 `RUN guard` 절을 따른다 — 공식 과제·채점 문서 확인 → 계정·리전 확인 → `init` → `validate` → `plan` → `apply`. 기능 확인(VERIFY) 후에만 공식 채점(SCORE)을 한다. 기본 RUN에 `destroy`를 넣지 않는다.

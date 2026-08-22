@@ -1,5 +1,9 @@
 # keycloak 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 2과제 카탈로그 모듈 10 "Keycloak (VPC, EC2, IAM, Keycloak)" 스타터 키트. 저장소에 실전 구현이 없는
 모듈이라 **자족적인 terraform 모듈**(VPC 포함)로 만들었다 — 당일 모듈 5·6 으로 출제되면
 `_template/task-2/module-4` 복사본의 `terraform/` 에 통째로 넣고 시작한다.
@@ -8,13 +12,49 @@
 ALB HTTP 80 → 8080 · SG 체인 · IAM 인스턴스 프로파일(SSM + 시크릿 읽기) · Secrets Manager admin 비번(random) ·
 선택 RDS PostgreSQL(`KC_DB=postgres`).
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_kc_vpc_name` | `"keycloak-vpc"` | VPC 이름 태그. 과제지 명시 이름과 정확히 일치시킨다 |
+| `addon_kc_vpc_cidr` | `"10.30.0.0/16"` | VPC CIDR |
+| `addon_kc_public_subnets` | `{` | 퍼블릭 서브넷 (key = Name 태그). ALB 가 2 AZ 를 요구하므로 최소 2개 |
+| `addon_kc_instance_name` | `"keycloak-ec2"` | Keycloak EC2 이름 태그 |
+| `addon_kc_instance_type` | `"t3.small"` | EC2 인스턴스 타입. Keycloak(JVM) 은 t3.micro 에서 OOM 나므로 small 이상 |
+| `addon_kc_role_name` | `"keycloak-ec2-role"` | EC2 IAM 역할 이름 (인스턴스 프로파일은 <이름>-profile) |
+| `addon_kc_image` | `"quay.io/keycloak/keycloak:26.5"` | Keycloak 컨테이너 이미지. 최신 안정 26.x — 과제지가 버전을 지정하면 그 태그로 |
+| `addon_kc_admin_username` | `"admin"` | 부트스트랩 admin 사용자 이름 (KC_BOOTSTRAP_ADMIN_USERNAME) |
+| `addon_kc_secret_name` | `"keycloak/admin"` | admin 비밀번호를 저장할 Secrets Manager 시크릿 이름 |
+| `addon_kc_hostname` | `""` | KC_HOSTNAME (예: https://auth.example.com). 빈 값이면 hostname-strict=false + X-Forwarded 헤더로 ALB DNS 를 그대로 쓴다 |
+| `addon_kc_alb_name` | `"keycloak-alb"` | ALB 이름 (32자 이하, 영숫자·하이픈만) |
+| `addon_kc_tg_name` | `"keycloak-tg"` | 타겟 그룹 이름 |
+| `addon_kc_rds_enabled` | `false` | true 면 RDS PostgreSQL 을 만들고 KC_DB=postgres 로 연결한다. false 면 내장 dev-file DB (컨테이너 재생성 시 데이터 소실) |
+| `addon_kc_db_identifier` | `"keycloak-db"` | RDS 인스턴스 식별자 |
+| `addon_kc_db_name` | `"keycloak"` | Keycloak 이 쓸 데이터베이스 이름 |
+| `addon_kc_db_username` | `"keycloak"` | RDS 마스터 사용자 이름 |
+| `addon_kc_db_engine_version` | `"17"` | PostgreSQL 엔진 버전 (major 만 적으면 최신 minor 선택) |
+| `addon_kc_db_instance_class` | `"db.t3.micro"` | RDS 인스턴스 클래스 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -22,9 +62,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -193,8 +237,7 @@ path = "/health/ready"
 
 `addon_kc_ec2` SG 에 ALB SG → 9000 ingress 를 추가해야 한다. `KC_HEALTH_ENABLED=true` 는 userdata 에 이미 있다.
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - **Keycloak 26 env 이름**: `KC_BOOTSTRAP_ADMIN_USERNAME` / `KC_BOOTSTRAP_ADMIN_PASSWORD`. 구 `KEYCLOAK_ADMIN*` 는 deprecated (26 에서 경고, 이후 제거). 26.5.2 docs 기준 확인.
 - **ALB(HTTP) 뒤 필수 옵션**: `KC_HTTP_ENABLED=true` + `KC_PROXY_HEADERS=xforwarded` (구 `KC_PROXY=edge` 는 deprecated). 없으면 `start` 가 HTTPS 를 요구해 기동 실패하거나 issuer 가 `https://` 로 잡혀 토큰 검증이 깨진다. `KC_HOSTNAME` 미지정 시 `KC_HOSTNAME_STRICT=false` 가 있어야 기동한다.
 - **포트 9000 은 프록시하지 않는다** (관리 엔드포인트). ALB 리스너는 8080 만 forward, 헬스체크로만 9000 을 쓴다.

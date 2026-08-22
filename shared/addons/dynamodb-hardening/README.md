@@ -1,16 +1,48 @@
 # dynamodb-hardening 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 기존 DynamoDB 테이블에 TTL·PITR·삭제 방지·CMK·Streams·GSI 를 in-place 로 덧붙이고,
 Streams → Lambda ESM 과 Gateway 엔드포인트를 새 리소스로 붙인다.
 1과제 Database 옵션(전 세트 task-1 DynamoDB), set-07 m1(Streams→Lambda), set-02 m1/m4, set-05 m4 후보에 대응.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 5개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_ddb_stream_arn` | **필수** | Streams 를 읽을 테이블의 stream_arn. 같은 루트 모듈이면 aws_dynamodb_table.<기존>.stream_arn 으로 바꾼다 |
+| `addon_ddb_lambda_function_name` | **필수** | Streams 를 소비할 기존 Lambda 함수 이름 (aws_lambda_function.<기존>.function_name) |
+| `addon_ddb_lambda_role_name` | **필수** | 그 Lambda 의 실행 Role 이름 — 스트림 읽기 정책을 여기에 붙인다 (aws_iam_role.<기존>.name) |
+| `addon_ddb_vpc_id` | **필수** | 엔드포인트를 붙일 VPC ID (aws_vpc.<기존>.id) |
+| `addon_ddb_route_table_ids` | **필수** | 엔드포인트 경로를 넣을 라우트 테이블 ID 목록 (보통 private, aws_route_table.private[*].id) |
+| `addon_ddb_esm_batch_size` | `100` | ESM 배치 크기 (Streams 최대 10000) |
+| `addon_ddb_esm_max_retry_attempts` | `-1` | 실패 배치 재시도 횟수 (-1 = 무제한, 기본값). 과제지가 '재시도 N회' 를 지정하면 그 값 |
+| `addon_ddb_esm_bisect_on_error` | `false` | 함수 오류 시 배치를 반으로 쪼개 재시도 (poison record 격리) |
+| `addon_ddb_esm_on_failure_arn` | `""` | 실패 레코드 목적지 SQS/SNS ARN. 빈 문자열이면 destination_config 생략 |
+| `addon_ddb_endpoint_name` | `"dynamodb-endpoint"` | 엔드포인트 Name 태그 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +50,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -120,8 +156,7 @@ global_secondary_index {
 }
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 위 블록은 전부 in-place. 단 `hash_key`·`range_key`·`name`·`billing_mode` 를 건드리면 ⚠ 재생성 — 손대지 않는다.
 - **GSI 는 한 번의 apply 에 1개만 생성/삭제**된다(2개 이상이면 apply 에러). 백필에 수 분 걸리고 그동안 `IndexStatus=CREATING`. set-07 m1 채점 1-2-A 처럼 "GSI 정확히 N개" 를 검사하는 테이블에는 추가 GSI 를 붙이지 않는다.
 - `stream_view_type` 변경은 스트림이 켜진 상태에서 바로 안 된다 — 확인 필요: 실패하면 `stream_enabled = false` apply 후 새 타입으로 다시 켠다. 스트림 ARN 이 바뀌므로 ESM 도 다시 만들어진다.

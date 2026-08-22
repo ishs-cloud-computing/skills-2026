@@ -1,15 +1,49 @@
 # cw-dashboard 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 CloudWatch 대시보드 한 장 — ALB·RDS·ECS·EKS(Container Insights)·Lambda·WAF 위젯을 변수로 골라 넣는다.
 task-3 "모니터링 환경" 요구, set-08/09 task-1 ECS 대시보드 추가 문항, 1과제 Observability 옵션(대시보드 형)에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 0개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_cwdash_name` | `"skills-dashboard"` | 대시보드 이름. 과제지 명시 이름과 정확히 일치시킨다 |
+| `addon_cwdash_region` | `"ap-northeast-2"` | ALB·RDS·ECS·EKS·Lambda 위젯이 읽는 메트릭 리전 (대시보드 자체는 리전 무관) |
+| `addon_cwdash_period` | `60` | 위젯 공통 집계 주기 (초) |
+| `addon_cwdash_alb_arn_suffix` | `""` | ALB LoadBalancer dimension (aws_lb.<기존>.arn_suffix = app/<이름>/<id>) |
+| `addon_cwdash_rds_instance_id` | `""` | RDS DBInstanceIdentifier dimension |
+| `addon_cwdash_ecs_cluster_name` | `""` | ECS ClusterName dimension. service 와 둘 다 비어 있지 않아야 위젯이 들어간다 |
+| `addon_cwdash_ecs_service_name` | `""` | ECS ServiceName dimension |
+| `addon_cwdash_eks_cluster_name` | `""` | EKS ContainerInsights ClusterName dimension (amazon-cloudwatch-observability addon 필요) |
+| `addon_cwdash_lambda_function_name` | `""` | Lambda FunctionName dimension |
+| `addon_cwdash_waf_acl_name` | `""` | WAF WebACL dimension (Web ACL 이름) |
+| `addon_cwdash_waf_metric_region` | `"us-east-1"` | WAF BlockedRequests 메트릭이 있는 리전. CLOUDFRONT scope 는 us-east-1, REGIONAL 은 ALB 리전 |
+| `addon_cwdash_waf_dimension_region` | `"Global"` | WAF Region dimension 값. CLOUDFRONT scope 는 Global, REGIONAL 은 리전 코드(ap-northeast-2) |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -17,9 +51,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -77,8 +115,7 @@ aws cloudwatch put-dashboard --dashboard-name skills-dashboard --dashboard-body 
 }
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 대시보드 본문 변경은 in-place. `dashboard_name` 변경은 ⚠ 재생성(이름이 식별자) — 채점 영향 없음.
 - 위젯 `x`·`y` 를 일부러 뺐다 — 넣으면 전 위젯에 넣어야 하고, 빈 위젯이 빠질 때 좌표가 겹친다. 자동 배치(순서대로 채움)로 둔다.
 - ALB `LoadBalancer` dimension 은 ARN 이 아니라 `app/<이름>/<id>` (`arn_suffix`). 이름만 넣으면 데이터가 안 뜬다.

@@ -1,16 +1,43 @@
 # eks-logging-variants 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 EKS 클러스터 자체의 로깅·암호화·노드 강화 문항 묶음 — Control Plane 로깅, Secret envelope CMK,
 노드 EBS CMK, 노드 KST, IMDS 차단, 로그 그룹 CMK, EBS CSI 암호화 StorageClass.
 1과제 KMS/Security 옵션(set-02/03/05 task-1 후보)과 set-08 m4 에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 1개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_ekslog_cluster_name` | **필수** | EKS 클러스터 이름. Control Plane 로그 그룹 /aws/eks/<이름>/cluster 와 EBS CSI 정책 이름에 쓴다 |
+| `addon_ekslog_kms_alias` | `"eks-platform-key"` | EKS 플랫폼 CMK alias (alias/ 접두어 제외). 과제지 명시 이름과 정확히 일치시킨다 |
+| `addon_ekslog_kms_rotation_days` | `365` | CMK 자동 회전 주기 (일). 과제지가 지정하면 그 값으로 |
+| `addon_ekslog_log_retention_days` | `30` | Control Plane 로그 그룹 보존 일수 |
+| `addon_ekslog_create_cluster_log_group` | `true` | true 면 /aws/eks/<cluster>/cluster 로그 그룹을 CMK 로 선생성한다 (eksctl 보다 먼저 apply). 클러스터가 이미 있으면 false 로 두고 README 의 associate-kms-key 로 간다 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +45,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -116,8 +147,7 @@ preBootstrapCommands:
 kms_key_id = aws_kms_key.addon_ekslog.arn
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - **Secret envelope 은 켜면 못 끈다**(키 교체도 불가). 키 ARN 을 틀리면 클러스터 재생성뿐. 키가 같은 리전·같은 계정인지, alias 가 아니라 **key ARN** 인지 확인.
 - 노드 EBS CMK·IMDS·preBootstrapCommands 는 ⚠ NG 재생성. MNG 는 launch template 이 고정이라 `eksctl update nodegroup` 으로 못 바꾼다.
 - `volumeKmsKeyID` 를 줬는데 key policy 에 `AllowAutoScalingUse`/`AllowAutoScalingGrant` 가 없으면 인스턴스가 **조용히 terminate** 되고 eksctl 이 타임아웃난다. ASG 활동 기록(`Client.InternalError: Client error on launch`)으로 확인.

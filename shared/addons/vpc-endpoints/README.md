@@ -1,16 +1,46 @@
 # vpc-endpoints 부착 스니펫
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 Gateway(S3·DynamoDB) + Interface(PrivateLink) 엔드포인트 묶음. 1과제 Security 옵션
 ("private 서브넷에서 인터넷 경유 없이 ECR/로그/S3 접근", set-02/07/09 task-1, set-08 task-1 채점 1-5)과
 set-02 task-2 m4 후보에 대응한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 2개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_vpce_vpc_id` | **필수** | 엔드포인트를 만들 기존 VPC ID. 직접 참조하려면 aws_vpc.<기존>.id 로 바꾼다 |
+| `addon_vpce_vpc_cidr` | **필수** | Interface Endpoint SG 의 443 허용 소스 CIDR (VPC CIDR) |
+| `addon_vpce_route_table_ids` | `[]` | Gateway Endpoint 를 연결할 private 라우트 테이블 ID 목록 |
+| `addon_vpce_subnet_ids` | `[]` | Interface Endpoint ENI 를 둘 private 서브넷 ID 목록 (AZ 당 1개) |
+| `addon_vpce_gateway_services` | `["s3", "dynamodb"]` | Gateway 타입 서비스 목록 (s3 / dynamodb 만 Gateway 지원) |
+| `addon_vpce_interface_services` | `["ecr.api", "ecr.dkr", "logs"]` | Interface 타입 서비스 짧은 이름 목록 (ecr.api ecr.dkr logs sts secretsmanager sns sqs monitoring ssm ssmmessages ec2messages kms 등). 빈 목록이면 SG 도 안 만든다 |
+| `addon_vpce_name_prefix` | `"vpce"` | 엔드포인트 Name 태그 접두 (<prefix>-<service>) |
+| `addon_vpce_sg_name` | `"vpce-sg"` | Interface Endpoint 용 SG 이름 |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -18,9 +48,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 파일
 
@@ -79,8 +113,7 @@ policy = jsonencode({
 })
 ```
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - 전부 신규 리소스 — 기존 리소스 재생성 없음. Gateway 의 `route_table_ids` 변경은 in-place, `service_name`·`vpc_endpoint_type` 변경은 ⚠ 재생성.
 - Gateway 는 **s3·dynamodb 만**. 다른 서비스를 `addon_vpce_gateway_services` 에 넣으면 apply 실패.
 - `private_dns_enabled = true` 는 VPC 의 `enable_dns_support`·`enable_dns_hostnames` 가 둘 다 true 여야 한다 — 아니면 apply 에서 InvalidParameter.

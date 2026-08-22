@@ -7,7 +7,7 @@
 코드블록을 고치다 인자·필드에서 막히면 [DOC-LINKS](DOC-LINKS.md) 를 연다 —
 리소스별 공식문서 주소, 저장소 안 구현 위치, 인터넷 없이 스키마를 뽑는 명령을 한 장에 모은 색인이다.
 
-추가 문항의 KIT은 먼저 [QUICK-REFERENCE.md](QUICK-REFERENCE.md)에서 찾고, 없으면 [KIT-INDEX.md](KIT-INDEX.md)를 따른다. 각 KIT의 기능 확인(VERIFY) 뒤에는 해당 세트의 공식 `mark.md`·`mark*.sh`로 SCORE를 확인한다.
+추가 문항의 KIT은 먼저 [QUICK-REFERENCE.md](QUICK-REFERENCE.md)에서 찾고, 없으면 [KIT-INDEX.md](KIT-INDEX.md)를 따른다. KIT README는 전부 같은 순서다 — **USE WHEN → CHANGE(고칠 값) → KEEP → CHECK(계정·리전) → RUN → VERIFY/SCORE → TROUBLESHOOT**. `CHANGE` 표의 **필수** 변수만 채우면 apply 가 된다. 각 KIT의 기능 확인(VERIFY) 뒤에는 해당 세트의 공식 `mark.md`·`mark*.sh`로 SCORE를 확인한다.
 
 런북 코드블록은 붙여넣기 전에 **한 줄씩 칠지 블록째 칠지 먼저 판단**한다 — 앞 명령의 출력·성공 여부에 뒤가 걸리는 블록(로그인·apply·삭제·롤아웃)은 한 줄씩, 단순 설치·조회는 블록째. PowerShell 은 앞 줄이 실패해도 뒤 줄을 계속 실행한다.
 

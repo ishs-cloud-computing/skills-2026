@@ -1,5 +1,9 @@
 # Observability 부착 스니펫
 
+**STATUS:** `LINTED` — YAML/JSON 1개 파싱 통과 (2026-08-22). Terraform 파일 없음.
+
+## USE WHEN
+
 출제지침 예시가 "모니터링 도구 설치" 류라 5개 옵션 중 가장 유력하다.
 요구 형태별로 아래 경로 중 하나를 고른다. 전부 기존 구현이 있어 새로 쓰지 않는다.
 
@@ -7,19 +11,40 @@
 Prometheus·Grafana·Fluent Bit 는 이 금지 목록에 없다 (set-07 task-1 이 실제로 썼다).
 단 채점 대상은 helm 내부 상태가 아니라 결과물(k8s 오브젝트·CloudWatch 지표·대시보드)이어야 한다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 세트의 `k8s/`·`eksctl/`(또는 기존 구성)으로 복사해 병합한다. 이 addon 디렉터리 자체는 독립 `apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+Terraform 변수 없음. 고칠 값은 아래 본문의 스니펫에서 직접 바꾼다.
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
-kubectl config current-context
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
-- 기본 RUN에 `destroy`/`delete`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 세트의 `k8s/`·`eksctl/` 구성으로 복사해 병합한다. 이 addon 디렉터리 자체는 독립 `apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
+kubectl config current-context   # 채점 대상 클러스터가 맞는지
+kubectl apply -f <복사한 파일>    # 적용 순서는 아래 본문을 따른다
+kubectl get pods -A
+```
+
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+- 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 경로 A — Container Insights (CloudWatch 계열 요구)
 
@@ -122,8 +147,7 @@ Fargate 에는 DaemonSet(Fluent Bit·Container Insights agent)이 못 뜬다. �
 
 set-08 task-2 module-4(Fargate profile keda·karpenter) 처럼 컨트롤러만 Fargate 인 구성은 워커(EC2) 로그가 아니라 Fargate 파드 로그만 이 경로로 간다 — 워커는 경로 A/C.
 
-## 함정
-
+## TROUBLESHOOT — 이 KIT 고유 함정
 - Control Plane 로깅 요구는 경로 E — addon 설치로 착각하지 않는다.
 - Container Insights 로그 그룹 retention 기본은 무제한 — 과제지가 보존 기간을 지정하면
   `aws logs put-retention-policy` 로 맞춘다.

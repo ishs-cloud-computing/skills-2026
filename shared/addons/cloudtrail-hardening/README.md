@@ -1,14 +1,47 @@
 # CloudTrail hardening KIT
 
+**STATUS:** `VALIDATED` — `terraform validate` 통과 (2026-08-22). AWS 에 apply 한 검증은 아니다.
+
+## USE WHEN
+
 CloudTrail의 **로그 무결성 검증**, 멀티 리전 추적, 선택적 CloudWatch Logs 연동과 SSE-KMS를 기존 Terraform 루트에 부착하는 COPY KIT이다. 이 디렉터리는 독립 state나 독립 `apply` 대상이 아니다.
 
-## RUN guard
+## CHANGE — 당일 고치는 값
 
-이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체를 `init`/`apply` 하지 않으므로 기존 Kit의 state를 건드리지 않는다.
+`terraform.tfvars` 에 넣는다. **필수 1개**는 채우지 않으면 apply 되지 않는다.
+
+| 변수 | 기본값 | 무엇 |
+| --- | --- | --- |
+| `addon_trail_name` | **필수** | Trail 이름. 채점 스크립트가 describe-trails 로 직접 읽으므로 과제지와 정확히 일치시킨다 |
+| `addon_trail_bucket_prefix` | `"cloudtrail-logs"` | 로그 버킷 이름 접두 (<prefix>-<account_id>, 전역 유일) |
+| `addon_trail_s3_key_prefix` | `""` | 버킷 안 key prefix (예: cloudtrail). 빈 문자열이면 AWSLogs/ 루트. 버킷 정책 경로는 자동으로 맞춰진다 |
+| `addon_trail_multi_region` | `false` | 멀티리전 Trail 여부 (과제지 '모든 리전' 요구 시 true) |
+| `addon_trail_include_global_events` | `true` | IAM·STS·CloudFront 등 글로벌 서비스 이벤트 포함 여부. EventBridge 의 IAM/ConsoleLogin 룰을 쓰면 true |
+| `addon_trail_read_write_type` | `"All"` | management 이벤트 선택: All / ReadOnly / WriteOnly |
+| `addon_trail_cw_logs_enabled` | `false` | CloudWatch Logs 로그 그룹 연동 여부 (메트릭 필터·알람 문항이 같이 나올 때 true) |
+| `addon_trail_log_group_name` | `"/aws/cloudtrail/trail"` | CloudWatch Logs 로그 그룹 이름 (cw_logs_enabled 일 때) |
+| `addon_trail_log_retention_days` | `30` | 로그 그룹 보존 기간 (일) |
+| `addon_trail_kms_enabled` | `false` | Trail 로그(및 로그 그룹) SSE-KMS CMK 생성·적용 여부 |
+| `addon_trail_kms_alias` | `"cloudtrail-logs"` | CMK alias (alias/ 접두 제외) |
+
+## KEEP — 건드리지 않는다
+
+- 기존 세트의 리소스·이름·CIDR. 이름이 충돌하면 기존 것을 지우지 말고 **이 KIT 쪽 변수를 리네임**한다.
+- 공식 지급물 — `provided/`, `task.md`, `mark.md`, `mark*.sh`.
+- `plan` 에 기존 리소스의 replace/delete 가 보이면 apply 하지 말고 멈춘다.
+
+## CHECK — apply 전 계정·리전
 
 ```powershell
 aws sts get-caller-identity   # EXPECTED ACCOUNT: 대회 당일 지급 계정
 aws configure get region      # EXPECTED REGION : 과제지·terraform.tfvars 의 리전
+```
+
+## RUN
+
+이 KIT은 **COPY** 방식이다. 파일을 대상 `set-XX/task-Y/terraform/`(필요하면 `eksctl/`·`k8s/`)로 복사한 뒤 **그 디렉터리에서** 실행한다. 이 addon 디렉터리 자체는 `init`/`apply` 대상이 아니므로 기존 Kit의 state를 건드리지 않는다.
+
+```powershell
 terraform fmt
 terraform init                # -upgrade 는 쓰지 않는다
 terraform validate
@@ -16,9 +49,13 @@ terraform plan                # 기존 리소스에 replace/delete 가 보이면
 terraform apply
 ```
 
-- **VERIFY** = 이 README의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
+복사할 파일과 순서는 아래 본문을 따른다.
+
+## VERIFY / SCORE
+
+- **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
 - 기본 RUN에 `destroy`를 넣지 않는다. 점수에 필요한 리소스를 임의로 삭제하지 않는다.
-- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 이 README에는 이 KIT 고유 문제만 둔다.
+- 공통 실패는 [TROUBLESHOOTING-COMMON](../../TROUBLESHOOTING-COMMON.md). 아래 함정은 이 KIT 고유 문제다.
 
 ## 포함 파일
 
@@ -60,6 +97,5 @@ aws cloudtrail get-event-selectors --trail-name <Trail이름>
 
 `IsLogging=true`, `LogFileValidationEnabled=true`와 과제지의 멀티 리전·글로벌 이벤트 값이 일치해야 한다. CloudWatch Logs를 켰다면 Trail의 `CloudWatchLogsLogGroupArn`과 `CloudWatchLogsRoleArn`도 확인한다. 이 검증은 기능 확인이며, 점수 판정은 해당 세트의 공식 채점 절차로 한다.
 
-## 주의
-
+## TROUBLESHOOT — 주의
 기본 `event_selector`는 **management event**만 수집한다. S3 객체·Lambda 호출 같은 data event가 요구되면 기존 Trail의 event selector를 과제지 요구에 맞게 별도로 확장한다. KMS를 켜면 CloudTrail과 CloudWatch Logs 서비스 principal에 필요한 key policy가 함께 있어야 하며, 이 KIT의 정책 블록을 생략하면 적용이 실패할 수 있다.
