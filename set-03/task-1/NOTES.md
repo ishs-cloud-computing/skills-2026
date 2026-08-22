@@ -230,8 +230,14 @@
      데이터포인트를 아예 주지 않아 빈 시리즈가 된다(2026-07-29 항목의 미검증 대가). 타깃 2종을
      제거하고 패널 datasource 를 `-- Mixed --` → `prometheus` 로 환원. CloudWatch 연동 요구는
      Application Logs 가 계속 충족한다
-  5. **Node Memory (%) 범례가 `{{instance}}`** (`192.168.x.x:9100`) — Node CPU 의 `{{nodename}}` 과
-     불일치. `{{nodename}}` 으로 통일(expr 이 이미 `node_uname_info` 조인으로 달고 있다)
+  5. **Application Logs 패널 표시 옵션이 참고 사진과 달랐다** — `showTime: true` 가 타임스탬프 열을
+     앞에 붙여 각 줄이 `2026-…  INFO {"level":…}` 로 보였다. 채점지 예시는 `INFO {"level":…}` 로
+     시작하고 참고 사진에도 타임스탬프 열이 없다. `showTime`·`wrapLogMessage` 를 모두 `false` 로
+     내려 줄 전체가 채점지 예시와 문자 그대로 같아지게 했다
+- 참고 사진과 대조해 되돌린 것 1건: `Node Memory (%)` 범례를 `{{nodename}}` 으로 바꿨다가
+  `{{instance}}`(`192.168.2.111:9100`)로 되돌렸다. Node CPU 와 표기가 갈리는 게 어색해 통일했는데,
+  참고 사진이 이 패널만 instance 로 두고 있고 채점지 문구("노드별 Memory 사용률")는 둘 다 만족한다.
+  구성 일치를 우선했다
 - 보정 1건: `Pod Restarts` 를 `topk(10, ...)` 로 제한. `$namespace` 기본값이 All 이라(errata 2026-08-16
   "모든 파드") 타일이 수십 개가 되어 뭉갠다. 재시작 상위 10개면 `crash-test` 가 항상 최상단이다
 - 기각:

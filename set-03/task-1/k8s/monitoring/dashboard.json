@@ -168,7 +168,7 @@
             "uid": "prometheus"
           },
           "expr": "(100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * on(instance) group_left(nodename) node_uname_info * on(nodename) group_left() label_replace(kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\"}, \"nodename\", \"$1\", \"node\", \"(.*)\")",
-          "legendFormat": "{{nodename}}"
+          "legendFormat": "{{instance}}"
         }
       ]
     },
@@ -843,8 +843,8 @@
         "y": 49
       },
       "options": {
-        "showTime": true,
-        "wrapLogMessage": true,
+        "showTime": false,
+        "wrapLogMessage": false,
         "sortOrder": "Descending"
       },
       "targets": [
