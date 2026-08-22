@@ -83,12 +83,16 @@ terraform apply
 terraform output -json | Set-Content ..\outputs.json   # PS7 기본 UTF-8 no BOM → bastion jq OK
 
 # SSM 에는 파일 전송이 없어 S3 를 릴레이로 쓴다 (_transfer/ 는 step 9-3 에서 삭제).
-# bastion 홈은 유지되므로 이 전송은 1회면 된다.
+# bastion 홈은 유지되지만 이 아카이브는 업로드 시점 스냅샷이다 —
+# k8s/ 를 한 줄이라도 고쳤으면 아래 tar + cp 를 반드시 다시 돌린다. 안 그러면 step 5 가
+# 조용히 옛 내용으로 렌더하고, 에러 없이 "패널이 안 고쳐진다" 로만 보인다.
 $o = Get-Content ..\outputs.json | ConvertFrom-Json
 $BUCKET = $o.s3_bucket_name.value
 aws s3 cp ..\outputs.json "s3://$BUCKET/_transfer/outputs.json"
 tar czf "..\task.tgz" -C .. k8s
 aws s3 cp "..\task.tgz" "s3://$BUCKET/_transfer/task.tgz"
+# 이 해시를 step 4 의 sha256sum 출력과 대조한다 (본 PC ↔ bastion 전달 확인)
+(Get-FileHash ..\k8s\monitoring\dashboard.json -Algorithm SHA256).Hash.ToLower()
 # 이미지 빌드용 book(8.4MB) — CloudShell 업로드 UI 대신 릴레이로 넘긴다 (step 2)
 aws s3 cp ..\app\book "s3://$BUCKET/_transfer/book"
 ```
@@ -205,6 +209,10 @@ BUCKET=$(aws s3api list-buckets --query "Buckets[?contains(Name,'wsc2026-static'
 mkdir -p ~/wsc2026 && cd ~/wsc2026
 aws s3 cp "s3://$BUCKET/_transfer/task.tgz" . && tar xzf task.tgz
 aws s3 cp "s3://$BUCKET/_transfer/outputs.json" .
+# 받은 아카이브가 본 PC 의 현재 k8s/ 와 같은지 — step 1 마지막 줄 출력과 같아야 한다.
+# 다르면 본 PC 에서 tar + cp 를 다시 돌린다(고친 뒤 안 올린 것이다). step 5 의 대조는
+# bastion 로컬↔클러스터라 아카이브가 낡으면 양쪽이 같이 낡아 통과해버린다 — 여기가 유일한 대조 지점이다.
+sha256sum k8s/monitoring/dashboard.json
 
 cat > ~/.env <<EOF
 export AWS_DEFAULT_REGION=ap-northeast-2
@@ -314,6 +322,10 @@ kubectl run dns-test --rm -it --restart=Never --image=busybox \
 **배포 후에 고쳐야 할 때** — 클러스터를 다시 세울 필요 없다. bastion 에서 `~/wsc2026/k8s` 로 가
 위 `TITLES` 블록만 값 채워 실행한 뒤 ConfigMap 을 다시 만들어 apply 하면 Grafana 사이드카가
 1분 안에 다시 읽어간다:
+
+> 단, **본 PC 에서 `dashboard.json` 을 고쳤다면 step 1 의 `tar` + `aws s3 cp` 를 먼저 다시 돌리고**
+> bastion 에서 `task.tgz` 를 다시 풀어야 한다. 아래 블록은 bastion 의 파일이 최신이라고 가정한다.
+> `kubectl apply` 가 `unchanged` 를 뱉으면 아카이브가 아직 낡은 것이다.
 
 ```bash
 cd ~/wsc2026/k8s

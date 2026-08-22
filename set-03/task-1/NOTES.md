@@ -54,6 +54,13 @@
   `d3b0313` 이전 버전이었다. 쿼리·문법·ConfigMap YAML 왕복 모두 정상이었다).
   → README step 5 에 배포본↔원본 sha256 대조(CRLF 정규화), step 8 에 로컬 파일 없이 되는
   의미 검사(`filter @message like`·`count by (label_eks` grep)를 넣어 즉시 드러나게 했다.
+  **주의: step 5 의 대조만으로는 부족하다.** 그건 bastion 로컬↔클러스터 비교라 아카이브가 낡으면
+  양쪽이 같이 낡아 해시가 일치하고 통과해버린다. 정작 끊기는 링크는 **본 PC ↔ bastion** 이다
+  (2026-08-22 재현: 재배포했는데 `configmap ... unchanged` 가 떴다 — 본 PC 에서 tar+cp 를 다시
+  돌리지 않아 S3 의 `task.tgz` 가 그대로였다). → step 1 업로드 직후와 step 4 추출 직후에
+  `dashboard.json` sha256 을 각각 찍어 눈으로 대조하게 했다. PowerShell `Get-FileHash` 는 대문자,
+  `sha256sum` 은 소문자라 `.ToLower()` 를 붙여야 표기가 맞는다.
+  `kubectl apply` 가 `unchanged` 를 뱉으면 그 자체가 "아카이브가 낡았다" 는 신호다.
 - 미해결:
   - ~~11-4 HighLatency 실발화 불가~~ → **2026-08-07 정정으로 채점 항목이 삭제됐다**(정정 로그).
     11-4 는 5종만 확인한다. 과제지 Alert 표의 HighLatency 규칙 자체는 그대로 요구되므로

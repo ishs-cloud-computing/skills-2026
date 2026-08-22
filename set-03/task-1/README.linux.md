@@ -49,10 +49,13 @@ terraform apply
 terraform output -json > ../outputs.json
 
 # S3 릴레이 (VPC CloudShell 은 업로드 UI 없음. _transfer/ 는 채점 전 삭제 — README step 9)
+# 아카이브는 업로드 시점 스냅샷이다 — k8s/ 를 고쳤으면 tar + cp 를 반드시 다시 돌린다.
 BUCKET=$(jq -r '.s3_bucket_name.value' ../outputs.json)
 aws s3 cp ../outputs.json "s3://$BUCKET/_transfer/outputs.json"
 tar czf ../task.tgz -C .. k8s
 aws s3 cp ../task.tgz "s3://$BUCKET/_transfer/task.tgz"
+# 이 해시를 bastion 추출 후 sha256sum 출력과 대조한다 (README step 4)
+sha256sum ../k8s/monitoring/dashboard.json
 # 이미지 빌드용 book(8.4MB) — CloudShell 업로드 UI 대신 릴레이로 넘긴다 (step 2)
 aws s3 cp ../app/book "s3://$BUCKET/_transfer/book"
 ```
