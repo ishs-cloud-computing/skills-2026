@@ -35,6 +35,34 @@
   풀리고, 안 풀리면 VPC 잔여 ENI 를 detach/delete 로 수동 정리한다(런북 Teardown 절)
 
 ---
+## 이름 감사 (2026-08-22, 미해결)
+<!-- 과제지·채점지 원문의 이름 오탈자/불일치와 그 판정. 해소되면 정정 로그로 옮기고 여기서 지운다. -->
+
+원문의 이름을 전부 추출해 `task.md` ↔ `mark.md` ↔ `mark/mark2-N.sh` ↔ `provided/` ↔ 구현으로
+교차 대조했다. **구현이 채점 스크립트 이름을 못 맞추는 건은 없다.** 이 세트가 세 세트 중 원문
+오탈자가 가장 많다.
+
+| # | 모듈 | 위치 | 내용 | 판정 |
+|---|---|---|---|---|
+| N1 | 3 | `task.md:202-207`·`provided/module3/lambda.md` ↔ `mark/mark2-3.sh` | **이름 집합 자체가 다르다.** 룰: 과제지 `sg-change-rule`·`role-change-rule`·`ec2-terminate-rule`·`ec2-type-change-rule` ↔ 채점 `sg-ssh-rule`·`ec2-stop-rule`·`ec2-terminate-rule`·`required-tags-rule`. 함수: provided `sg-remediation`·`role-remediation`·`ec2-terminate-alert`·`ec2-type-remediation` ↔ 채점 `ec2-stop-remediation`·`ec2-terminate-alert`·`sg-remediation`·`tag-alert`. 겹치는 건 3개뿐이고 `sg-change-rule` ↔ `sg-ssh-rule` 은 **같은 룰의 이름이 다른 것** | **합집합으로 해소.** 함수 6·룰 6 을 `variables.tf:120-148` 의 map 으로 전부 생성. 어느 쪽이 정본으로 확정돼도 map 값만 고치면 된다 |
+| N2 | 4 | `mark.md:430` | 4-0 사전준비가 `BUCKET_NAME="wsc2026-student-score-bucket-(선수 비번호)"` — module-1 블록 복붙 | **채점 스크립트가 정본.** `mark/mark2-4.sh:7` 의 `wsc2026-sensor-alert-bucket-${NUM}` 이 맞고 구현도 그 이름. 마이스터넷 질의 마감(2026-08-13) 이후라 정정을 받을 수 없다 |
+| N3 | 4 | `mark.md:137` | 기대 출력에 `"S3_BUCKET": "wsc2026-student-score-bucket-103"` — 비번호 `103` 하드코딩 | **미해결.** set-02 task-1 2-1-A 와 같은 유형인데 그건 신판이 `<선수비번호>`로 고쳤고 이건 안 고쳤다. 당일 심사장 확인 사항 |
+| N4 | 4 | `task.md:302-310` | §6 DynamoDB 속성표가 `studentId`·`examDate`·`korean/english/math/…` — module-1 학생점수 표 복붙. 바로 위 §6 Key 는 `sensorId`/`timestamp` | **Key 스키마가 정본.** `module-4-msk/terraform/dynamodb.tf:10,15` 가 `sensorId`/`timestamp`. `mark2-4.sh:14` 도 이 둘만 읽는다 |
+| N5 | 4 | `task.md:270` | §3 MSK **Topic** 절 밑에 `- **PK** : sensorId` 가 붙어 있다. Kafka 토픽에 PK 개념이 없다 | **DynamoDB 절 잔재로 판정, 무시.** |
+| N6 | 3 | `task.md:176-181`·`:190` | 이 모듈의 네트워크만 `event-vpc`·`event-pub-a/b`·`event-pub-rtb`·`event-igw` 로 `wsc2026-` 접두사가 없다 | **원문대로 유지.** `variables.tf:18,43,49,69` 가 원문 그대로. 채점 비대상 |
+| N7 | 2 | (해소됨) | `wsc2026-alaytics-ec2-role` → `wsc2026-analytics-ec2-role`. 2026-08-21 신판이 원문 오타를 고쳤고 전사본·구현 리네임 완료 | **저장소에 stale 잔존**: `DAY-OF.md:512` 가 아직 `alaytics` 를 "(과제지 오타 그대로)" 라고 지시하고, `shared/addons/ec2-asg-alb/README.md:93` 도 `wsc2026-alaytics-ec2-role-profile` 을 예시로 쓴다. **당일 치트시트가 틀린 이름을 지시하므로 고쳐야 한다** |
+
+### 하드코딩 — 이름 정정이 오면 즉시 못 바꾸는 지점
+
+| 파일:줄 | 리터럴 | 비고 |
+|---|---|---|
+| `module-2-analytics/terraform/bastion.tf:8,31,41` | `wsc2026-analytics-bastion-sg`·`-role`·`-profile` | 과제지에 없는 작업용 리소스라 위험도 낮음 |
+| `module-4-msk/terraform/bastion.tf:9,19` | `wsc2026-msk-bastion-role`·`-profile` | 상동 |
+| `module-4-msk/terraform/security.tf:11,67,109,135` | `wsc2026-msk-sg`·`-producer-sg`·`-msk-lambda-sg`·`-msk-bastion-sg` | 채점 비대상 |
+| `module-3-event/terraform/config.tf:20` | `wsc2026-event-config-role` | 채점 비대상(Config 룰 이름만 채점) |
+
+채점 대상 이름은 전부 변수화돼 있다. 위 4건은 전부 채점 비대상이라 우선순위가 낮다.
+
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
 

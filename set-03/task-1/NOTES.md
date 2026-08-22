@@ -118,6 +118,29 @@
 - 기타 병목:
 
 ---
+## 이름 감사 (2026-08-22, 미해결)
+<!-- 과제지·채점지 원문의 이름 오탈자/불일치와 그 판정. 해소되면 정정 로그로 옮기고 여기서 지운다. -->
+
+원문의 이름을 전부 추출해 `task.md` ↔ `mark.md` ↔ `mark.sh` ↔ 구현으로 교차 대조했다.
+**구현이 채점 스크립트 이름을 못 맞추는 건은 없다.**
+
+| # | 위치 | 내용 | 판정 |
+|---|---|---|---|
+| N1 | `task.md:77` ↔ `:85` | 노드그룹 접미사가 `wsc2026-addon-**nodegroup**` ↔ `wsc2026-workload-**ng**` 로 갈린다 | **양쪽 다 원문대로.** 채점지도 동일하다(`mark.sh:89,92`). 한쪽으로 통일하면 그 항목이 죽는다. `eksctl/cluster.yaml:95,124` 일치 |
+| N2 | `task.md:44` | ConfigMap 만 `book-config` 로 `wsc2026-` 접두사가 없다. 다른 k8s 리소스는 전부 `wsc2026-book-*` | **원문대로 유지.** `mark.sh:116` 도 `book-config` 를 읽는다 |
+| N3 | Reference02 ↔ 채점지 본문 11-3 ↔ 채점지 참고 사진 | Grafana 패널 제목이 **3중으로 갈린다.** 핵심 3건 — `Status Code`/`Status Codes`, `Alerts`/`Alert`, `App Restarts`/`App restarts`(소문자 r). 그 외 `All Node CPU` vs `Node CPU (%)` 등 대부분 패널이 어긋난다 | **미해결(구조로 흡수).** 채점지 본문 표기를 기본값으로 쓰고, 당일 배부본이 다르면 `README.md:257` 의 `TITLES` 에 `"id":"새 제목"` 만 넣어 바꾼다. 출처별 대응표는 `README.md:290` |
+| N4 | `task.md:143` | "CDN **Name**" 이라 적었지만 CloudFront 에 Name 속성이 없다. 채점 9-1 은 **Name 태그**로 검색(`mark.sh:168`) — 같은 자리를 set-02 는 Comment 로 본다. 세트마다 판정 축이 다르다 | **양쪽 방어.** `cloudfront.tf:84` comment + `:170` Name 태그 |
+| N5 | `task.md:52` | GSI 를 "booking_id 를 이용한 조회" 라고만 하고 **이름을 주지 않는다.** 로그 그룹 이름도 미지정 | **자체 명명.** GSI `booking_id-index`(`dynamodb.tf:30`), 로그 그룹 `/wsc2026/eks/book-app`(`cloudwatch.tf:12`). 채점은 존재·동작만 보므로 이름 자유. set-07 은 같은 자리를 `client-id-created-at-index`·`/unicorn/eks/book-app` 로 명시한다 |
+
+### 하드코딩
+
+이 세트는 `var.name_prefix` 로 거의 전부 조립돼 있어 리터럴이 사실상 없다. 예외 2곳:
+
+| 파일:줄 | 리터럴 | 비고 |
+|---|---|---|
+| `terraform/dynamodb.tf:30` | GSI `booking_id-index` | N5 대로 이름 자유. 정정이 와도 리스크 낮음 |
+| `terraform/security.tf:63,73` | SG `mark-sg` (name·Name 태그) | **의도된 값.** 채점지가 `mark-sg` 를 그대로 쓴다(`mark.md:19-20`). 접두사를 붙이면 안 된다 |
+
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
 

@@ -49,6 +49,42 @@
 - 기타 병목:
 
 ---
+## 이름 감사 (2026-08-22, 미해결)
+<!-- 과제지·채점지 원문의 이름 오탈자/불일치와 그 판정. 해소되면 정정 로그로 옮기고 여기서 지운다. -->
+
+원문의 이름을 전부 추출해 `task.md` ↔ `mark.md` ↔ `mark.sh` ↔ 구현으로 교차 대조했다.
+**세 세트 중 이름 정합성이 가장 좋다 — `unicorn-*` 이름 집합이 네 출처에서 완전히 일치하고
+불일치 0건이다.** 남은 건 스펙 공백 2건과 저장소 쪽 stale 참조다.
+
+| # | 위치 | 내용 | 판정 |
+|---|---|---|---|
+| N1 | `mark.md:410` | ServiceAccount `unicorn-book-app-sa` 는 **채점지에만** 있고 `task.md` 는 이름을 주지 않는다 | **영향없음.** 기대 출력이 "출력되는 값이 있다면 정답" 이라 이름 자체는 미채점. 구현은 채점지 이름과 일치(`k8s/app/00-serviceaccount.yaml:9`, `eksctl/cluster.yaml:66`) |
+| N2 | `mark.md` 예상 출력 다수 | 출제자 환경값이 그대로 박혀 있다 — `unicorn-web-837933860870`(계정 ID), `unicorn-monitoring-grafana-7974ccf57f-j585v`·`unicorn-monitoring-kube-pr-prometheus-0`(Pod 해시) | **유의사항 16(붉은 글씨만 채점)으로 커버.** 다만 채점자가 문자열 비교를 하면 오답이 되므로 당일 확인 사항 |
+| N3 | `shared/addons/cw-alarms/README.md:160-169` | 코드 블록이 `set-07/task-1/outputs.tf` 를 가리키는데 예시 출력은 `app/wskorea26-alb/…`(set-02 접두사)다. `cw-dashboard/README.md:105,107` 도 `wskorea26-alb`·`wskorea26-book-func` 를 예시로 쓰는데 set-02 실제 이름은 `wskorea26-book-alb`·`wskorea26-book-lambda` | **저장소 예시값 오류(경미).** 30% 변동 대비로 addon 을 급히 붙일 때 그대로 복붙하면 dimension 이 빈다 |
+
+### 하드코딩 — 이 세트의 **가장 큰 미해결 건**
+
+작업 규칙 5(바뀌기 쉬운 축은 변수화)가 사실상 미적용이다. set-03 이 `var.name_prefix` 로 전부
+조립하는 반면 이 세트는 **채점 대상 이름 대부분이 `.tf` 리터럴**이라, 당일 정정이나 30% 변동으로
+접두사·이름이 바뀌면 파일을 일일이 열어야 한다. 채점 대상부터 우선순위를 매긴다.
+
+| 우선 | 파일:줄 | 리터럴 | 채점 |
+|---|---|---|---|
+| **상** | `terraform/lambda.tf:74,38,68` | `unicorn-get-booking-func` · `-role` · `-policy` | 채점지 명시 이름 |
+| **상** | `terraform/dynamodb.tf:13,33` | `unicorn-concert-db` · GSI `client-id-created-at-index` | 채점지 명시 이름 |
+| **상** | `terraform/alb.tf:16,27,113,123` | `unicorn-alb` · `unicorn-tg` · `unicorn-grafana-alb` · `unicorn-grafana-tg` | 과제지 명시 이름. 바꾸면 `k8s/app/targetgroupbinding.yaml`·`k8s/monitoring/grafana-targetgroupbinding.yaml` 동반 수정 |
+| **상** | `terraform/waf.tf:14,84,120` | `unicorn-waf` · `unicorn-rate-limit` · `aws-waf-logs-unicorn` | 과제지 명시 이름 |
+| **상** | `terraform/kms.tf:36,71,154,168` | `alias/unicorn-kms-app` · `-data` · `-platform`(×2) | 과제지 명시 이름 |
+| **상** | `terraform/ecr.tf:13` | `unicorn-concert-app` | 과제지 명시 이름 |
+| **상** | `terraform/iam.tf:186,245` | `unicorn-audit-role` · `unicorn-audit-policy` | 과제지 명시(9-2-A 가 ARN 을 직접 조립) |
+| **상** | `terraform/cloudfront.tf:21,47` | `unicorn-alb-origin` · comment `unicorn-svc-cf` | 채점지 명시 |
+| 중 | `terraform/iam.tf:35,56,63,80,87,105,112,117,128,159` | book-app/fluentbit/cwexporter/lbc/ebs-csi 역할·정책 8종 | 이름 비채점 |
+| 중 | `terraform/security.tf:16,37,58,81,110,126` | SG 6종 | 이름 비채점 |
+| 하 | `terraform/flowlog.tf:27,46` · `waf.tf:155` · `cloudfront.tf:13` | flowlog 역할·정책, delivery policy, OAC | 과제지에 없는 부수 리소스 |
+
+권장: `variables.tf` 에 `name_prefix = "unicorn"` 를 두고 **"상" 구간만** `"${var.name_prefix}-…"`
+로 돌린다. "중/하" 까지 한 번에 건드리면 apply 되던 구성을 미검증 상태로 만든다.
+
 ## 정정 로그
 <!-- 과제지·채점지의 오류/정정. -->
 

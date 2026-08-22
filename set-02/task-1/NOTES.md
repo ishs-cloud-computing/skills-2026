@@ -53,6 +53,37 @@
 - 기타 병목: CloudFront Deployed 전파 수 분
 
 ---
+## 이름 감사 (2026-08-22, 미해결)
+<!-- 과제지·채점지 원문의 이름 오탈자/불일치와 그 판정. 해소되면 정정 로그로 옮기고 여기서 지운다. -->
+
+원문의 이름을 전부 추출해 `task.md` ↔ `mark.md` ↔ `mark.sh` ↔ 구현으로 교차 대조했다.
+**구현이 채점 스크립트 이름을 못 맞추는 건은 없다.** 남은 건 원문 자체의 표기 문제다.
+
+| # | 위치 | 내용 | 판정 |
+|---|---|---|---|
+| N1 | `task.md:135-138` Reference01 | IGW/NAT 만 `book-igw`·`book-ngw-c`·`book-ngw-d` 로 접두사가 `wskorea26-` 에서 벗어난다. 같은 표의 VPC·서브넷·RTB 는 전부 `wskorea26-` | **원문대로 유지.** 채점 1-2-A 는 이름이 아니라 `igw-…`/`nat-…` **ID** 만 읽는다. `variables.tf:46,52` 가 원문 그대로 |
+| N2 | `task.md:167` ↔ `:169` | Lambda 경로가 표는 `/reserv-query`, 예시는 `/reserv_query` | **영향없음.** `alb.tf:84-118` 이 경로가 아니라 HTTP method 로 분기해 어느 쪽이 와도 통과 |
+| N3 | `task.md` Reference02/03 | `concert_name` 예시값이 `2ND_TINY_CON`(Request) ↔ `2ND TINY_CON`(Response) ↔ `2ND%20TINY_CON`(쿼리)로 세 군데가 다르다 | **미해결.** 9-x E2E 는 채점자가 입력한 값을 그대로 되돌려주면 되므로 구현 영향은 없다. 당일 채점자가 어느 표기로 POST 하든 그 값이 GET 응답에 그대로 나와야 한다 |
+| N4 | `task.md:113` | "Distribution **Name**" 이라 적었지만 CloudFront 에 Name 속성이 없다. 채점은 **Comment** 로 조회(`mark.sh:9`) | **양쪽 방어.** `cloudfront.tf:41` comment + `:114` Name 태그를 같이 세팅 |
+| N5 | `task.md` 전체 | ServiceAccount 이름을 과제지·채점지 어디에도 명시하지 않는다 | **자체 명명.** `wskorea26-book-sa`. 채점 대상 아님 |
+
+### 하드코딩 — 이름 정정이 오면 즉시 못 바꾸는 지점
+
+작업 규칙 5(바뀌기 쉬운 축은 변수화) 미적용 구간. 30% 변동이나 당일 정정으로 이름이 바뀌면
+`.tf` 를 직접 열어 고쳐야 한다.
+
+| 파일:줄 | 리터럴 |
+|---|---|
+| `terraform/alb.tf:26,46,134` | `wskorea26-book-tg` · `wskorea26-lambda-tg` · `wskorea26-grafana-tg` |
+| `terraform/iam.tf:28,36,54` | `wskorea26-book-app-policy` · `wskorea26-lbc-policy` · `wskorea26-fluent-bit-policy` |
+| `terraform/security.tf:17,38,61,107` | `wskorea26-book-alb-sg` · `wskorea26-grafana-alb-sg` · `wskorea26-node-sg` · `wskorea26-cluster-extra-sg` |
+| `terraform/cloudfront.tf:12,20` | `wskorea26-book-rewrite` · `wskorea26-s3-oac` |
+| `terraform/dynamodb.tf:29` | GSI `concert_name-created_at-index` (과제지 명시값이라 위험도 낮음) |
+
+TG 3종은 채점 7-x 가 이름을 직접 읽지는 않지만 ALB 규칙과 TargetGroupBinding 이 물려 있어
+바꿀 때 `k8s/app/targetgroupbinding.yaml`·`k8s/monitoring/grafana-targetgroupbinding.yaml` 을
+같이 고쳐야 한다. 나머지는 채점 비대상이라 우선순위가 낮다.
+
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
 
