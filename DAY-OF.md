@@ -29,10 +29,10 @@
 
 | 세트 | task-1 | task-2 | 추가 문항 대처 |
 | --- | --- | --- | --- |
-| set-02 | — | [대조표](#set-02-task-2) | [task-2](#set-02-task-2--추가-가능-문항) |
+| set-02 | [대조표](#set-02-task-1) | [대조표](#set-02-task-2) | [task-2](#set-02-task-2--추가-가능-문항) |
 | set-03 | [대조표](#set-03-task-1) | — | [task-1](#set-03-task-1--추가-가능-문항) |
 | set-07 | [대조표](#set-07-task-1) | [대조표](#set-07-task-2) | [task-1](#set-07-task-1--추가-가능-문항) · [task-2](#set-07-task-2--추가-가능-문항) |
-| set-08 | [대조표](#set-08-task-1) | [대조표](#set-08-task-2) |  [task-2](#set-08-task-2--추가-가능-문항) |
+| set-08 | [대조표](#set-08-task-2) |  [task-2](#set-08-task-2--추가-가능-문항) |
 | task-3 | [대조표](#task-3) | | [대처](#task-3--추가-가능-문항) |
 
 세트 번호를 모르면 [세트 식별표](#세트-식별표)로 먼저 판별한다.
@@ -403,6 +403,37 @@ docker push "${ECR}:v2"
 
 ### set-02
 
+#### set-02 task-1
+
+| 축 | 준비본 값 | 다르면 고칠 곳 |
+|---|---|---|
+| 리전 | `ap-northeast-2` (AZ `c`/`d`) | `terraform/terraform.tfvars: region` ⚠ `variables.tf: subnets` 의 `az`, `eksctl/cluster.yaml` `metadata.region`·subnets `az`, `k8s/monitoring/fluent-bit.yaml:37` `region`, `k8s/app/configmap.yaml` `AWS_REGION` 리터럴 |
+| 비번호 | `<비번호>` (버킷 접미·Grafana 계정) | `terraform.tfvars: player_number` (`outputs.tf grafana_admin_user` 가 `skills-<비번호>-admin` 조립) |
+| VPC 이름·CIDR | `wskorea26-vpc` · `172.16.0.0/16` | `variables.tf: vpc_name` / `terraform.tfvars: vpc_cidr` |
+| 서브넷 4개 | `wskorea26-pub-subnet-c` `172.16.1.0/24` / `-pub-subnet-d` `172.16.2.0/24` / `-priv-subnet-c` `172.16.201.0/24` / `-priv-subnet-d` `172.16.202.0/24` | `variables.tf: subnets` (맵 키가 이름 리터럴) ⚠ `eksctl/cluster.yaml` `vpc.subnets.private` 키도 `wskorea26-priv-subnet-c/d` 리터럴 |
+| IGW / NAT | `book-igw` / `book-ngw-c`·`book-ngw-d` | `variables.tf: igw_name` / `nat_name_prefix`(AZ 접미 자동) |
+| 라우트 테이블 | `wskorea26-public-rtb` / `wskorea26-private-rtb-c`·`-d` | `variables.tf: public_rtb_name` / `private_rtb_name_prefix` |
+| 채점용 SG | `wskorea26-vpc-environment-sg` | `variables.tf: environment_sg_name` |
+| KMS CMK alias | `wskorea26-s3-key` / `wskorea26-dynamodb-key` / `wskorea26-eks-key` | `variables.tf: kms_aliases{s3,dynamodb,eks}` |
+| S3 버킷·경로 | `wskorea26-concert-bucket-<비번호>` · `/web/main/` | `variables.tf: bucket_name_prefix` · `object_prefix`(`web/main`) |
+| ECR | `wskorea26-book-repo` · 태그 `stable` · scanOnPush · KMS | `variables.tf: ecr_repo_name` ⚠ 태그 `stable` 은 `README.md` 빌드 명령 + `k8s/app/deployment.yaml` `image: ${ECR}:stable` 리터럴 |
+| DynamoDB | `wskorea26-data-table` · PK `client_id(S)` · 삭제방지 · GSI `concert_name-created_at-index`(`concert_name`/`created_at`) | `terraform.tfvars: table_name` ⚠ PK·GSI 는 `terraform/dynamodb.tf` 리터럴, GSI 이름은 `lambda.tf` `INDEX_NAME` + `lambda/index.py` 기본값, 테이블명은 `k8s/app/configmap.yaml:9` `TABLE_NAME` 리터럴 |
+| EKS 클러스터 | `wskorea26-cluster` · `1.35` · priv-subnet-c/d · 모든 CP 로그 · Secret KMS | `terraform.tfvars: cluster_name` ⚠ `eksctl/cluster.yaml` `metadata.name`·`version`·`cloudWatch`·`secretsEncryption` 전부 리터럴 |
+| 네임스페이스 | 앱 `wskorea26` / 모니터링 `monitoring` | `variables.tf: app_namespace` ⚠ `k8s/00-namespaces.yaml`·`k8s/**` `namespace:`·`eksctl/cluster.yaml` SA namespace 리터럴 |
+| 노드그룹 | `wskorea26-addon-ng`·`wskorea26-app-ng` · `t3.medium` · Name 태그 `wskorea26-addon-node`·`wskorea26-app-node` · 라벨 `node-type: addon/app` · min 2 | ⚠ 변수 없음 — `eksctl/cluster.yaml` `managedNodeGroups` 리터럴. 라벨값은 `k8s/app/deployment.yaml:25` `nodeSelector`, `k8s/monitoring/kube-prometheus-stack-values.yaml` nodeSelector 6곳, `cluster.yaml` coredns `configurationValues` |
+| IRSA SA | `wskorea26-book-sa` (ns `wskorea26`) | ⚠ `eksctl/cluster.yaml` `iam.serviceAccounts` + `k8s/app/deployment.yaml:23` 리터럴 |
+| Lambda | `wskorea26-book-lambda` · `python3.14` · env `TABLE_NAME` · GET `concert_name` 없으면 400 | `variables.tf: lambda_function_name`·`lambda_runtime` (env 키·400 은 `lambda.tf`/`lambda/index.py` 리터럴) |
+| ALB(book) | `wskorea26-book-alb` · internet-facing · HTTP 80 · `/book` → 앱/Lambda · 비CF 요청 403 | `variables.tf: book_alb_name` (포트 80·403 default·`/health` 는 `alb.tf` 리터럴) |
+| Origin 검증 헤더 | `X-Origin-Verify: wskorea26-cf` | `variables.tf: origin_verify_header` / `terraform.tfvars: origin_verify_value` |
+| CloudFront | `wskorea26-concert-cf` · Origin ID `wskorea26-alb-origin`·`wskorea26-s3-origin` · S3 헤더 `wskorea26-s3-access: true` · HTTP→HTTPS · `/book` → ALB · PriceClass_All | `variables.tf: cloudfront_name`·`alb_origin_id`·`s3_origin_id`·`s3_access_header{name,value}` ⚠ 경로 `/book*` 는 `cloudfront.tf:90` + `cloudfront/book-rewrite.js`(`/book`→`/v1/book`) 리터럴 |
+| 앱 포트 / 경로 | `8080` · `/v1/book` POST · `/health` | `variables.tf: container_port` (경로는 `book-rewrite.js`·`alb.tf` 리터럴) |
+| Grafana | ALB `wskorea26-grafana-alb` · 포트 `3000` · 대시보드 `wskorea26-monitoring` · 계정 `skills-<비번호>-admin` / `$korea26!!` · 패널 5개(CPU·Mem·Pod수·재시작·네트워크 수신) | `variables.tf: grafana_alb_name`·`grafana_port`·`grafana_admin_password` ⚠ 대시보드명은 `k8s/monitoring/dashboard.json` `title`(uid `wskorea26`) + helm release `wskorea26-monitoring`(README §6, `grafana-targetgroupbinding.yaml` 서비스명 `wskorea26-monitoring-grafana`) 리터럴 |
+| Pod 로그 그룹 | `/wskorea26/eks/pod-logs` | `variables.tf: pod_log_group_name` ⚠ `k8s/monitoring/fluent-bit.yaml:38` `log_group_name` 리터럴 |
+
+⚠ **이름 접두어 `wskorea26` 는 tfvars 로 안 끝난다.** `eksctl/cluster.yaml`(12곳)·`k8s/**`(40여 곳)·`cloudfront/book-rewrite.js`·README 런북에 리터럴. 접두어가 바뀌면 `set-02/task-1` 전체 치환(`task.md`·`mark*`·`NOTES.md` 제외).
+⚠ 리전이 바뀌면 tfvars 한 줄 외에 `variables.tf: subnets` AZ, `eksctl/cluster.yaml`, `fluent-bit.yaml`, `configmap.yaml` 4곳을 같이 친다.
+
+
 #### set-02 task-2
 
 각 모듈 `terraform/terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다 — **현재 값이 모듈마다 다르다**(개인 실습값 잔재). 4곳 전부.
@@ -764,28 +795,6 @@ docker push "${ECR}:v2"
 [↑ 세트 바로가기](#세트-바로가기)
 
 ### set-08
-
-#### set-08 task-1
-
-⚠ **개별 이름은 변수가 아니라 `name_prefix` 파생 local 이다.** 과제지가 한 리소스만 다른 이름을 주면(예: 로그 그룹만 `/ecs/book-app`) `variables.tf` 의 `locals` 블록 해당 줄을 직접 고친다. 버킷의 `static-2026`, 로그 그룹 `/ecs/…-app`, 역할 `-ecs-execution-role` 같은 중간 문자열도 locals 리터럴이다.
-⚠ **CloudWatch 수치(임계 1·60초·1/1·notBreaching)와 필터 패턴은 `cloudwatch.tf` 리터럴.** 앱 로그 형식이 바뀌면(`status=` 토큰) 패턴을 새로 잰다 — `aws logs test-metric-filter` 로 검증.
-⚠ `mark.sh` 와 README 4~6단계 명령에도 `skills-book-*` 이 리터럴로 박혀 있다(채점 스크립트는 공식본이니 손대지 말고 README 쪽만 치환).
-
-#### set-08 task-1 — 추가 가능 문항
-
-| 후보 | 근거 | 대처 |
-|---|---|---|
-| WAF(CloudFront scope) 관리형 룰 + rate limit | 옵션 5 중 미사용, set-07 task-1 10-3·mark 8-6-A(XSS 403), set-03 10-1 | `shared/addons/waf/waf-cloudfront.tf`+`variables.tf` 복사, `cloudfront.tf` 에 `web_acl_id` 한 줄, `providers.tf` 에 `aws.use1` alias 추가. 차단 본문 지정 시 set-07 `terraform/waf.tf` 패턴 |
-| S3 SSE-KMS / 버전 관리 | KMS 옵션 확장, set-07 task-1 5절(S3 Data CMK·versioning) | `shared/addons/kms/README` S3 블록 → `s3.tf` 에 `aws_s3_bucket_server_side_encryption_configuration`·`aws_s3_bucket_versioning` 추가. OAC 읽기용 key policy 는 set-07 `terraform/kms.tf` `kms_data` 복사. 키트: `shared/addons/s3-hardening/` |
-| KMS 회전 주기(90일) / 로그 그룹 KMS | set-07 task-1 4절·mark 2-1-A(`True 90`) | `dynamodb.tf` 의 `aws_kms_key.ddb` 에 `rotation_period_in_days` 추가; 로그 그룹은 `cloudwatch.tf` `kms_key_id` + key policy logs 문장(set-07 `kms.tf` `AllowCloudWatchLogs`) |
-| ECR KMS 암호화·scan on push·immutable | set-07 task-1 7절(취약점 0·태그 중복 불허·Data CMK) | `ecr.tf` 에 `image_scanning_configuration`·`image_tag_mutability=IMMUTABLE`(이미지 재푸시 필요) — set-07 `terraform/ecr.tf` 참고. ⚠ KMS 는 생성 시에만 → 리포 재생성·재푸시. 키트: `shared/addons/ecr-hardening/` |
-| DynamoDB PITR·삭제 방지·TTL | set-07 task-1 6절(PITR+deletion protection), set-07 m1 mark 1-1-A | `dynamodb.tf` 에 `point_in_time_recovery{enabled=true}`·`deletion_protection_enabled` — set-07 task-1 `terraform/dynamodb.tf` 복사. 키트: `shared/addons/dynamodb-hardening/` |
-| Lambda GET `/v1/book` (ALB→Lambda) | 옵션 "Lambda GET API", set-07 task-1 9절·10-1(GET→Lambda, POST→앱), set-02 6-1-A | set-07 task-1 `terraform/lambda.tf`+`lambda/` 복사, `alb.tf` 에 lambda TG + listener rule(GET /v1/book) 추가, 함수명·런타임 변수화 — DynamoDB GSI 요구 시 `dynamodb.tf` GSI 추가. 키트: `shared/addons/lambda-get-api/` |
-| ECS Container Insights / CloudWatch 대시보드 / 알람 SNS 액션 | Observability 옵션, "모니터링 도구 설치" 예시 | `shared/addons/observability/`(ECS `containerInsights` 한 줄), `shared/addons/cw-dashboard/`, `shared/addons/cw-alarms/` |
-| VPC Flow Log / ECR·Logs Interface Endpoint | Security·네트워크 확장, set-07 task-1 3절·mark 1-3-A(s3·ecr.api·ecr.dkr + flow log) | set-07 task-1 `terraform/flowlog.tf`·`endpoints.tf` 복사(SG·서브넷 참조만 바꿈). mark 1-4 가 NAT 또는 Endpoint 둘 다 인정하므로 요구될 때만. 키트: `shared/addons/vpc-flow-log/`·`shared/addons/vpc-endpoints/` |
-| CloudFront `/health` 경로도 ALB 로 / 캐시 정책 | CloudFront 경로 구성 일반 항목, set-03 9-2 | `cloudfront.tf` `ordered_cache_behavior` 블록 복제(`path_pattern=/health`). 키트: `shared/addons/cloudfront-hardening/` |
-| ALB 액세스 로그 S3 / CloudFront 표준 로그 | 로깅 계열 흔한 채점 항목 | 키트: `shared/addons/alb-hardening/`·`shared/addons/cloudfront-hardening/` |
-| 불필요 리소스 미존재 확인 | 불필요 리소스 점검 일반 항목 | 코드 변경 없음 — 실험용 TG·EIP 잔존 점검(plan.md 함정 9) |
 
 [↑ 세트 바로가기](#세트-바로가기)
 
