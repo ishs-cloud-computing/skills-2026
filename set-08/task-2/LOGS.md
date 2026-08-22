@@ -2,7 +2,7 @@
 
 > set-08/task-2 4모듈을 런북 그대로 배포하고 CloudShell에서 `mark/mark2-N.sh`를 실행한 기록.
 > 계정 600440344359. 배포는 로컬(IAM user `admin`), 채점은 CloudShell(콘솔 root 로그인).
-> 런북 개선점은 [FEEDBACK.md](FEEDBACK.md), 함정·결정은 [NOTES.md](NOTES.md).
+> 런북 반영 내용은 [README.md](README.md), 함정·결정은 [NOTES.md](NOTES.md).
 
 ## 0. 사전 점검
 

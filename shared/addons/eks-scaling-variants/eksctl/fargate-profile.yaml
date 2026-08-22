@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# Fargate Profile 부착 — 기존 클러스터에:
+#   eksctl create fargateprofile -f fargate-profile.yaml
+# 새 클러스터면 fargateProfiles 블록만 cluster.yaml 에 붙인다.
+# 원본: set-08 task-2 module-4 eksctl/cluster.yaml
+# ---------------------------------------------------------------------------
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: "${CLUSTER_NAME}"
+  region: "${REGION}"
+
+fargateProfiles:
+  - name: "${CLUSTER_NAME}-fp-keda"
+    selectors:
+      - namespace: keda
+  - name: "${CLUSTER_NAME}-fp-karpenter"
+    selectors:
+      - namespace: karpenter
+  # 노드그룹이 없는 클러스터는 CoreDNS 가 앉을 곳이 없다 — kube-system profile +
+  # coredns addon configurationValues {"computeType":"Fargate"} 가 같이 필요하다
+  - name: "${CLUSTER_NAME}-fp-kube-system"
+    selectors:
+      - namespace: kube-system
+        # label 로 좁힐 때만
+        # labels:
+        #   k8s-app: kube-dns

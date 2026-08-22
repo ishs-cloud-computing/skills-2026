@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# kube-prometheus-stack values 추가 블록 — 기존 values 에 **병합**한다 (통째로 덮어쓰지 않는다).
+# 원본: set-03 task-1 k8s/monitoring/kube-prometheus-stack-values.yaml
+#   helm upgrade --install <release> prometheus-community/kube-prometheus-stack -n monitoring -f <기존 values> -f 이 파일
+# ${NODE_LABEL_KEY}=${NODE_LABEL_VALUE} 는 Addon NG label (예: role=addon), ${REGION} 은 CloudWatch 리전.
+# ---------------------------------------------------------------------------
+
+# 기본 번들 알람 끄고 PrometheusRule(prometheus-rules.yaml)만 운용
+defaultRules:
+  create: false
+
+prometheus:
+  prometheusSpec:
+    nodeSelector:
+      ${NODE_LABEL_KEY}: ${NODE_LABEL_VALUE}
+    # PrometheusRule/ServiceMonitor/PodMonitor 를 release 라벨 없이도 선택
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+# Alertmanager 활성 (알람 체계 문항). 기본 false 세트(set-02)에 붙일 때 nodeSelector 가 없으면 app 노드에 뜬다
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    nodeSelector:
+      ${NODE_LABEL_KEY}: ${NODE_LABEL_VALUE}
+  # 수신처까지 요구되면 — 기본 null receiver 대신 webhook/이메일
+  # config:
+  #   route:
+  #     receiver: "default"
+  #   receivers:
+  #     - name: "default"
+
+grafana:
+  nodeSelector:
+    ${NODE_LABEL_KEY}: ${NODE_LABEL_VALUE}
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: monitoring
+    # Grafana alerting 룰을 ConfigMap(label grafana_alert=1)으로 provisioning — 확인 필요(README 함정)
+    alerts:
+      enabled: true
+      label: grafana_alert
+      searchNamespace: monitoring
+    datasources:
+      defaultDatasourceEnabled: false
+  # 데이터소스 이름·타입은 채점 스크립트가 읽는 값 — 과제지 표기와 정확 일치. uid 는 dashboard json 의 datasource.uid 와 일치
+  additionalDataSources:
+    - name: prometheus
+      type: prometheus
+      uid: prometheus
+      access: proxy
+      url: http://prometheus-operated.monitoring.svc:9090
+      isDefault: true
+    - name: alertmanager
+      type: alertmanager
+      uid: alertmanager
+      access: proxy
+      url: http://alertmanager-operated.monitoring.svc:9093
+      jsonData:
+        implementation: prometheus
+    # Grafana Pod 의 SA 역할(Pod Identity/IRSA)에 cloudwatch:GetMetricData·ListMetrics 필요
+    - name: cloudwatch
+      type: cloudwatch
+      uid: cloudwatch
+      access: proxy
+      jsonData:
+        authType: default
+        defaultRegion: ${REGION}
+    # Loki 가 같은 클러스터에 있을 때 (svc 이름은 helm release 에 따라 다르다)
+    - name: loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.monitoring.svc:3100
+
+# node-exporter 는 taint 노드 포함 전 노드
+prometheus-node-exporter:
+  tolerations:
+    - operator: Exists
+
+kube-state-metrics:
+  nodeSelector:
+    ${NODE_LABEL_KEY}: ${NODE_LABEL_VALUE}
+
+prometheusOperator:
+  nodeSelector:
+    ${NODE_LABEL_KEY}: ${NODE_LABEL_VALUE}
+  admissionWebhooks:
+    patch:
+      nodeSelector:
+        ${NODE_LABEL_KEY}: ${NODE_LABEL_VALUE}

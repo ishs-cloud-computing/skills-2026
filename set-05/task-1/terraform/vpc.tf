@@ -31,8 +31,8 @@ resource "aws_subnet" "this" {
   # 요구사항 9.2 / 채점 6-2-A: EKS 노드 hostname 을 <INSTANCE_ID>.ap-northeast-2.compute.internal
   # 로 만들기 위해 Workload Subnet 의 Private DNS hostname 유형을 resource-name(인스턴스 ID 기반)
   # 으로 지정한다. 기본값(ip-name)이면 kubelet 이 ip-10-0-x-x.* 를 노드명으로 등록해 채점이 실패한다.
-  private_dns_hostname_type_on_launch          = each.value.tier == "workload" ? "resource-name" : "ip-name"
-  enable_resource_name_dns_a_record_on_launch  = each.value.tier == "workload"
+  private_dns_hostname_type_on_launch         = each.value.tier == "workload" ? "resource-name" : "ip-name"
+  enable_resource_name_dns_a_record_on_launch = each.value.tier == "workload"
 
   tags = merge(
     { Name = each.key },

@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+#
+# EKS Fargate 내장 로그 라우터 → CloudWatch Logs.
+# 네임스페이스 이름·라벨·ConfigMap 이름은 EKS 가 읽는 고정값 — 바꾸면 무시된다.
+# region / log_group_name 두 값만 세트에 맞게 고친다. pod execution role 정책은 README 경로 F.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aws-observability
+  labels:
+    aws-observability: enabled
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-logging
+  namespace: aws-observability
+data:
+  # 라우터 자체 로그를 CloudWatch 로 안 보낸다(불필요 로그 그룹 방지)
+  flb_log_cw: "false"
+  filters.conf: |
+    [FILTER]
+        Name parser
+        Match *
+        Key_name log
+        Parser crio
+  parsers.conf: |
+    [PARSER]
+        Name crio
+        Format Regex
+        Regex ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>P|F) (?<log>.*)$
+        Time_Key time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+  output.conf: |
+    [OUTPUT]
+        Name cloudwatch_logs
+        Match kube.*
+        region ap-northeast-2
+        log_group_name /aws/eks/fargate/application
+        log_stream_prefix fargate-
+        auto_create_group true
+        log_retention_days 7

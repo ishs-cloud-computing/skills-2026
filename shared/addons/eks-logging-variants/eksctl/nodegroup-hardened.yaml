@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+# ---------------------------------------------------------------------------
+# 노드 EBS CMK + KST + IMDS 강화 관리형 노드그룹 — 기존 클러스터에:
+#   eksctl create nodegroup -f nodegroup-hardened.rendered.yaml
+# 기존 NG 는 in-place 변경이 안 된다(이 NG 생성 → 구 NG drain/delete, README 부착 절차 3).
+# 새 클러스터면 managedNodeGroups 항목만 cluster.yaml 로 옮긴다.
+# 원본: set-07 task-1 eksctl/cluster.yaml (unicorn-app-ng), set-05 task-1 (disablePodIMDS)
+# ${CLUSTER_NAME} ${REGION} ${KMS_ARN} 치환.
+# ---------------------------------------------------------------------------
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: "${CLUSTER_NAME}"
+  region: "${REGION}"
+
+managedNodeGroups:
+  - name: "${CLUSTER_NAME}-app-ng-v2"
+    amiFamily: AmazonLinux2023
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 4
+    desiredCapacity: 2
+    privateNetworking: true
+    volumeSize: 30
+    volumeType: gp3
+    # 노드 루트 EBS CMK — key policy 에 AllowAutoScalingUse/Grant 필수 (terraform/kms-eks.tf)
+    volumeEncrypted: true
+    volumeKmsKeyID: "${KMS_ARN}"
+    # IMDSv1 차단(httpTokens=required) + Pod 에서 IMDS 차단(hop limit 1)
+    disableIMDSv1: true
+    disablePodIMDS: true
+    labels:
+      role: app
+    instanceName: "${CLUSTER_NAME}-app-node"
+    # 노드 시간대 KST. AL2023 + preBootstrapCommands 는 eksctl 0.198.0+ 에서 동작
+    preBootstrapCommands:
+      - "ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime || true"
+      - "timedatectl set-timezone Asia/Seoul || true"

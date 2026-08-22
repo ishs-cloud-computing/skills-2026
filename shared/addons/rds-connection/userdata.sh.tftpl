@@ -1,0 +1,29 @@
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+set -uxo pipefail
+
+# AL2023 에는 mysql 커뮤니티 클라이언트가 없다 — mariadb105 가 mysql 명령을 제공하고 RDS MySQL 8.0 에 붙는다
+dnf install -y mariadb105 jq
+
+cat > /usr/local/bin/db-test.sh <<'SCRIPT'
+#!/bin/bash
+# db-test.sh            : Secrets Manager 비밀번호로 접속
+# db-test.sh iam <user> : IAM 토큰으로 접속 (인스턴스/Proxy IAM 인증 + 해당 DB 사용자 필요)
+set -eo pipefail
+REGION="${region}"
+HOST="${db_host}"
+PORT="${db_port}"
+
+if [ "$${1:-}" = "iam" ]; then
+  USER="$${2:?iam db user}"
+  TOKEN=$(aws rds generate-db-auth-token --hostname "$HOST" --port "$PORT" --username "$USER" --region "$REGION")
+  exec mysql -h "$HOST" -P "$PORT" -u "$USER" --password="$TOKEN" --ssl --enable-cleartext-plugin -e "SELECT CURRENT_USER(), VERSION(), NOW();"
+fi
+
+SECRET=$(aws secretsmanager get-secret-value --secret-id "${secret_name}" --region "$REGION" --query SecretString --output text)
+USER=$(echo "$SECRET" | jq -r .username)
+PASS=$(echo "$SECRET" | jq -r .password)
+exec mysql -h "$HOST" -P "$PORT" -u "$USER" --password="$PASS" -e "SELECT CURRENT_USER(), VERSION(), @@hostname, NOW();"
+SCRIPT
+chmod +x /usr/local/bin/db-test.sh
