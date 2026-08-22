@@ -108,6 +108,126 @@ KIT 코드 블록의 `aws_xxx.<기존>` 자리에 넣을 값이다. **자기 세
 
 리전은 세 세트 모두 `ap-northeast-2`. CLOUDFRONT scope WAF 리소스만 us-east-1(`provider = aws.use1`).
 
+## 1과제 옵션 5개 — 세트별 사전 판정
+
+분홍 항목을 보기 전에 이미 끝나 있는 것과 새로 붙일 것을 구분해 둔 표다. 표기는 세 가지다.
+
+- **있음** — 코드에 이미 있다. 과제지 문구와 값만 대조하고 넘어간다.
+- **신규** — 부착 KIT을 그대로 붙이면 된다. 기존 리소스는 건드리지 않는다.
+- **재생성** — 생성 시에만 지정 가능한 속성이다. 이미 만들었으면 `plan`에 replace가 뜬다. 배점과 재생성 시간을 먼저 비교한다.
+
+### Observability
+
+| 항목 | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| Fluent Bit | 있음 — `k8s/monitoring/fluent-bit.yaml` (ns `monitoring`) | 있음 — `k8s/logging/fluent-bit.yaml` (ns `observability`) | 있음 — `k8s/logging/fluent-bit.yaml` (ns `logging`) |
+| Prometheus / Grafana | 있음 — `k8s/monitoring/` | 있음 — `+ prometheus-rules.yaml` | 있음 — `+ cloudwatch-exporter-values.yaml` |
+| Grafana 노출 | TargetGroupBinding (`aws_lb.grafana`) | k8s Ingress (LBC) | TargetGroupBinding (`aws_lb.grafana`) |
+| Control Plane 로깅 | 있음 — 5종 전부 (`cluster.yaml`) | 있음 — 5종 전부 | 있음 — 5종 전부 |
+| Container Insights addon | 신규 — `addons:`에 없음 | 신규 — `addons:`에 없음 | 신규 — `addons:`에 없음 |
+| 앱 로그 그룹 | 있음 — `pod_logs` (보존 30일) | 있음 — `book_app` (보존 7일) | 있음 — `book_app`·`eks_cluster` (30일) |
+| CloudWatch 경보·대시보드 | 신규 — 세 세트 모두 `aws_sns_topic`·`aws_cloudwatch_metric_alarm`·`aws_cloudwatch_dashboard` 없음 | 신규 | 신규 |
+
+"모니터링 도구를 설치" 류면 셋 다 이미 서 있다 — 새로 세우지 말고 과제지가 요구한 지표·패널만 [grafana-panels](shared/addons/grafana-panels/README.md)로 얹는다. Container Insights를 이름으로 지정하면 그때만 addon을 추가한다.
+
+### KMS
+
+| 대상 | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| 보유 키 | `.s3` `.dynamodb` `.eks` | `.db` `.ecr` `.eks` `.bucket` `.function` | `.platform`(+us-east-1 replica) `.app` `.data` |
+| S3 | 있음 — SSE-KMS | 있음 | 있음 |
+| DynamoDB | 있음 | 있음 | 있음 |
+| ECR | **AWS 관리형 `aws/ecr`** — CMK 요구 시 재생성 | 있음 — `.ecr` CMK | 있음 — `.data` CMK |
+| Lambda 환경변수·코드 | 신규 — `kms_key_arn` 없음 | 있음 — `kms_key_arn` + `source_kms_key_arn` | 있음 — `kms_key_arn` |
+| CloudWatch 로그 그룹 | 신규 | 신규 | 있음 — `.platform` |
+| EKS Secret 봉투 암호화 | 있음 — `secretsEncryption.keyARN` | 있음 | 있음 |
+| 노드 EBS | `volumeEncrypted: true` (기본 키) — CMK 지정은 **재생성** | 동일 | 있음 — `volumeKmsKeyID` 지정 |
+
+ECR·EKS Secret·노드 EBS는 생성 후 키를 바꿀 수 없다. 배포 전에 문항을 읽었다면 tfvars/`cluster.yaml`에서 먼저 지정하고, 이미 배포한 뒤라면 재생성 비용을 먼저 계산한다.
+
+### WAF
+
+| 항목 | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| Web ACL | **없음** → [waf](shared/addons/waf/README.md) 신규 | 있음 — `aws_wafv2_web_acl.wsc2026` (CLOUDFRONT) | 있음 — `aws_wafv2_web_acl.unicorn` (CLOUDFRONT) |
+| us-east-1 provider alias | **없음** — CLOUDFRONT scope면 `provider "aws" { alias = "use1" }` 블록부터 추가 | 있음 — `providers.tf` | 있음 — `versions.tf` |
+| CloudFront 연결 | 신규 | 있음 — `web_acl_id` | 있음 — `web_acl_id` |
+| WAF 로깅 | 신규 | 신규 | 있음 |
+| REGIONAL(ALB) 부착 | `aws_lb.book`에 association 신규 | **Terraform ALB가 없다** — Ingress 어노테이션 경로 | `aws_lb.app`(internal)에 association 신규 |
+
+룰만 추가하는 문항이면 [waf-extra-rules](shared/addons/waf-extra-rules/README.md)이고, `priority` 충돌만 확인하면 된다.
+
+### Security (IRSA / Pod Identity)
+
+| 항목 | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| 현재 방식 | **IRSA** — `iam.withOIDC: true` + `serviceAccounts` 3개 | **Pod Identity** — `podIdentityAssociations` | **Pod Identity** — `podIdentityAssociations` (addon에도 사용) |
+| SA `role-arn` annotation | 있음 — eksctl이 생성 | **없음** — 매니페스트에 annotation 자체가 없다 | **없음** |
+| 채점이 annotation을 읽으면 | 그대로 충족 | `iam.withOIDC: true` + `iam.serviceAccounts`로 전환 필요 (클러스터 업데이트) | 동일 |
+
+채점 스크립트가 `eks.amazonaws.com/role-arn`을 읽는지부터 확인한다. 읽지 않으면 Pod Identity를 IRSA로 "정정"하지 않는다.
+
+### Lambda GET API
+
+| 항목 | set-02 | set-03 | set-07 |
+| --- | --- | --- | --- |
+| 함수 | `aws_lambda_function.book` | `.book_get` | `.get_booking` |
+| 호출 경로 | ALB Lambda 타깃그룹 `wskorea26-lambda-tg` | Function URL (`AWS_IAM`) + CloudFront | ALB Lambda 타깃그룹 `unicorn-lambda-tg` |
+| API Gateway | **세 세트 모두 없음** — "REST API"를 이름으로 요구하면 전부 신규 | 없음 | 없음 |
+
+세 세트 모두 호출 경로가 동기라 Lambda `dead_letter_config`는 발화하지 않는다. DLQ 문항이면 비동기 경로부터 만든다.
+
+## 여러 KIT을 한꺼번에 얹을 때
+
+분홍 항목이 여러 개면 KIT을 하나씩 apply하지 않는다. **전부 붙인 뒤 `plan` 한 번**이 기본이다 — apply 횟수가 늘수록 기존 리소스를 건드릴 확률과 대기 시간이 같이 늘어난다.
+
+### 부착 순서 (선행 KIT을 먼저 붙인다)
+
+| 선행 | 후행 | 이유 |
+| --- | --- | --- |
+| [kms](shared/addons/kms/README.md) | s3-hardening · dynamodb-hardening · lambda-hardening · cw-alarms | 후행 블록이 키 ARN을 참조한다. 키가 없으면 `validate`부터 실패 |
+| [cloudtrail-hardening](shared/addons/cloudtrail-hardening/README.md) | [eventbridge-security-rules](shared/addons/eventbridge-security-rules/README.md) | 세 세트 모두 CloudTrail이 없다. `AWS API Call via CloudTrail` 패턴 룰은 trail 없이는 발화하지 않는다 |
+| [waf](shared/addons/waf/README.md) | [waf-extra-rules](shared/addons/waf-extra-rules/README.md) · cw-alarms의 WAF 알람 | Web ACL이 있어야 룰·지표가 붙는다 |
+| [observability](shared/addons/observability/README.md) 경로 B | [grafana-panels](shared/addons/grafana-panels/README.md) | 패널은 기존 Grafana·Prometheus 위에만 올라간다 |
+| [cw-alarms](shared/addons/cw-alarms/README.md) 0절 SNS 토픽 | 나머지 알람 블록 전부 | 알람의 `alarm_actions`가 토픽 ARN을 참조한다 |
+| [alb-hardening](shared/addons/alb-hardening/README.md) 액세스 로그 버킷 | [s3-hardening](shared/addons/s3-hardening/README.md) | 로그 버킷까지 정책 대상이면 버킷을 먼저 만든다 |
+
+Terraform 자체는 의존성을 그래프로 풀지만, **선행을 빼먹으면 `validate` 단계에서 정의되지 않은 참조로 멈춘다.** 순서는 붙이는 순서지 apply 횟수가 아니다.
+
+### 같은 파일에 여러 KIT이 붙을 때
+
+| 파일 | 겹치는 KIT | 확인할 것 |
+| --- | --- | --- |
+| `cloudwatch.tf` | cw-alarms · cw-dashboard · cw-logs-insights · kms(로그 그룹 암호화) | 같은 로그 그룹을 두 KIT이 새로 만들지 않는지. 기존 그룹에 인자만 추가한다 |
+| `s3.tf` | s3-hardening · kms · alb-hardening(액세스 로그 버킷) · cloudtrail-hardening(trail 버킷) | 버킷 정책이 두 곳에서 선언되면 뒤엣것이 앞엣것을 덮는다. `aws_s3_bucket_policy`는 버킷당 하나로 합친다 |
+| `waf.tf` | waf · waf-extra-rules · cw-alarms(BlockedRequests) | 룰 `priority` 중복 금지. 알람은 us-east-1 지표라 `provider = aws.use1` |
+| `lambda.tf` | lambda-hardening · kms · lambda-get-api | 같은 함수에 `kms_key_arn`이 두 번 선언되지 않게 한다 |
+| `iam.tf` | irsa · iam-audit-role · 각 KIT의 정책 | Role 이름이 과제지 지정값과 정확히 일치해야 한다. 정책은 합치지 말고 KIT별로 분리해 둔다 |
+| `eksctl/cluster.yaml` | eks-logging-variants · eks-scaling-variants · irsa | **Terraform과 apply 축이 다르다.** 여기 변경은 `eksctl upgrade`/`update` 대상이며 일부는 클러스터 재생성이다. Terraform `plan`에 안 잡히니 따로 확인한다 |
+
+### 묶어서 돌리는 절차
+
+1. 분홍 항목마다 KIT을 정하고, 위 순서표대로 코드 블록을 **전부** 붙인다.
+2. `terraform fmt` → `terraform validate`. 여기서 걸리는 건 대부분 선행 KIT 누락이다.
+3. `terraform plan` 한 번. **기존 리소스에 replace/delete 0건**을 눈으로 확인한다.
+4. replace가 뜨면 그 리소스를 만드는 KIT **하나만** 빼고 다시 `plan`한다. 남은 것부터 apply하고, 뺀 항목은 재생성 비용과 배점을 비교해 따로 판단한다.
+5. `apply` 뒤 KIT별 `VERIFY`를 순서대로 돌린다. 전부 통과한 다음에만 세트 `mark.sh`를 돌린다.
+6. `cluster.yaml`을 건드린 KIT이 있으면 Terraform과 별도로 eksctl 명령을 돌리고, `kubectl get nodes`로 클러스터가 살아 있는지 먼저 확인한다.
+
+### 이름이 충돌하면
+
+기존 리소스를 지우지 않는다. KIT 쪽 변수를 리네임한다. 충돌이 잦은 축은 아래와 같다.
+
+| 축 | 리네임 대상 |
+| --- | --- |
+| S3 버킷 (전역 고유) | `bucket_suffix`, trail 버킷은 `trail_name` |
+| CloudWatch 로그 그룹 | 로그 그룹 이름 변수 — 기존 그룹에 인자 추가로 대체 가능한지 먼저 본다 |
+| IAM Role·Policy | **과제지가 이름을 지정했으면 리네임 금지.** 채점이 그 이름을 직접 읽는다 |
+| KMS alias | `alias/` 뒤 접미사 |
+| SNS 토픽·알람 | 이름 접미사 |
+
+과제지가 이름을 지정한 리소스는 리네임 대상이 아니다. 그 이름으로 이미 뭔가 있으면 지우지 말고 감독에게 확인한다.
+
 ## 헷갈리는 표현
 
 | 과제지 표현 | 판단 기준 |

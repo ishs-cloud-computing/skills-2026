@@ -4,6 +4,8 @@
 
 ## 1과제 추가 문항은 이 5개뿐
 
+붙이기 전에 [세트별 사전 판정](KIT-INDEX.md#1과제-옵션-5개--세트별-사전-판정)에서 자기 세트 열을 본다 — 이미 있음 / 신규 / 재생성이 옵션별로 갈려 있다.
+
 | 옵션 | KIT |
 | --- | --- |
 | **Observability** (가장 유력) | [observability](shared/addons/observability/README.md) |
@@ -54,3 +56,13 @@ MSK → [msk-hardening](shared/addons/msk-hardening/README.md) · DocumentDB →
 KIT README의 `CHANGE` → 코드 블록(**블록 머리에 붙일 `*.tf` 파일이 적혀 있다**) → 블록 밑 `<details>` 에서 **자기 세트(set-02 / set-03 / set-07)** 항목을 펴서 `outputs.tf` 보강 + `terraform output` 값 확보 → `fmt` → `init` → `validate` → `plan`(기존 리소스 replace/delete 0건) → `apply` → `VERIFY` → 세트 `mark.sh`.
 
 세트별 리소스 주소는 [KIT-INDEX 대조표](KIT-INDEX.md#세트별-리소스-주소-대조표-task-1).
+
+## KIT이 2개 이상이면
+
+하나씩 apply하지 않는다. 전부 붙이고 `plan` 한 번, 기존 리소스 replace/delete 0건 확인 후 apply한다.
+
+선행부터 붙인다: `kms` → 암호화 인자를 쓰는 KIT · `cloudtrail-hardening` → `eventbridge-security-rules` · `waf` → `waf-extra-rules` · `observability` → `grafana-panels` · `cw-alarms` SNS 토픽 → 나머지 알람.
+
+같은 파일이 겹치는 조합(`cloudwatch.tf`·`s3.tf`·`waf.tf`·`lambda.tf`·`iam.tf`·`cluster.yaml`)과 replace가 떴을 때 빼는 순서는 [여러 KIT을 한꺼번에 얹을 때](KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때).
+
+`cluster.yaml`을 건드리는 KIT은 Terraform `plan`에 잡히지 않는다 — eksctl 쪽에서 따로 확인한다.
