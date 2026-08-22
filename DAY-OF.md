@@ -2,7 +2,7 @@
 
 과제지는 **종이로 배부된다.** 파일 대조(diff)는 불가능하고 눈으로 훑어야 한다.
 재시동하면 파일이 초기화되고, AI 코딩 보조는 없으며(AWS 웹 Q 만 허용), 추가 시간도 없다.
-이 문서는 그 상황에서 위에서 아래로 실행한다. 세트별 값은 [7절 **값 대조표**](#7-값-대조표)를 쓴다.
+이 문서는 그 상황에서 위에서 아래로 실행한다. 세트별 값은 [8절 **값 대조표**](#8-값-대조표)를 쓴다.
 
 코드블록을 고치다 인자·필드에서 막히면 [DOC-LINKS](DOC-LINKS.md) 를 연다 —
 리소스별 공식문서 주소, 저장소 안 구현 위치, 인터넷 없이 스키마를 뽑는 명령을 한 장에 모은 색인이다.
@@ -79,7 +79,7 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 
 **노랑 = 준비본과 값이 다름. 분홍 = 준비본에 없는 신규 문항.**
 
-1. [7절 **값 대조표**](#7-값-대조표)에서 해당 세트 표를 화면에 띄운다.
+1. [8절 **값 대조표**](#8-값-대조표)에서 해당 세트 표를 화면에 띄운다.
 2. 종이 과제지를 위에서 아래로 읽으며 표와 1:1 대조한다.
 3. 값이 다르면 종이에 **노랑**, 표에 없는 요구사항이면 **분홍**.
 4. 채점지가 같이 배부되면 채점지도 같은 방식으로 훑는다. 안 주면 준비본 `mark.md` 기준으로 간다.
@@ -93,11 +93,73 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
   - `NOTES.md` 결정 로그·정정 로그 — 과거 기록이라 값이 옛날 것이어도 그대로 둔다.
   - `*.tfstate`·`outputs.json` — 배포 산출물. 치환해도 실제 리소스와 어긋나기만 한다.
   - **짧은 접두어는 부분 문자열 오염 주의** (예: `wsc` 치환이 `wsc2026` 도 침) — **Match Whole Word(Alt+W)** 켜거나 결과 미리보기로 판별. 반대로 리전처럼 AZ 접미(`ap-northeast-2a`)까지 같이 바뀌어야 하는 값은 Whole Word 를 끄고 잡는다.
-- **분홍** → 별도 목록으로 빼서 2절로 넘긴다. **기존 문항·기존 모듈은 건드리지 않는다.**
+- **분홍** → 별도 목록으로 빼서 3절로 넘긴다. **기존 문항·기존 모듈은 건드리지 않는다.**
 
 당일 변동은 기존 문제 교체가 아니라 **문항 추가**다. 기존 4모듈을 재작성하려 들면 시간이 날아간다.
 
-## 2. 신규 문항(분홍)은 출제가이드 카탈로그 안에서 나온다
+## 2. 치환 → apply 파이프라인 (1·2과제 동시 운영)
+
+**치환은 apply 대기 시간에 한다.** 4모듈을 전부 치환한 뒤 한꺼번에 거는 게 아니라, 한 모듈 치환이 끝나면 그 자리에서 apply 를 걸고 창을 둔 채 다음 모듈 치환으로 넘어간다. 모듈마다 리전이 다르고 state 는 디렉토리별 로컬이라, 창만 나누면 실제로 병렬로 돈다.
+
+### 병목 실측 (각 세트 NOTES.md 실측치)
+
+| 대기 | 실측 | 출처 |
+| --- | --- | --- |
+| MSK 클러스터 | **31분 40초** (모듈 전체 35분, destroy 23분) | set-02 m4 |
+| eksctl 클러스터 | **19~20분** (삭제 8분) | set-08 task-2, set-02 task-1 |
+| CloudFront 배포 | 5~10분 | set-08 task-1 |
+| DocumentDB 인스턴스 | 3분 44초 (모듈 전체 5~7분) | set-08 m1 |
+| NAT GW | ~2분 | set-08 m4 |
+| 그 외 모듈 apply | 1~3분 | set-07·set-08 |
+| mark 스크립트 | 1~3분 (kubectl 설치·sleep 포함은 ~11분) | set-08 task-2 |
+
+**긴 것부터 건다.** MSK·EKS·CloudFront·RDS/DocumentDB 가 든 모듈을 먼저 치환해 먼저 apply 를 걸고, 1~3분짜리 모듈을 그 대기 시간에 채운다. 순서를 반대로 잡으면 마지막 30분이 통째로 대기가 된다.
+
+### 창 배치
+
+- 모듈 수만큼 PowerShell 탭을 열고 [0절](#0-도착-직후) ④ 의 CloudShell 탭 그룹과 **같은 번호**로 맞춘다.
+- 창 제목에 모듈·리전을 박아 리전 착각을 막는다:
+
+  ```powershell
+  $Host.UI.RawUI.WindowTitle = 'm1 ap-southeast-1'
+  ```
+
+- 같은 디렉토리를 두 창에서 동시에 apply 하지 않는다 (state lock). 모듈이 다르면 디렉토리가 달라 안전하다.
+
+### 모듈 1회전
+
+```powershell
+cd set-XX/task-2/module-N-<name>/terraform
+# 1절 노랑 값만 tfvars 에 덮어쓴다 (안 적은 값은 variables.tf 기본값 = 준비본 과제지 값)
+terraform init
+terraform plan      # 눈으로 확인 — added/changed 개수와 리소스 이름
+terraform apply     # 여기서 이 창을 두고 다음 모듈로 넘어간다
+```
+
+- `plan` 을 눈으로 본 뒤에만 `-auto-approve` 를 쓴다.
+- apply 가 실패하면 **그 창에 에러를 남긴 채 다음 모듈로 넘어간다.** 한 모듈에 붙잡히면 나머지 모듈 점수까지 같이 잃는다. 복귀는 다른 모듈의 apply 대기 시간에 한다.
+- apply 가 끝난 모듈은 **그 자리에서 바로** 해당 mark 스크립트를 돌린다. 전부 끝내고 몰아서 채점하면 고칠 시간이 남지 않는다.
+
+### 전체 순서
+
+1. **1과제 terraform 을 가장 먼저 건다.** 단일 리전 종합이라 내부 순서 의존이 있고 총 소요가 가장 길다.
+   - ECR 이 있는 세트는 `terraform apply -target=<ecr 리소스>` 를 먼저 친다. ECS Service·EKS Deployment 는 이미지가 없으면 안정화되지 않는다.
+   - 이미지 build/push 후 전체 apply.
+2. **EKS 세트는 VPC apply 가 끝나는 즉시 별도 창에서 `eksctl create cluster`** — 19분 타이머를 최대한 앞으로 당긴다. 같은 타이밍에 그 리전 CloudShell 에 VPC environment 를 만든다([0절](#0-도착-직후) ⑥).
+3. eksctl 이 도는 19분 동안 **2과제 최장 모듈**을 치환해 apply 를 건다.
+4. 남은 2과제 모듈을 짧은 순으로 치환·apply.
+5. apply 가 끝난 순서대로 검증 → mark 스크립트 → 부분 점수 확보.
+6. 분홍(신규 문항·모듈 5·6)은 3·4절, 배부물 교체는 5절로 처리하되 **전부 apply 대기 시간에 끼워 넣는다.**
+
+### 하지 않는 것
+
+- 4모듈 치환을 다 끝내고 한꺼번에 apply — 첫 오류가 30분 뒤에 드러난다.
+- 한 창에서 모듈을 직렬로 apply — 최장 모듈 하나가 나머지를 전부 막는다.
+- apply 진행 로그를 지켜보며 대기 — 그 시간이 다음 모듈의 치환 시간이다.
+
+되돌리는 시간도 같이 잡는다: MSK destroy 23분, eksctl 삭제 8분. 리소스를 갈아엎어야 하는 상황이면 재생성 시간까지 더해 남은 시간과 비교한 뒤 결정한다.
+
+## 3. 신규 문항(분홍)은 출제가이드 카탈로그 안에서 나온다
 
 출제자는 자유롭게 문제를 만들지 않는다. 2과제 출제지침은 **모듈 카탈로그 13개**를 고정하고
 "제공된 모듈 중 4개를 골라 출제한다" 고 못박는다. 1과제는 **작업범위 12개** 중 선택이다.
@@ -147,7 +209,7 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 
 금지선을 넘는 요구는 오독이다. 1과제에는 **인프라 스케일링 문제가 출제되지 않고**, 3rd-party Addon(Istio·Cilium·Calico·Crossplane·Nginx)은 불가하며, Helm 은 채점요소가 될 수 없다.
 
-## 3. 모듈 5·6 추가
+## 4. 모듈 5·6 추가
 
 ```powershell
 Copy-Item -Recurse _template/task-2/module-4 set-XX/task-2/module-5-<name>
@@ -159,19 +221,39 @@ New-Item -ItemType Directory set-XX/task-2/provided/module-5
 - 모듈 간 **리전이 겹치면 안 된다**. 리소스도 공유하면 안 된다.
 - 6모듈이면 배점이 모듈당 7.5 → **5.0** 으로 재조정된다. 채점 항목 우선순위를 다시 잡는다.
 
-## 4. 당일 배부 바이너리·앱 교체
+## 5. 당일 배부 바이너리·앱 교체
 
-배부물은 `provided/` 규칙과 같이 **원본 그대로** 둔다. 구현 코드가 그걸 참조하게 만든다.
+### 배부물 교체 경로
+
+배포파일은 **경기 중 USB 로 배부된다.** 저장소 안 준비본 파일을 **같은 경로에 덮어쓴다** — 참조 경로를 고치지 않는다. terraform·Dockerfile 이 그 경로를 리터럴로 물고 있어서, 경로를 옮기면 그쪽도 다 고쳐야 한다.
+
+| 과제 | 덮어쓸 경로 | 참조 방식 |
+| --- | --- | --- |
+| task-1 | `shared/provided/task-1/` | 런북이 `app/` 으로 복사(set-03) 또는 빌드 컨텍스트로 직접 지정(set-08·set-09) |
+| task-2 | `set-XX/task-2/provided/module-N/` | terraform 이 `file()`·`base64gzip(file())` 로 직접 읽음 |
 
 ```powershell
-# 1. 배부물을 원본 위치에 둔다 (수정 금지)
-Copy-Item -Recurse <배부경로>/* shared/provided/task-1/     # task-1
-Copy-Item -Recurse <배부경로>/* set-XX/task-2/provided/module-N/   # task-2
+$USB = 'E:\<배부폴더>'   # USB 드라이브 문자는 탐색기로 먼저 확인
+Copy-Item -Force $USB\* C:\Users\User\skills-2026\shared\provided\task-1\
+Copy-Item -Force $USB\* C:\Users\User\skills-2026\set-XX\task-2\provided\module-N\
+```
 
-# 2. 빌드 컨텍스트가 그 경로를 가리키는지 확인한다
-Select-String -Path set-XX/task-1/README.md -Pattern "docker build"
+- `-Force` 없이는 기존 파일이 있어 복사가 조용히 실패한다. 복사 후 `Get-ChildItem` 으로 타임스탬프가 오늘인지 확인한다.
+- **런북이 `app/` 으로 복사하는 세트는 복사 단계를 다시 밟는다.** `shared/provided/` 만 덮으면 `app/` 에는 옛 파일이 남아 그게 빌드된다.
 
-# 3. 이미지 재빌드·푸시 (x86_64 고정)
+  ```powershell
+  Copy-Item -Force shared/provided/task-1/* set-XX/task-1/app/
+  ```
+
+- 참조 지점이 헷갈리면 경로로 역추적한다:
+
+  ```powershell
+  Get-ChildItem -Recurse set-XX -Include *.tf,Dockerfile | Select-String -Pattern "provided"
+  ```
+
+### 이미지 재빌드·푸시 (x86_64 고정)
+
+```powershell
 $ECR = terraform -chdir=set-XX/task-1/terraform output -raw ecr_repository_url
 aws ecr get-login-password --region <리전> | docker login --username AWS --password-stdin ($ECR -split '/')[0]
 docker build --platform linux/amd64 -f app/Dockerfile -t "${ECR}:v2" <빌드컨텍스트>
@@ -183,7 +265,7 @@ docker push "${ECR}:v2"
 - 롤백: 이전 태그로 `kubectl set image` 또는 태스크 정의 이전 리비전으로 되돌린다. **이전 태그를 지우지 않는다.**
 - 앱이 바뀌면 앱 문자열에 의존하는 구성도 같이 바뀐다 — 로그 쿼리 필터, WAF 경로 regex, 헬스체크 경로.
 
-## 5. 미완성 코드 완성 — Amazon Q 컨텍스트 템플릿
+## 6. 미완성 코드 완성 — Amazon Q 컨텍스트 템플릿
 
 출제지침이 1·2과제 양쪽에 명시한다: **Kiro·Q-CLI·MCP 전부 불가. AWS 웹에서 사용 가능한 Q 만 허용.**
 따라서 컨텍스트를 손으로 붙여넣어야 한다. 코드 전문을 넣지 말고 아래 4블록만 넣는다.
@@ -211,7 +293,7 @@ docker push "${ECR}:v2"
 - 나온 코드는 **환경변수 키 이름·핸들러 경로·응답 필드명**을 배부 명세와 직접 대조한다. 이 셋이 틀리면 동작해도 0점이다.
 - 로컬에서 한 번 실행해 확인한 뒤 배포한다.
 
-## 6. 채점 직전
+## 7. 채점 직전
 
 - EKS: **일반 CloudShell** 에서 `aws eks update-kubeconfig --name <클러스터> --region <리전>` **한 줄 뒤** `kubectl get nodes` 가 되는지 확인한다. 채점 중 허용되는 명령은 그 한 줄뿐이다.
 - 채점 스크립트는 CloudShell 업로드 후 CRLF 를 제거한다: `sed -i 's/\r$//' <파일>`
@@ -219,7 +301,7 @@ docker push "${ECR}:v2"
 - bastion 을 지우기 전에 CloudShell 경로를 **먼저 검증**한다. 지운 뒤에 권한이 없다는 걸 알면 손쓸 방법이 없다.
 - 채점 중에는 리소스를 새로 만들거나 시작할 수 없다. 채점 때 쓸 것은 그 시점에 이미 running 이어야 한다.
 
-## 7. 값 대조표
+## 8. 값 대조표
 
 1절 종이 대조에서 쓰는 표. 각 세트 README 에는 여기로 오는 링크만 남겼다.
 **set-05(task-1·2)·set-08 task-1·set-09 task-1 은 대조표 미작성** — 해당 세트가 걸리면 그 README 의 변수 목록(`variables.tf`)으로 직접 대조한다.
