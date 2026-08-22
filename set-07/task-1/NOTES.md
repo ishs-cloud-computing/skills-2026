@@ -10,6 +10,8 @@
   머신 3분할 — 본 PC(PS7: terraform·eksctl·시드·정리) / 일반 CloudShell(이미지 빌드) /
   `unicorn-mark` CloudShell VPC environment(helm·kubectl·채점). **작업용 bastion 없음.**
 - 미해결: 배포 실측 미수행 — apply·`mark.sh` 결과를 받으면 아래 채점 커버리지와 소요시간을 채운다.
+- 미해결: 13-1-A(수동 채점)는 스크립트가 없다. 배포 후 Grafana 화면을 `task.pdf` p7 이미지와
+  나란히 놓고 배치·범례·축·점선을 육안 대조하고, 패널 5개에 No Data 가 없는지 확인해야 끝난다.
 - 채점 신원은 PowerUser~Administrator 수준 **IAM 사용자**의 CloudShell 이다(2026-08-04 답변). 본 PC 가
   클러스터를 만들므로 본 PC 신원이 그 IAM 사용자와 같아야 하고, 어긋나면 access entry 로 사후 보정한다.
 - 새 필수 절차: eksctl 이 fully-private 클러스터를 public+private 로 만든 뒤 public 을 끄므로,
@@ -78,6 +80,11 @@ task-2 도 같은 날 재배포돼 채점 스크립트 사본이 `mark3.sh`·`ma
 채점지 쪽은 유의사항 18·19 추가, 6-3-A 예상 출력 `unicorn-book-app-svc ClusterIP`, 12-1-A 의
 `TZ=Asia/Seoul date` 기준선·"출력된 로그가 위와 같고"·"`None` 무시" — 모두 이미 반영된 정정이다.
 
+Grafana 절(과제지 p7 / 채점지 p13)은 **재배포본에서도 내용이 그대로다**. 예시 이미지는 재인코딩만
+됐고(과제지 3024×1584 재압축, 채점지 3024×1584 → 2484×1301 축소), 본문·밑줄·패널 목록도 동일하다.
+빨간색·취소선은 과제지 p3~p6 의 정정 4·0·5·6 번뿐이고 Grafana 절에는 없다. 채점지의 `#c75252`·
+`#315f97` 은 정정 표시가 아니라 유의사항 16번의 색 범례다. 같은 의심이 또 들면 PDF 를 다시 파지 말 것.
+
 ### 2026-08-10 답변 (출처: `set-07/errata/1과제.txt` 10~12 + `changelog.txt`)
 
 | # | 정정 내용 | 구현 영향 |
@@ -133,6 +140,32 @@ task-2 도 같은 날 재배포돼 채점 스크립트 사본이 `mark3.sh`·`ma
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-22 13-1-A — 백분위수 메트릭이 통째로 안 생기던 문제와 대시보드 배치 역산
+- 맥락: `Book App HTTP Request Duration` 패널이 배포 상태에서 No Data. 13-1-A 는 "No Data가 있는
+  경우에도 오답"이라 그대로면 1.5점이 통째로 날아간다.
+- 원인: `cloudwatch-exporter-values.yaml` 이 백분위수를 `aws_statistics: [p50, p95, p99]` 로 넣고
+  있었다. cloudwatch_exporter 는 이 키를 AWS SDK `Statistic` enum 으로 파싱해서 p50 은
+  `UNKNOWN_TO_SDK_VERSION` 이 되고, `_p50/_p95/_p99` 시계열이 **아예 만들어지지 않는다**
+  (`CloudWatchCollector.java:295-306, 601`). **에러 로그가 남지 않아** 권한 문제로 오인하기 쉽다.
+  백분위수 전용 키는 `aws_extended_statistics` 다. 메트릭 이름 규칙은
+  `<namespace 소문자>_<metric snake_case>_<stat>` 이라 대시보드 쪽 이름은 원래 맞았다.
+- 같이 넣은 것: `delay_seconds: 120`. 기본값 600 이면 exporter 가 `[now-1200, now-600]` 구간만
+  조회해서, **채점 직전에 시드 트래픽을 넣으면 설정을 고쳐도 10분간 No Data** 다. ALB 메트릭
+  게시 지연은 1~3분이라 120 이면 충분하다.
+- 기각: 앱 자체 Prometheus 메트릭으로 바꾸기. 제공 바이너리 `book` 은 `/v1/book`·`/health` 만
+  노출하고 `/metrics` 가 없다. ALB TargetResponseTime 말고 다른 소스가 없다.
+- 대시보드 배치는 과제지 p7 예시 이미지에서 픽셀로 역산했다(3024×1584 = 레티나 2배,
+  grid unit 30 + gutter 8 logical). 행1 테두리 y=230~820 → `h:8`, 행2 y=838~1580 → `h:10`,
+  행2 세로 경계 x=32|968|986|1446|1464|2878 → `w: 8/4/12`. y축 100%→y342·0%→y759 기준으로
+  CPU 점선 3개 = 60/75/85, Memory 점선 2개 = 70/90. 임계선은 실선이 아니라 **점선**이라
+  set-03 이 쓰는 `thresholdsStyle.mode: "line"` 이 아니라 `"dashed"` 다.
+- `Book App Ready Pods` 가 `w:4` 인 근거: 이미지 제목이 `Book App Ready ...` 로 잘려 있고,
+  채점지가 "4번은 Book App Ready까지만 출력되어도 정답"이라고 그 잘림을 그대로 인정한다.
+  `w:8` 로 두면 제목이 안 잘려서 오히려 이미지와 달라진다.
+- 색상은 일부러 맞추지 않았다. 채점지가 "선수가 색상, 대소문자 등을 다르게 구성한 것은 정답 처리"
+  라고 명시한다. 이미지의 phase 별 색(Failed=빨강 … Unknown=보라)은 시리즈별 override 가 있어야
+  나오는데 점수와 무관해서 넣지 않는다.
 
 ### 2026-08-22 audit 정책 — `/index/*` 제거 + DynamoRead 를 액션 1개씩 분리
 - 맥락: 2026-08-21 항목이 `eks:DescribeCluster` 를 ARN 으로 좁히면서 "남는 와일드카드 리소스는

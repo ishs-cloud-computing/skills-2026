@@ -6,14 +6,45 @@
   "schemaVersion": 39,
   "tags": ["unicorn"],
   "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
   "templating": { "list": [] },
   "panels": [
     {
       "id": 1,
       "title": "EKS Node CPU Usage (%)",
+      "description": "EKS 노드별 CPU 사용률",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max", "lastNotNull"]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "orange", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "thresholdsStyle": { "mode": "dashed" }
+          }
+        },
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -26,9 +57,38 @@
     {
       "id": 2,
       "title": "EKS Node Memory Usage (%)",
+      "description": "EKS 노드별 메모리 사용률",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max", "lastNotNull"]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "thresholdsStyle": { "mode": "dashed" }
+          }
+        },
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -41,9 +101,15 @@
     {
       "id": 3,
       "title": "unicorn Namespace Pod Status",
+      "description": "unicorn 네임스페이스 Pod 의 phase 별 개수",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
-      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 10, "w": 8, "x": 0, "y": 8 },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "targets": [
         {
@@ -57,9 +123,15 @@
     {
       "id": 4,
       "title": "Book App Ready Pods",
+      "description": "Book App Deployment 의 Ready 상태 Pod 수",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
-      "options": { "graphMode": "none", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 10, "w": 4, "x": 8, "y": 8 },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "targets": [
         {
@@ -73,9 +145,25 @@
     {
       "id": 5,
       "title": "Book App HTTP Request Duration",
+      "description": "unicorn-alb TargetResponseTime p50/p95/p99",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
-      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 8 },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "lastNotNull"]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": { "fillOpacity": 10, "gradientMode": "opacity" }
+        },
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
