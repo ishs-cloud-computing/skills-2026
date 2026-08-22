@@ -246,6 +246,14 @@ for f in $(find * -name '*.yaml' ! -name 'kube-prometheus-stack-values.yaml'); d
   sed "${SED[@]}" "$f" > "rendered/$f"
 done
 
+# 패널·행 제목 오탈자 대응 — 채점지 표기가 우리 값과 다르면 TITLES 에만 적고 그대로 이어서 실행한다.
+# 기본값 {} 는 무변경(no-op)이다. 아래 "패널 제목 출처별 표기" 표에서 id 를 찾는다.
+# 예) TITLES='{"19":"Status Codes","21":"Alert"}'
+TITLES='{}'
+jq --argjson t "$TITLES" '.panels |= map(.title = ($t[(.id|tostring)] // .title))' \
+  monitoring/dashboard.json > /tmp/d.json && mv /tmp/d.json monitoring/dashboard.json
+jq -r '.panels[] | "  \(.id)\t\(.title)"' monitoring/dashboard.json   # 반영 결과 확인
+
 # dashboard.json 은 manifest 가 아니라 ConfigMap 으로 만들어 rendered/ 에 넣는다 (일괄 apply 대상)
 kubectl create configmap wsc2026-grafana-dashboard -n observability \
   --from-file=dashboard.json=monitoring/dashboard.json --dry-run=client -o yaml \
@@ -263,6 +271,56 @@ kubectl run dns-test --rm -it --restart=Never --image=busybox \
   --overrides='{"spec":{"nodeSelector":{"wsc2026/node":"addon"}}}' \
   -- nslookup kubernetes.default.svc.wsc2026.skills.local
 ```
+
+#### 패널 제목 출처별 표기 (오탈자 의심 대응표)
+
+과제지 Reference02·채점지 본문 11-3·채점지 참고 사진이 같은 패널을 서로 다르게 적는다.
+**채점지 본문 표기를 기본값으로 쓴다.** 당일 배부본이 다르면 위 `TITLES` 에 `"id":"새 제목"` 을 넣는다.
+
+| id | 현재값 = 채점지 본문 | 참고 사진 | 과제지 Reference02 |
+|---:|---|---|---|
+| 1 | `Node` (행) | `Node` | `Node` |
+| 2 | `Node CPU (%)` | 동일 | `All Node CPU` |
+| 3 | `Node Memory (%)` | 동일 | `All Node Memory` |
+| 4 | `Available Nodes` | 동일 | `All Available Nodes` |
+| 5 | `Pod` (행) | `Pod` | `Pod` |
+| 6 | `Pod CPU` | 동일 | `All Pod CPU` |
+| 7 | `Pod Memory` | 동일 | `All Pod Memory` |
+| 8 | `Pending Pods` | 동일 | `All Pending Pods` |
+| 9 | `Pod Restarts` | 동일 | `All Pod restarts` (소문자 r) |
+| 10 | `Application Pod` (행) | 동일 | `Application Pod` |
+| 11 | `App Pod CPU` | 동일 | `App Pod CPU` |
+| 12 | `App Pod Memory` | 동일 | `App Pod Memory` |
+| 13 | `App Running` | 동일 | `App Running` |
+| 14 | `App Restarts` | 동일 | `App restarts` (소문자 r) |
+| 15 | `App Pending` | 동일 | `App Pending` |
+| 16 | `Application Traffic` (행) | 동일 | `Application Traffic` |
+| 17 | `Request Count` | 동일 | `App Request Count` |
+| 18 | `Response Time` | 동일 | `App Response Time` |
+| 19 | **`Status Code`** | **`Status Codes`** | `App Status Code` |
+| 20 | `Application Logs` | 동일 | `App Application Logs` |
+| 21 | **`Alerts`** (행) | **`Alerts`** | **`Alert`** |
+| 22 | `Active Alerts` | 동일 | (이름 없음 · "Alertmanager 알림 현황") |
+
+가장 갈리는 두 곳이 **19(`Status Code` / `Status Codes`)** 와 **21(`Alerts` / `Alert`)** 이다.
+
+**배포 후에 고쳐야 할 때** — 클러스터를 다시 세울 필요 없다. bastion 에서 `~/wsc2026/k8s` 로 가
+위 `TITLES` 블록만 값 채워 실행한 뒤 ConfigMap 을 다시 만들어 apply 하면 Grafana 사이드카가
+1분 안에 다시 읽어간다:
+
+```bash
+cd ~/wsc2026/k8s
+TITLES='{"19":"Status Codes"}'   # ← 바꿀 것만
+jq --argjson t "$TITLES" '.panels |= map(.title = ($t[(.id|tostring)] // .title))' \
+  monitoring/dashboard.json > /tmp/d.json && mv /tmp/d.json monitoring/dashboard.json
+kubectl create configmap wsc2026-grafana-dashboard -n observability \
+  --from-file=dashboard.json=monitoring/dashboard.json --dry-run=client -o yaml \
+  | kubectl label --local -f - -o yaml grafana_dashboard=1 \
+  | kubectl apply -f -
+```
+
+> id 로 거는 이유: 제목이 서로의 부분문자열이라(`Pod CPU` ⊂ `App Pod CPU`) `sed` 치환은
+> 엉뚱한 패널까지 바꾼다. `TITLES='{}'` 이면 아무것도 바뀌지 않으므로 평소엔 그대로 둔다.
 
 ### 6) [bastion] Helm 애드온 + k8s 리소스 일괄 apply
 
