@@ -105,15 +105,11 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 2. 탭 우클릭 → **그룹에 탭 추가** → **새 그룹** → 그룹 이름을 모듈 번호(`1`~`4`)로 붙인다. 색은 모듈마다 다르게.
 
    ![탭 우클릭 메뉴에서 그룹에 탭 추가 → 새 그룹, 모듈 번호 1~4로 색 구분](shared/asset/tab-group-cloudshell.png)
-
-   같은 조작은 CloudShell 탭이 아닌 일반 탭에서도 동일하다.
-
-   ![Chrome 탭 우클릭 메뉴의 새 그룹에 탭 추가](shared/asset/tab-group-chrome-menu.png)
-
-3. 이후 그 모듈 작업·채점은 반드시 해당 번호 그룹의 탭에서만 한다. 탭을 새로 열면 같은 그룹에 넣는다.
+   
+4. 이후 그 모듈 작업·채점은 반드시 해당 번호 그룹의 탭에서만 한다. 탭을 새로 열면 같은 그룹에 넣는다.
    - 모듈 여러 개를 병렬로 돌리다 런북 어디까지 쳤는지 헷갈리면 **history 로 복원**한다: CloudShell 은 `history`, 본 PC PowerShell 은 `Get-History`(현재 세션) 또는 `Get-Content (Get-PSReadLineOption).HistorySavePath -Tail 30`(닫힌 세션 포함). 마지막 성공 명령을 런북에서 찾아 그 다음 줄부터 잇는다.
-4. 콘솔 상단 즐겨찾기 바에 자주 쓰는 서비스(VPC·EC2·S3·IAM·RDS·CloudFormation·Secrets Manager·CloudWatch·ECR·WAF·EKS)를 별표로 고정한다. 검색 왕복을 줄인다. 문서 탭은 [8절 "과제 받고 5분 안에 열어 둘 탭"](#과제-받고-5분-안에-열어-둘-탭)을 같이 연다.
-5. **1과제는 VPC apply 가 끝나는 대로 그 리전 CloudShell 에 VPC environment 를 무조건 만든다** — 프라이빗 리소스(RDS·EKS 프라이빗 엔드포인트) 접근용. bastion 대체라 불필요 EC2 감점을 피한다. 생성: CloudShell 좌측 **+** → **Create VPC environment** → VPC·프라이빗 서브넷·SG 선택. 프라이빗 서브넷이 NAT 를 못 타면 AWS API 호출도 안 나가니 라우팅을 먼저 확인한다.
+5. 콘솔 상단 즐겨찾기 바에 자주 쓰는 서비스(VPC·EC2·S3·IAM·RDS·CloudFormation·Secrets Manager·CloudWatch·ECR·WAF·EKS)를 별표로 고정한다. 검색 왕복을 줄인다. 문서 탭은 [8절 "과제 받고 5분 안에 열어 둘 탭"](#과제-받고-5분-안에-열어-둘-탭)을 같이 연다.
+6. **1과제는 VPC apply 가 끝나는 대로 그 리전 CloudShell 에 VPC environment 를 무조건 만든다** — 프라이빗 리소스(RDS·EKS 프라이빗 엔드포인트) 접근용. bastion 대체라 불필요 EC2 감점을 피한다. 생성: CloudShell 좌측 **+** → **Create VPC environment** → VPC·프라이빗 서브넷·SG 선택. 프라이빗 서브넷이 NAT 를 못 타면 AWS API 호출도 안 나가니 라우팅을 먼저 확인한다.
 
 위 IAM 등록까지 끝난 뒤에 종이 과제지를 펼치고 1절로 넘어간다.
 
