@@ -6,7 +6,22 @@
   "schemaVersion": 39,
   "tags": ["wskorea26"],
   "time": { "from": "now-1h", "to": "now" },
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(kube_pod_info, namespace)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "refresh": 2,
+        "current": { "text": ["wskorea26"], "value": ["wskorea26"] }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
@@ -18,7 +33,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))",
+          "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", container!=\"\"}[5m]))",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]
@@ -33,7 +48,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\"})",
+          "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"$namespace\", container!=\"\"})",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]
@@ -42,15 +57,16 @@
       "id": 3,
       "title": "Running Book App Pods",
       "type": "stat",
+      "description": "namespace=wskorea26 / phase=Running — wskorea26 는 book app 전용 ns 다. 상단 Namespace 필터와 무관하게 고정",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
-      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": { "graphMode": "area", "colorMode": "value", "textMode": "value_and_name", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(kube_pod_status_phase{namespace=\"wskorea26\", pod=~\"wskorea26-book-deploy-.*\", phase=\"Running\"})",
-          "legendFormat": "book app running"
+          "expr": "sum(kube_pod_status_phase{namespace=\"wskorea26\", phase=\"Running\"})",
+          "legendFormat": "book app (Running)"
         }
       ]
     },
@@ -64,7 +80,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (kube_pod_container_status_restarts_total)",
+          "expr": "sum by (namespace, pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]
@@ -79,7 +95,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (namespace, pod) (rate(container_network_receive_bytes_total[5m]))",
+          "expr": "sum by (namespace, pod) (rate(container_network_receive_bytes_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "{{namespace}}/{{pod}}"
         }
       ]

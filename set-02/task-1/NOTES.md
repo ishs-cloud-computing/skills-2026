@@ -33,10 +33,10 @@
 | 4-1-A / 9-2-A | DynamoDB GSI 과제지 명시 | 수정완료 | 구현은 `terraform/dynamodb.tf:28-41`에 이미 존재. 과제지 전사본 `task.md` §7 에 GSI 줄 추가 |
 | 7-2-A | ALB 예상출력 `wskorea26-cf`×2 + `403` | 영향없음 | `terraform/alb.tf:84-120` 헤더 조건 규칙 2개 + listener default 403(`:72-79`), `mark.md`도 이미 최신본 |
 | 10-0 | Grafana 접속 게이트 신설 | 수정완료 | 채점지 `mark.md`·`mark.sh` 10절 교체. 접속 경로·계정은 `README.md:262-263`, `terraform/outputs.tf:76-78`과 이미 일치 |
-| 10-1-A | book app CPU/Memory | 영향없음 | `dashboard.json:21,36` `sum by (namespace, pod)` — 범례에 book app 파드가 그대로 나온다 |
-| 10-2-A | 실행중인 **book app** Pod 개수 | 수정완료 | `dashboard.json:52`가 클러스터 전역 합계라 book app 개수를 읽을 수 없었다. `namespace="wskorea26", pod=~"wskorea26-book-deploy-.*"` 로 한정 |
-| 10-3-A | book app 재시작 횟수 | 영향없음 | `dashboard.json:67` 범례에 book app 파드 포함 |
-| 10-4-A | book app 네트워크 수신량 | 영향없음 | `dashboard.json:82` 범례에 book app 파드 포함 |
+| 10-1-A | book app CPU/Memory | 수정완료 | `dashboard.json:36,51` `namespace=~"$namespace"` + 변수 기본값 `wskorea26` — 열면 book app 파드만 보인다 |
+| 10-2-A | 실행중인 **book app** Pod 개수 | 수정완료 | `dashboard.json:68` 이 클러스터 전역 합계라 book app 개수를 읽을 수 없었다. `namespace="wskorea26"` 고정으로 한정 |
+| 10-3-A | book app 재시작 횟수 | 수정완료 | `dashboard.json:83` 위와 동일 |
+| 10-4-A | book app 네트워크 수신량 | 수정완료 | `dashboard.json:98` 위와 동일 |
 | — | HighLatency Alert 채점 항목 삭제 / 로그 `level` 필드 / DataSource 이름 / `booking_id` 예시값 | **대상 아님(set-03)** | 근거 파일 `수정사항.txt` 가 set-03 정정본이었다. 이 세트엔 Alert·로그 형식·DataSource 채점 항목 자체가 없다 → `set-03/errata/수정사항(1).txt` 로 이관, 판정은 `set-03/task-1/NOTES.md` |
 | — | `static/ PASS` 객체 채점 제외 (`6-1`) | **대상 아님(set-03)** | 이 세트 2-2-A(`mark.md:159`)는 `web/main/` 2개 객체만 보고 `--prefix "static/"` 명령 자체가 없다. set-03 6-1 항목이다 |
 | — | `created_at` 을 `date` 기준 1분 이내 검증 (`9-3`) | **대상 아님(set-03)** | 이 세트 9-3-A 는 400 코드 확인이다. set-03 9-3 항목이라 이 세트 9-2-A 의 "정확히 일치" 문구는 그대로 남는다 (위 미해결) |
@@ -65,6 +65,10 @@
   `mark 03121625031bd51b…`(103,440B)
 - 대조 방법: 구판을 `git lfs fetch` 로 받아 `pdftotext -layout` 과 `-raw` 두 모드로 각각 추출해
   diff. 두 결과가 완전히 일치해 리플로우에 가려진 변경이 없음을 확인했다
+- **2026-08-22 재검증: 위 대조 방법은 불충분했다.** 텍스트 추출은 글자색과 취소선을 버린다.
+  신판의 수정은 빨간색(`#ff0000`)으로, 삭제는 취소선으로 표시돼 있어 두 축이 통째로 안 보였다.
+  `pymupdf` 로 span 색상과 얇은 가로 그래픽(취소선) 좌표를 텍스트 bbox 와 대조해 다시 읽었고,
+  그 결과 아래 두 항목을 정정한다
 - 변경은 총 7건. **구현(`*.tf`·`k8s/*.yaml`) 변경은 0건**이다
 
 | # | 문서 | 변경 | 판정 |
@@ -82,12 +86,16 @@
   맞췄다. **위 「미해결」의 배점 불일치 건은 이것으로 종결**
 - **9-2-A 는 신판에서도 그대로다.** 예상 출력이 `created_at`·`booking_id` 포함 고정 문자열에
   "정확히 일치" 판정인 문제는 손대지 않았다 → 「미해결」 유지, 대회 당일 심사장 확인 사항
-- 신판에도 `10-1-A (명령어 입력)` 칸의 Grafana ALB DNS 조회 명령이 남아 있다. 신설된 10-0 1) 과
-  같은 명령이라 중복이며, 2026-08-07 답변의 "10-1-A 「명령어 입력」 제외" 판정은 그대로 유효하다
-- **1-1-A 의 `/242` 오타는 신판에서도 안 고쳐졌다.** 채점지 1-1-A 예상 출력이 여전히
-  `wskorea26-pub-subnet-d 172.16.2.0/242` 다. 2026-08-07 답변(`errata/질의 답변.txt`)이 계속
-  살아 있는 정정이라는 뜻 — 구현·전사본은 이미 `/24` 라 조치는 없지만, 대회 당일 채점자가
-  배부본만 보고 판정할 경우를 대비해 이 답변을 근거로 제시할 수 있어야 한다
+- **정정(2026-08-22): `10-1-A (명령어 입력)` 칸은 남은 게 아니라 삭제됐다.** PDF p10 에서 `10-1-A`·
+  `(명령어 입력)`·`브라우저를 사용해 출력되는 경로로 접속합니다.`·ALB DNS 조회 명령 3줄까지
+  전부 취소선이 그어져 있다. 신설된 10-0 이 이를 대체한다. 결론(채점 대상 아님)은 2026-08-07
+  답변과 같지만 근거가 "중복이라는 우리 판단"이 아니라 "출제자가 삭제"로 바뀐다
+- **정정(2026-08-22): `/242` 오타는 신판에서 고쳐졌다.** PDF p4 는 `172.16.2.0/24`(검정) 뒤에
+  빨간 `2` 를 두고 **그 한 글자에만 취소선**을 그었다 — 취소선 `x 384.5~391.0`, 글자 bbox
+  `x 384.5~390.8`, 선 `y 684.5` 가 글자 세로 중앙이다. 텍스트만 뽑으면 `/24`+`2` 로 이어져
+  `/242` 로 읽히는 게 위 오판의 원인이다. 구현·전사본은 이미 `/24` 라 조치 없음
+- p2 주요항목표에서 빨간 `1` 이 ECR 행이 아니라 **NoSQL 행**에 찍혀 있다(ECR 배점 `1` 은 검정).
+  두 항목 다 신판 값이 `1` 이라 합계 30 에는 영향이 없다. 출제자의 셀 착색 실수로 본다
 
 ### 2026-08-16 [출처 정정] `errata/수정사항.txt` 는 set-03 정정본이었다 — 삭제하고 이관
 - 경위: 이 파일의 4개 문답(HighLatency Alert 삭제, Reference02 로그 `level`, 11-2 DataSource 이름,
@@ -139,8 +147,8 @@
   나오므로 정본("book app 지표를 확인할 수 있을 경우 정답")과 취합본(All Pod) 양쪽을 동시에 만족한다
 - 기각: 5패널 전부 book app 필터 → 정본에는 정확히 맞지만 취합본의 All Pod 요구를 깨뜨린다.
   `kube_pod_labels` 조인으로 `label_app` 매칭 → kube-state-metrics 의 라벨 sanitize 규칙에
-  의존이 하나 더 붙는다. Pod 이름 prefix 는 Deployment→ReplicaSet→Pod 명명을 k8s 가 보장하고
-  `wskorea26-book-deploy` 는 과제지가 못 박은 이름이라 더 안전하다
+  의존이 하나 더 붙는다. ~~Pod 이름 prefix 는 Deployment→ReplicaSet→Pod 명명을 k8s 가 보장하고
+  `wskorea26-book-deploy` 는 과제지가 못 박은 이름이라 더 안전하다~~ → **근거 오류. 2026-08-22 항목에서 정정**
 - 대가: Pod 개수 패널이 book app 전용이 되어 클러스터 전체 파드 수는 이 대시보드에서 안 보인다
 
 ### 2026-08-07 [2-1-A] S3 버킷명 비번호 채점 제외
@@ -152,7 +160,8 @@
 ### 2026-08-07 [1-1-A] subnet-d prefix `/242` 오타
 - 답변일: 2026-08-07. 출처: `errata/질의 답변.txt:1-2`
 - 판정: **영향없음** — `terraform/variables.tf:37` 이 이미 `172.16.2.0/24`, `mark.md:114` 전사본도
-  `/24` 다. 오타는 `mark.pdf` 원본에만 남아 있고 원본은 수정하지 않는다
+  `/24` 다. 구판 `mark.pdf` 에만 남아 있던 오타이고, 2026-08-21 신판이 취소선으로 정정했다
+  (2026-08-21 항목의 2026-08-22 정정 참조)
 
 ### 2026-08-07 [7 / 4-1-A] DynamoDB GSI 요구사항 과제지 명시
 - 답변일: 2026-08-07. 출처: `errata/질의 답변(1).txt:26-43`
@@ -168,6 +177,29 @@
 
 ---
 ## 결정 로그
+
+### 2026-08-22 [10-1~4] Grafana 대시보드를 신판 채점 기준(book app)에 맞춤 — namespace 변수 + 기본값 `wskorea26`
+- 근거: 2026-08-21 신판 채점지가 10-1~4 를 전부 `book app` 기준으로 본문에 명시했다(`mark.md:475-478`).
+  구판에서 4패널을 전역으로 둔 근거였던 취합본 01 "All Pod" 문답은 `11-3` 을 가리키는데
+  이 세트 채점지에는 11절이 없다. 정본 근거가 신판으로 더 세졌으므로 book app 쪽으로 정렬한다
+- 채택: `templating` 에 `namespace` 쿼리 변수 1개, 4패널 expr 에 `namespace=~"$namespace"`,
+  기본값 `wskorea26`. 대시보드를 열면 book app 파드만 보이고, All 로 바꾸면 전체 파드가 나와
+  취합본 해석에도 클릭 한 번으로 대응된다. 당일 "네임스페이스별 필터" 문항이 붙어도 그대로 쓴다
+- **`allValue: ".*"` 가 필수**다. All 선택 시 치환값이 변수 쿼리 결과가 아니라 리터럴 `.*` 가 된다.
+  `includeAll` 만 두면 로드 시점에 `label_values(kube_pod_info, namespace)` 가 비었을 때
+  `namespace=~""` 가 되어 4패널이 동시에 No data → 10-1~4 4점이 통째로 날아간다
+- Pod 개수 stat(`id:3`)은 변수에 연결하지 않고 고정한다. 10-2-A 는 book app 개수 자체가 판정
+  대상이라 필터 선택에 따라 값이 흔들리면 안 된다
+- 정정: 2026-08-07 항목의 「`wskorea26-book-deploy` 는 과제지가 못 박은 이름」은 **사실이 아니다.**
+  `task.md`·`mark.md`·`mark.sh`·`errata/` 어디에도 없고 `k8s/app/deployment.yaml:9` 에서 우리가 지은
+  이름이다. stat 쿼리에서 `pod=~"wskorea26-book-deploy-.*"` 를 빼고 과제지가 명시한(`task.md:66`)
+  `namespace="wskorea26"` 만 남겼다 — 이 ns 에는 book app 만 들어가므로 값은 같고 의존만 줄었다
+- stat 패널에 `textMode: value_and_name` 과 `description` 을 넣었다. 숫자만 크게 뜨면 채점자가
+  그 값이 book app 기준인지 알 수 없다
+- 기본값 오염 없음: ConfigMap + grafana sidecar provisioning 이고 provider `allowUiUpdates` 가
+  기본 false 라 UI 에서 저장해 파일을 덮어쓸 수 없다. 채점자는 항상 `wskorea26` 로 시작한다
+- 대가: 채점 4점이 걸린 4패널 expr 을 건드렸다. 배포 리허설 때 상단 `Namespace: wskorea26` 표시와
+  4패널 데이터, stat 숫자를 눈으로 확인한다 (실배포 검증은 대회 계정에서만 가능)
 
 ### 2026-07-27 k8s manifest 를 rendered/ 로 일괄 렌더 후 폴더 단위 apply
 - 맥락: 파일별 인라인 Replace 파이프는 치환 누락·env 미선언을 조용히 통과시킴.

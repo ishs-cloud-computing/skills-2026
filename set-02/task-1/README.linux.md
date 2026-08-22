@@ -192,10 +192,11 @@ grep -n '\${' kps-values.rendered.yaml && echo '치환 누락!' || echo OK
 helm upgrade --install wskorea26-monitoring prometheus-community/kube-prometheus-stack \
   --version 87.5.1 -n monitoring -f kps-values.rendered.yaml
 
-# 대시보드 provisioning (uid=wskorea26, title=wskorea26-monitoring)
+# 대시보드 provisioning (uid=wskorea26, title=wskorea26-monitoring) — 재적용 가능
 kubectl -n monitoring create configmap wskorea26-dashboard \
-  --from-file=dashboard.json=monitoring/dashboard.json
-kubectl -n monitoring label configmap wskorea26-dashboard grafana_dashboard=1
+  --from-file=dashboard.json=monitoring/dashboard.json \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n monitoring label configmap wskorea26-dashboard grafana_dashboard=1 --overwrite
 
 # Grafana ALB 타겟 healthy 대기 (TGB 는 §5 에서 apply 됨)
 aws elbv2 wait target-in-service --target-group-arn "$GRAFANA_TG"
