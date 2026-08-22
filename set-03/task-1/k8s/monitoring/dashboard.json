@@ -168,7 +168,7 @@
             "uid": "prometheus"
           },
           "expr": "(100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * on(instance) group_left(nodename) node_uname_info * on(nodename) group_left() label_replace(kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\"}, \"nodename\", \"$1\", \"node\", \"(.*)\")",
-          "legendFormat": "{{instance}}"
+          "legendFormat": "{{nodename}}"
         }
       ]
     },
@@ -204,10 +204,14 @@
       "options": {
         "colorMode": "value",
         "graphMode": "area",
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
         "reduceOptions": {
+          "values": false,
           "calcs": [
             "lastNotNull"
-          ]
+          ],
+          "fields": ""
         }
       },
       "targets": [
@@ -217,7 +221,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (label_eks_amazonaws_com_nodegroup) (kube_node_status_condition{condition=\"Ready\", status=\"true\"} * on(node) group_left(label_eks_amazonaws_com_nodegroup) kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\"})",
+          "expr": "count by (label_eks_amazonaws_com_nodegroup) (kube_node_labels{label_eks_amazonaws_com_nodegroup=~\"$nodegroup\", label_eks_amazonaws_com_nodegroup!=\"\"} and on (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"} == 1))",
           "legendFormat": "{{label_eks_amazonaws_com_nodegroup}}"
         }
       ]
@@ -416,7 +420,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
+          "expr": "topk(10, sum by (pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})) or vector(0)",
           "legendFormat": "{{pod}}"
         }
       ]
@@ -615,7 +619,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"wsc2026\"})",
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"wsc2026\"}) or vector(0)",
           "legendFormat": "{{pod}}"
         }
       ]
@@ -719,7 +723,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total[1m]))",
+          "expr": "sum(increase(log_metric_counter_wsc2026_requests_total[1m])) or vector(0)",
           "legendFormat": "Requests/min"
         }
       ]
@@ -760,7 +764,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(log_metric_histogram_wsc2026_request_duration_seconds_sum[5m])) / sum(rate(log_metric_histogram_wsc2026_request_duration_seconds_count[5m]))",
+          "expr": "sum(rate(log_metric_histogram_wsc2026_request_duration_seconds_sum[5m])) / sum(rate(log_metric_histogram_wsc2026_request_duration_seconds_count[5m])) or vector(0)",
           "legendFormat": "Avg Response Time"
         }
       ]
@@ -770,8 +774,8 @@
       "title": "Status Code",
       "id": 19,
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "gridPos": {
         "h": 8,
@@ -821,44 +825,6 @@
           },
           "expr": "sum(increase(log_metric_counter_wsc2026_requests_total{status=~\"5..\"}[1m])) or vector(0)",
           "legendFormat": "5XX"
-        },
-        {
-          "refId": "D",
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "queryMode": "Metrics",
-          "namespace": "AWS/ApplicationELB",
-          "metricName": "HTTPCode_ELB_4XX_Count",
-          "statistic": "Sum",
-          "dimensions": {
-            "LoadBalancer": [
-              "*"
-            ]
-          },
-          "matchExact": false,
-          "region": "ap-northeast-2",
-          "label": "ELB 4XX"
-        },
-        {
-          "refId": "E",
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "queryMode": "Metrics",
-          "namespace": "AWS/ApplicationELB",
-          "metricName": "HTTPCode_ELB_5XX_Count",
-          "statistic": "Sum",
-          "dimensions": {
-            "LoadBalancer": [
-              "*"
-            ]
-          },
-          "matchExact": false,
-          "region": "ap-northeast-2",
-          "label": "ELB 5XX"
         }
       ]
     },
@@ -898,7 +864,7 @@
               "name": "/wsc2026/eks/book-app"
             }
           ],
-          "expression": "fields @timestamp, @message | sort @timestamp desc | limit 100"
+          "expression": "fields @timestamp, @message | filter @message like '\"path\":\"/v1/book\"' | sort @timestamp desc | limit 100"
         }
       ]
     },

@@ -305,6 +305,12 @@ aws dynamodb scan --table-name wsc2026-book-table --max-items 1 --query 'Items[0
 FB_POD=$(kubectl get pods -n observability -l app=fluent-bit -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n observability "$FB_POD" -- curl -s localhost:2021/metrics | grep -o '^log_metric[a-z_0-9]*' | sort -u
 
+# KSM 노드 라벨 노출 확인 — Available Nodes 패널과 $nodegroup 변수가 이 라벨에만 의존한다
+KSM_POD=$(kubectl get pods -n observability -l app.kubernetes.io/name=kube-state-metrics -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n observability "$KSM_POD" -- wget -qO- localhost:8080/metrics | grep -m2 '^kube_node_labels'
+# → label_eks_amazonaws_com_nodegroup="wsc2026-addon-nodegroup" 이 보여야 한다.
+#   안 보이면 kube-prometheus-stack-values.yaml 의 metricLabelsAllowlist 가 적용되지 않은 것이다.
+
 # Grafana LB / datasource / 대시보드 (mark 11-2)
 GRAFANA_LB=$(kubectl get svc -n observability monitoring-grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 curl -s -u admin:'Skills$#$@!' "http://$GRAFANA_LB/api/datasources" | jq -r '.[].name'   # alertmanager cloudwatch prometheus
@@ -312,6 +318,10 @@ curl -s -u admin:'Skills$#$@!' "http://$GRAFANA_LB/api/search?query=wsc2026" | j
 
 # CloudWatch 앱 로그 (Reference02 형식)
 aws logs tail /wsc2026/eks/book-app --since 10m | head -5
+
+# Application Logs 패널이 실제로 쓰는 필터 — /v1/book 라인만 돌아와야 한다 (mark 11-3 오답처리 조항)
+aws logs filter-log-events --log-group-name /wsc2026/eks/book-app \
+  --filter-pattern '"\"path\":\"/v1/book\""' --max-items 5 --query 'events[].message' --output text
 ```
 
 > **필수 제출 조건** — 과제지 11절: "동작의 확인을 위해 로그 및 메트릭을 1개 이상 발생시켜야 합니다."

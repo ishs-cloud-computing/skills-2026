@@ -56,6 +56,9 @@
   - **메트릭 실명을 배포 후 다시 확인해야 한다.** README step 8 에서 `:2021/metrics` 를 grep 해
     `prometheus-rules.yaml`·`dashboard.json` 의 이름과 대조한다. aws-for-fluent-bit 이미지에
     `log_to_metrics` 가 없으면 upstream `fluent/fluent-bit` 최신 안정 태그로 교체한다.
+  - **KSM 이 노드 라벨을 실제로 노출하는지 배포 후 확인해야 한다.** `Available Nodes` 와
+    `$nodegroup` 변수가 전적으로 `kube_node_labels{label_eks_amazonaws_com_nodegroup=...}` 에
+    의존한다. README step 8 에서 kube-state-metrics `/metrics` 를 grep 한다.
   - **접두어가 30% 변동으로 바뀌면 `name_prefix` 만으로 안 끝난다.**
     `grep -rl wsc2026 terraform eksctl k8s app | xargs sed -i 's/wsc2026/<새접두어>/g'` 로
     terraform 까지 포함해 일괄 치환해야 한다. 라벨 키 `wsc2026/node` 도 이 범위에 든다.
@@ -200,6 +203,49 @@
 ---
 ## 결정 로그
 <!-- append만. 위 섹션과 달리 절대 수정하지 않는다. 최신이 위로 오게 쌓는다. -->
+
+### 2026-08-22 대시보드 기준을 채점지 사진 → 최종 채점지 11-3 본문(16종 + 빈값 금지)으로 교체
+- 맥락: 최종 정정본 PDF 를 이미지로 재판독했다(텍스트 추출은 빨간 글자·취소선을 버려 못 쓴다).
+  11-3 의 **"메트릭과 로그 형식이 채점지 사진과 일치하는지 확인하며" 가 취소선으로 삭제**되고,
+  빨간 글자로 "**모든 메트릭 및 로그는 빈값이 없어야합니다**. 다음 구성 요소가 대쉬보드에 포함되어
+  있는지 확인합니다" + 필수 패널 16종이 들어갔다. 사진은 "(참고 사진)" 으로 격하됐다.
+  → 채점축이 *사진 대조* 에서 **① 16종 존재 ② 전 패널 비어있지 않음 ③ Application Logs 는
+  `/v1/book` 형식만** 으로 바뀌었다. 2026-07-29 결정("사진을 우선한다")의 전제가 사라졌다
+- 발견한 결함 5건과 채택안(`dashboard.json` 단독 수정):
+  1. **Application Logs 무필터** — Insights 쿼리에 필터가 없어 채점 스크립트의 `error-gen`(`/nonexist`)·
+     `latency-gen`(`/delay?ms=5000`) 액세스 로그가 그대로 출력됐다 → 오답처리.
+     `| filter @message like '"path":"/v1/book"'` 추가. `format.lua` 가 키 순서를 고정 출력하므로
+     부분문자열 매칭이 안정적이다. Logs Insights 의 `like` 는 **작은/큰따옴표로 감싸면 부분문자열,
+     슬래시로 감싸면 정규식**이다(AWS 문서 CWL_QuerySyntax-Filter). 패턴에 `"` 가 들어가므로 작은따옴표를
+     쓴다 — 정규식 형태를 쓰면 `/` 이스케이프 방식이 문서화돼 있지 않아 검증 불가라 피했다
+  2. **Available Nodes 붕괴 경로** — `sum by (label_eks_amazonaws_com_nodegroup)` + `=~"$nodegroup"`.
+     `=~".*"` 는 **라벨이 없는 시리즈도 매치**하므로 KSM `metricLabelsAllowlist` 가 안 먹으면 조인이
+     라벨을 못 붙이고 `sum by (없는 라벨)` 이 **이름 없는 타일 1개(총합 4)** 로 붕괴한다 — "각
+     노드그룹별 노드 수" 가 아니게 되는 정확한 경로다. `count by (...) (kube_node_labels{...,
+     label_eks_amazonaws_com_nodegroup!=""} and on (node) (kube_node_status_condition{...} == 1))`
+     로 교체. **`!=""` 가 방어선** — 라벨이 없으면 조용히 틀린 숫자 대신 패널이 비어 리허설에서 드러난다.
+     `textMode: value_and_name` + `orientation: horizontal` 로 그룹명 타일 2개 렌더를 고정
+  3. **Request Count / Response Time 이 No Data** — 트래픽이 끊기면 빈값. `or vector(0)` 추가
+  4. **Status Code 의 CloudWatch ELB 4XX/5XX 타깃** — 해당 코드가 한 번도 안 나면 CloudWatch 가
+     데이터포인트를 아예 주지 않아 빈 시리즈가 된다(2026-07-29 항목의 미검증 대가). 타깃 2종을
+     제거하고 패널 datasource 를 `-- Mixed --` → `prometheus` 로 환원. CloudWatch 연동 요구는
+     Application Logs 가 계속 충족한다
+  5. **Node Memory (%) 범례가 `{{instance}}`** (`192.168.x.x:9100`) — Node CPU 의 `{{nodename}}` 과
+     불일치. `{{nodename}}` 으로 통일(expr 이 이미 `node_uname_info` 조인으로 달고 있다)
+- 보정 1건: `Pod Restarts` 를 `topk(10, ...)` 로 제한. `$namespace` 기본값이 All 이라(errata 2026-08-16
+  "모든 파드") 타일이 수십 개가 되어 뭉갠다. 재시작 상위 10개면 `crash-test` 가 항상 최상단이다
+- 기각:
+  - **fluent-bit 을 `/v1/book` 전용으로 조여 수집 단계에서 거른다** → `error-gen` 의 404 가
+    `wsc2026_errors_total` 의 유일한 공급원이라 HighErrorRate(11-4)와 Status Code 4XX 가 동반 사망한다.
+    `log_to_metrics` 3종 **뒤에** grep 을 넣으면 메트릭은 살릴 수 있지만, 대시보드 수정 때문에
+    1.5점짜리 알람 항목을 필터 순서 실수에 노출시킬 이유가 없다. 필터는 패널 쿼리에만 둔다
+  - **Pod/App Pod CPU·Memory 를 limit 대비 % 로 변경**(채점지 문구가 "사용률") → limit 미설정 파드가
+    NaN 이 되어 `$namespace=All` 에서 "빈값 없어야" 를 정면으로 위반한다. raw cores/bytes 유지
+  - **Pod Restarts 를 "리스타트 Pod 개수" 단일 숫자로 변경** → 어느 파드가 재시작했는지가 사라지고
+    재시작 1회 이상 경고 색상(과제지) 의미가 흐려진다. 파드별 타일 유지
+- 대가: `/v1/book/999`(Reference02 의 WARN 예시 경로) 도 패널에서 제외된다. 오답처리 조항이
+  "`/v1/book` 을 제외한 로그" 라 엄격 일치가 안전하고, 제공 바이너리는 그 경로를 만들지 않는다
+  (라우팅이 `/v1/book` Exact 하나뿐이라 404 는 `path=/nonexist` 형태로만 남는다)
 
 ### 2026-08-21 mark.sh 는 정본의 `sleep 180` 을 쓰지 않는다 — 파드 생성 1회 + 알람 폴링
 - 맥락: 최종 채점지가 부하 파드 6종 생성 + `sleep 180` 을 11-1·11-3 **양쪽에** 둔다. 정본을 그대로
