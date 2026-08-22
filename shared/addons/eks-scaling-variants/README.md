@@ -283,3 +283,7 @@ aws eks list-fargate-profiles --cluster-name <클러스터>
 - set-08 task-2 module-4-sqs-scaling `k8s/30-keda-scaledobject.yaml`(TriggerAuthentication) · `eksctl/cluster.yaml`(Fargate profile 3개·coredns Fargate)
 - set-05 task-2 module-1-eks-scaling `k8s/30-karpenter-nodepool.yaml`(limits cpu+memory) · `terraform/iam.tf`(컨트롤러 정책 전문) · `terraform/sqs.tf`
 - interruption 큐는 실전 구현이 없다 — 공식 `karpenter cloudformation.yaml` 기준
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

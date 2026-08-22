@@ -157,6 +157,7 @@ Remove-Item Env:AWS_ACCESS_KEY_ID, Env:AWS_SECRET_ACCESS_KEY, Env:AWS_SESSION_TO
 **CMK로 암호화된 테이블/버킷을 읽어야 하면** `kms:Decrypt` 문장을 추가한다:
 
 ```hcl
+# 조각 — 위 정책의 statement 리스트 안에 한 줄로 추가한다 (블록 통째로 붙이는 게 아니다)
 { sid = "CmkDecrypt", actions = ["kms:Decrypt"], resources = [aws_kms_key.app.arn] },
 ```
 </details>
@@ -220,3 +221,7 @@ aws iam get-role --role-name (terraform output -raw audit_role_name) --query "Ro
 ## 실전 구현 (참고용)
 
 - set-07 task-1 `terraform/iam.tf` — `unicorn-audit-role` (Audit Role 절) · `variables.tf: audit_external_id_prefix` · `data.tf: local.audit_external_id` (**완성 복사 원본**)
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

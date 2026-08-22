@@ -271,3 +271,7 @@ aws logs describe-query-definitions --query-definition-name-prefix skills/waf --
 - task-3 `NOTES.md` "Logs Insights 쿼리 세트" — WAF 쿼리 라이브 검증 기록
 - task-3 `terraform/waf.tf` — WAF 로그 그룹(us-east-1) + logging_configuration
 - set-07 task-1 `terraform/cloudwatch.tf` — WAF 로그 그룹 + 리소스 정책 (그대로 쿼리 대상)
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

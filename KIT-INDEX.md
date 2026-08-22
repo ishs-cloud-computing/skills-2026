@@ -17,6 +17,24 @@
 
 `plan`에 기존 리소스 replace/delete가 뜨면 apply하지 않고 멈춘다. 이름이 충돌하면 기존 것을 지우지 말고 **KIT 쪽 변수를 리네임**한다.
 
+### 코드 블록에서 바꿔야 하는 자리
+
+꺾쇠 표기는 전부 치환 대상이다. 하나라도 남으면 `validate`에서 걸린다.
+
+| 표기 | 넣을 값 | 어디서 얻나 |
+| --- | --- | --- |
+| `set-XX` | 자기 세트 디렉터리 (`set-02`·`set-03`·`set-07`) | — |
+| `<기존>` | 기존 리소스의 Terraform 주소 이름 (`aws_s3_bucket.<기존>` → `aws_s3_bucket.web`) | 아래 [세트별 리소스 주소 대조표](#세트별-리소스-주소-대조표-task-1) |
+| `<클러스터>` | EKS 클러스터 이름 | 같은 대조표 첫 행 |
+| `<이름>` · `<룰이름>` · `<버킷>` | 과제지가 지정한 이름 | 과제지 원문 그대로 |
+| `<region>` | 세트 리전 (task-1은 전부 `ap-northeast-2`) | `terraform.tfvars` |
+| `<ns>` · `<sa>` · `<앱>` · `<svc>` | k8s 네임스페이스·ServiceAccount·앱·Service 이름 | `kubectl get ns` · 세트 `k8s/` |
+| `<account_id>` | 지급 계정 ID | `aws sts get-caller-identity --query Account --output text` |
+| `<id>` · `<sg-id>` · `<i-id>` | 실제 리소스 ID | `terraform output` 또는 `aws ... describe-*` |
+| `<선수번호>` | 배정받은 선수 번호 | 과제지·좌석표 |
+
+블록 안에 `# ← 세트별 주소로 치환` 주석이 붙어 있으면 그 줄이 치환 지점이다.
+
 ## 1과제: 추가 문항은 이 5개에서만 나온다
 
 필수 7개(VPC·Container·Database·Static hosting·ECR·로드밸런서·Application)는 이미 다 구현돼 있다. 새 문항은 **아직 안 쓰인 옵션 5개** 안에서 나온다.

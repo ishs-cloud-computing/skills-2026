@@ -251,3 +251,7 @@ aws logs tail (terraform output -raw app_log_group) --since 5m
 - Container Insights 로그 그룹 retention 기본은 **무제한**. 과제지가 보존 기간을 지정하면 `aws logs put-retention-policy` 로 맞춘다.
 - Grafana 노출에 **새 ALB를 만들지 않는다.** 기존 ALB + TargetGroupBinding 재사용 (불필요 리소스 감점, set-07 패턴). set-03은 Ingress에 path 룰을 추가한다.
 - helm 설치 상태 자체는 채점 대상이 될 수 없다. 결과물(k8s 오브젝트·지표·대시보드)이 보이는지로 확인한다.
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

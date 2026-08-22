@@ -10,7 +10,7 @@ EKS 기반 콘서트 예약 플랫폼 인프라를 **Terraform / eksctl / Kubern
 
 ## 값 대조표
 
-> [DAY-OF.md 8절 값 대조표](../../DAY-OF.md#8-값-대조표) 로 이동했다.
+> [DAY-OF.md 8절 값 대조표](../../DAY-OF.md#10-값-대조표) 로 이동했다.
 
 ## 디렉토리 구조
 

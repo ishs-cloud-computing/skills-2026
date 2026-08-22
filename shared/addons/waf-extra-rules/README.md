@@ -97,7 +97,9 @@ rule {
       scope_down_statement {
         regex_pattern_set_reference_statement {
           arn = aws_wafv2_regex_pattern_set.addon_api_paths.arn
-          field_to_match { uri_path {} }
+          field_to_match {
+            uri_path {}
+          }
           text_transformation {
             priority = 0
             type     = "URL_DECODE"
@@ -112,7 +114,9 @@ rule {
       # 오탐 방지 — 특정 하위 룰만 COUNT 로 강등
       rule_action_override {
         name = "SizeRestrictions_BODY"
-        action_to_use { count {} }
+        action_to_use {
+          count {}
+        }
       }
     }
   }
@@ -176,7 +180,9 @@ rule {
       scope_down_statement {
         regex_match_statement {
           regex_string = var.addon_wafx_rate_path_regex
-          field_to_match { uri_path {} }
+          field_to_match {
+            uri_path {}
+          }
           text_transformation {
             priority = 0
             type     = "NONE"
@@ -224,7 +230,9 @@ $d = terraform output -raw cloudfront_domain
 rule {
   name     = "geo-block"
   priority = 50
-  action { block {} }
+  action {
+    block {}
+  }
   statement {
     geo_match_statement {
       country_codes = var.addon_wafx_geo_country_codes
@@ -266,14 +274,18 @@ CloudFront 쪽이면 [cloudfront-hardening](../cloudfront-hardening/README.md) 2
 rule {
   name     = "post-body-block"
   priority = 60
-  action { block {} }
+  action {
+    block {}
+  }
   statement {
     and_statement {
       statement {
         byte_match_statement {
           positional_constraint = "EXACTLY"
           search_string         = "POST"
-          field_to_match { method {} }
+          field_to_match {
+            method {}
+          }
           text_transformation {
             priority = 0
             type     = "NONE"
@@ -284,7 +296,9 @@ rule {
         byte_match_statement {
           positional_constraint = "CONTAINS"
           search_string         = "admin"
-          field_to_match { body {} }        # 기본 8KB 까지만 검사
+          field_to_match {
+            body {}        # 기본 8KB 까지만 검사
+          }
           text_transformation {
             priority = 0
             type     = "LOWERCASE"
@@ -429,13 +443,17 @@ resource "aws_wafv2_regex_pattern_set" "addon_api_paths" {
 rule {
   name     = "scanner-ua"
   priority = 80
-  action { block {} }
+  action {
+    block {}
+  }
   statement {
     and_statement {
       statement {
         regex_pattern_set_reference_statement {
           arn = aws_wafv2_regex_pattern_set.addon_api_paths.arn
-          field_to_match { uri_path {} }
+          field_to_match {
+            uri_path {}
+          }
           text_transformation {
             priority = 0
             type     = "URL_DECODE"
@@ -567,3 +585,7 @@ curl.exe -s -o NUL -w "%{http_code}`n" "https://$d/"                       # 200
 - set-03 task-1 `terraform/waf.tf` — 커스텀 sqli/xss match, rate limit 200
 - task-3 `terraform/waf.tf` — regex pattern set + scope_down, base64-sqli, `waf/scanner-ua.json`(콘솔 부착용 JSON 룰)
 - [waf](../waf/README.md) — Web ACL 본체 + 로깅 + 연결
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

@@ -205,13 +205,20 @@ s3_public = {
 }
 ```
 
-```hcl
-# 파일: set-XX/task-1/terraform/eventbridge.tf
-# 특정 SG/인스턴스로 한정 — 패턴 detail 안에
-requestParameters = { groupId = ["<sg-id>"] }                                   # sg_ingress
-instance-id       = ["<i-id>"]                                                   # ec2_state
+아래 셋은 **블록이 아니라 조각**이다. 통째로 붙이지 말고 위 `detail = { ... }` 안에 필요한 줄만 넣는다.
 
-# 원복 값 제외로 무한 루프 차단
+```hcl
+# 파일: set-XX/task-1/terraform/eventbridge.tf — sg_ingress 룰의 detail 안에
+requestParameters = { groupId = ["<sg-id>"] }
+```
+
+```hcl
+# 파일: set-XX/task-1/terraform/eventbridge.tf — ec2_state 룰의 detail 안에
+"instance-id" = ["<i-id>"] # 키에 하이픈이 있어 따옴표가 필요하다
+```
+
+```hcl
+# 파일: set-XX/task-1/terraform/eventbridge.tf — 원복 값 제외로 무한 루프 차단
 requestParameters = { instanceType = { value = [{ anything-but = "t3.micro" }] } }
 ```
 
@@ -391,3 +398,7 @@ aws logs tail (terraform output -raw evb_lambda_log_group) --since 5m    # lambd
 
 - set-02 task-2 module-3-event `terraform/eventbridge.tf`(룰 6종 + Lambda 타깃·permission) · `terraform/config.tf`(recorder + `INCOMING_SSH_DISABLED`·`REQUIRED_TAGS`) · `terraform/lambda/tag_alert/index.py`
 - set-08 task-2 module-3-event-handling `terraform/eventbridge.tf`(AuthorizeSecurityGroupIngress → Lambda) · `terraform/sns.tf`
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

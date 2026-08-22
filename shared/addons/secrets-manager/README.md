@@ -273,3 +273,7 @@ aws secretsmanager get-secret-value --secret-id $s --query SecretString --output
 
 - set-08 task-2 module-1-nosql `terraform/secrets.tf` — `random_password` + JSON 시크릿, recovery 0 (**가장 가까운 원본**)
 - 읽기 정책·회전은 실전 구현이 없다.
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

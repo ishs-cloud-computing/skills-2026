@@ -336,3 +336,7 @@ aws s3api get-public-access-block --bucket $b
 - set-05 task-1 `terraform/s3.tf` — versioning + 객체 단위 SSE-KMS
 - set-02 task-2 module-1-workflow `terraform/s3.tf` — `aws_s3_bucket_notification` (Lambda 트리거, prefix/suffix 필터)
 - lifecycle · logging · eventbridge · Object Lock은 실전 구현이 없다 — 이 KIT이 처음이다.
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

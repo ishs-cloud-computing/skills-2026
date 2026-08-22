@@ -63,10 +63,13 @@ terraform output -raw lambda_log_group
 ```
 
 ```hcl
-# 파일: set-02 / set-03 — 이름이 변수라 output 값을 확인해 넣는다
+# 파일: set-02 또는 set-03 의 task-1/terraform/terraform.tfvars
+# 이름이 변수라 output 값을 확인해 넣는다
 addon_lamhard_function_name = "<terraform output -raw lambda_function_name 값>"
 addon_lamhard_role_name     = "<terraform output -raw lambda_role_name 값>"
+```
 
+```hcl
 # 파일: set-07/task-1/terraform/terraform.tfvars — 이름이 리터럴이라 그대로
 addon_lamhard_function_name = "unicorn-get-booking-func"
 addon_lamhard_role_name     = "unicorn-get-booking-func-role"
@@ -276,8 +279,10 @@ SG는 새로 만든다(아웃바운드만). NAT 경유 인터넷 없이 DynamoDB
 
 ## 7. Function URL
 
+함수 하나에 URL은 하나뿐이다. **set-03은 이미 `aws_lambda_function_url.book_get` 이 있으니 이 블록을 붙이지 말고 기존 것의 `authorization_type` 만 고친다.**
+
 ```hcl
-# 파일: set-XX/task-1/terraform/lambda.tf
+# 파일: set-XX/task-1/terraform/lambda.tf  (set-02 · set-07 처럼 URL이 없을 때만)
 resource "aws_lambda_function_url" "addon" {
   function_name      = aws_lambda_function.book.function_name   # ← 세트별 주소
   authorization_type = "NONE"   # CloudFront OAC 뒤면 "AWS_IAM"
@@ -372,3 +377,7 @@ aws logs tail (terraform output -raw lambda_log_group) --since 10m
 - set-07 task-1 `terraform/lambda.tf` — 선생성 로그 그룹(CMK) · `kms_key_arn` · `logging_config`
 - set-03 task-1 `terraform/lambda.tf` — `source_kms_key_arn` · Function URL(AWS_IAM) · CloudFront 권한 · `aws_kms_ciphertext`
 - set-02 task-2 module-4-msk `terraform/lambda.tf` — MSK ESM (`starting_position`·`topics`)
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

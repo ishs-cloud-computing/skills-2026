@@ -286,3 +286,7 @@ aws sns list-subscriptions-by-topic --topic-arn (terraform output -raw alarm_top
 
 - set-08 task-1 `terraform/cloudwatch.tf` — 4xx/5xx 메트릭 필터 + 알람 (액션 없음)
 - set-08 task-2 module-3-event-handling `terraform/sns.tf` — SNS 토픽
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

@@ -82,12 +82,21 @@ terraform output -raw db_kms_arn           # set-03
 
 ## 1. S3 버킷 암호화 (기존 버킷에 추가 가능)
 
+세 세트 모두 `aws_s3_bucket_server_side_encryption_configuration` 이 **이미 있다.** 버킷당 하나만 존재할 수 있으므로 새 리소스를 만들지 말고 기존 블록의 두 줄만 바꾼다.
+
 ```hcl
 # 파일: set-XX/task-1/terraform/s3.tf
-# 세 세트 모두 aws_s3_bucket_server_side_encryption_configuration 이 이미 있다 —
-# 새 리소스를 만들지 말고 그 블록의 kms_master_key_id 만 바꾼다.
+# 기존 aws_s3_bucket_server_side_encryption_configuration 블록 *안에서* 이 두 줄을 바꾼다
+sse_algorithm     = "aws:kms"
+kms_master_key_id = aws_kms_key.addon.arn
+```
+
+버킷을 새로 만드는 문항이라 SSE 블록 자체가 없을 때만 아래를 통째로 붙인다.
+
+```hcl
+# 파일: set-XX/task-1/terraform/s3.tf  (SSE 설정이 없는 새 버킷일 때만)
 resource "aws_s3_bucket_server_side_encryption_configuration" "addon" {
-  bucket = aws_s3_bucket.web.id   # ← 세트별 주소로 치환
+  bucket = aws_s3_bucket.web.id # ← 세트별 주소로 치환
 
   rule {
     apply_server_side_encryption_by_default {
@@ -293,3 +302,7 @@ aws kms get-key-rotation-status --key-id (terraform output -raw addon_kms_arn)
 - **WAF(CLOUDFRONT) 로그 암호화**까지 요구되면 us-east-1 키가 필요하다. 단일 리전 키 대신 MRK(`multi_region = true`) + `aws_kms_replica_key` 로 간다 — set-07 task-1 `kms.tf` 가 그 형태다 (`platform` + `platform_use1`).
 - **AccessDenied on apply** — 거의 항상 key policy에 서비스 principal 문장이 빠진 것이다. 계정 Deny 정책 문제가 아니다.
 - 과제지에 CMK 이름이 없으면 **AWS 관리 키로 두는 게 맞다** (불필요 리소스 생성 감점 회피). set-02 `ecr.tf` 가 그 판단의 예다.
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

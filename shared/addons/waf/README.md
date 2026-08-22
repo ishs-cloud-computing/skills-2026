@@ -234,3 +234,7 @@ curl.exe -s -o NUL -w "%{http_code}`n" "https://$d/?id=1' OR 1=1--"   # 403
 - rate limit `evaluation_window_sec` 는 **60/120/300/600만 허용**.
 - managed rule group은 `and_statement` 로 감쌀 수 없다 — 경로 한정은 `scope_down_statement` 만 가능.
 - LBC가 만든 ALB(set-03)에 Terraform association을 걸면 벗겨진다. Ingress 어노테이션을 쓴다.
+
+---
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).
