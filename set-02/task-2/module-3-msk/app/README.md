@@ -1,6 +1,6 @@
 # app — 자체 IAM 인증 producer
 
-2026-08-17 시점의 제공 바이너리(`../../provided/module4/app`)는 SASL/IAM signer 가 없어
+2026-08-17 시점의 제공 바이너리(`../../provided/module3/app`)는 SASL/IAM signer 가 없어
 9094 비인증 TLS 로만 접속한다(`../BINARY-ANALYSIS.md`). 9094 TLS 는 전송 구간 암호화일 뿐
 인증이 없어, 과제지 "MSK 는 IAM 인증을 통해서만 접근" 요구를 만족하지 못한다. 그래서 IAM
 인증(SASL/OAUTHBEARER, 9098)을 지원하는 producer 를 따로 만들어 이 폴더에 뒀다.
@@ -26,12 +26,12 @@
 ./check-binary-auth.sh app/producer
 ```
 
-같은 스크립트를 제공 바이너리(`../provided/module4/app`)에 돌리면 IAM 마커 0건이 나온다 —
+같은 스크립트를 제공 바이너리(`../provided/module3/app`)에 돌리면 IAM 마커 0건이 나온다 —
 두 바이너리의 차이가 이 한 줄로 드러난다.
 
 - 이 바이너리는 **IAM 전용**이다 — 항상 SASL/IAM(9098)으로 접속한다(TLS/IAM 런타임 전환 없음).
   제공 바이너리(TLS) ↔ 이 바이너리(IAM) 선택은 `producer_auth_mode` 변수로 결정된다.
-- 그 외 동작·출력은 제공 바이너리와 동일 (`../../provided/module4/Application.md`):
+- 그 외 동작·출력은 제공 바이너리와 동일 (`../../provided/module3/Application.md`):
   env `BOOTSTRAP_SERVERS`, `TOPIC_RAW`, `AWS_REGION`(signer 리전), 센서 JSON 을 `sensorId` 키로 발행.
 
 ## 활성화

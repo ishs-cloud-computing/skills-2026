@@ -15,6 +15,30 @@ s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 
 
+def decode_csv(raw):
+    # utf-8-sig: BOM 이 붙은 CSV(엑셀/메모장 저장본)를 그대로 받는다. utf-8 로 읽으면
+    # 첫 헤더가 "﻿examDate" 가 되어 전 행이 MISSING_FIELD 로 떨어지고,
+    # DynamoDB 는 0건인데 statusCode 는 200 이라 processed/ 로 넘어간다 (mark 1-5 오답)
+    for encoding in ("utf-8-sig", "cp949"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def normalize_header(name):
+    # BOM·공백·따옴표가 섞인 헤더도 REQUIRED_FIELDS 와 맞춘다
+    return (name or "").strip().strip('"').strip("﻿").strip()
+
+
+def read_rows(csv_text):
+    reader = csv.DictReader(io.StringIO(csv_text))
+    if reader.fieldnames:
+        reader.fieldnames = [normalize_header(f) for f in reader.fieldnames]
+    return reader.fieldnames or [], list(reader)
+
+
 def validate_row(row):
     for field in REQUIRED_FIELDS:
         if not (row.get(field) or "").strip():
@@ -99,25 +123,38 @@ def handler(event, context):
     table_name = os.environ.get("DDB_TABLE")
 
     if not bucket or not table_name:
+        print("[processor] missing env S3_BUCKET/DDB_TABLE")
         return {"statusCode": 400, "processed": 0, "errors": 0}
 
     key = event.get("key")
     if not key or not key.startswith("input/"):
+        print(f"[processor] bad key: {key!r}")
         return {"statusCode": 400, "processed": 0, "errors": 0}
 
     try:
         response = s3_client.get_object(Bucket=bucket, Key=key)
-        csv_text = response["Body"].read().decode("utf-8")
-    except Exception:
+        csv_text = decode_csv(response["Body"].read())
+    except Exception as exc:
+        print(f"[processor] get_object failed: {exc!r}")
         return {"statusCode": 400, "processed": 0, "errors": 0}
 
-    reader = csv.DictReader(io.StringIO(csv_text))
-    rows = list(reader)
+    fieldnames, rows = read_rows(csv_text)
+    # 헤더와 행 수를 먼저 남긴다 — 전 행 탈락 시 원인이 헤더인지 값인지 로그 한 줄로 갈린다
+    print(f"[processor] key={key} fieldnames={fieldnames} rows={len(rows)}")
+
+    missing_headers = [f for f in REQUIRED_FIELDS if f not in fieldnames]
+    if missing_headers:
+        print(f"[processor] header mismatch, missing={missing_headers}")
+        return {"statusCode": 400, "processed": 0, "errors": 0}
 
     table = dynamodb.Table(table_name)
     processed = 0
     errors = 0
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    # 타임스탬프를 입력 객체의 LastModified 에서 뽑는다: Step Functions 가 Lambda 를
+    # 재시도해도 error/ 키가 같아 덮어써진다. 벽시계였다면 재시도마다 새 파일이 생겨
+    # mark 1-6(정확히 4개)이 깨진다
+    last_modified = response.get("LastModified") or datetime.now(timezone.utc)
+    timestamp = last_modified.astimezone(timezone.utc).strftime("%Y%m%d%H%M%S")
 
     for row in rows:
         error_reason = validate_row(row)
@@ -127,5 +164,14 @@ def handler(event, context):
         else:
             save_student(table, row)
             processed += 1
+
+    print(f"[processor] processed={processed} errors={errors}")
+
+    # 행은 읽혔는데 DynamoDB 에 한 건도 못 넣었으면 정상 종료로 위장하지 않는다.
+    # 200 을 돌려주면 워크플로우가 processed/ 로 옮겨 "성공"처럼 보이고, 실패를
+    # 발견하는 시점이 채점 직후가 된다 (실제로 mark 1-5 가 None 으로 나온 경위)
+    if rows and processed == 0:
+        print("[processor] every row rejected — reporting failure")
+        return {"statusCode": 500, "processed": processed, "errors": errors}
 
     return {"statusCode": 200, "processed": processed, "errors": errors}

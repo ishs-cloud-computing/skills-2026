@@ -34,6 +34,9 @@ aws dynamodb get-item --table-name wsc2026-student-score \
   --query "Item.[studentId.S,average.N,grade.S]" --output text   # STU1020 96.6 A
 aws s3 ls s3://$B/processed/   # test.csv 만
 aws s3 ls s3://$B/error/       # 4개만
+
+# 결과가 기대와 다르면 처리 Lambda 로그부터 본다 (헤더/행수/처리결과가 찍힌다)
+aws logs tail /aws/lambda/wsc2026-student-score-function --since 10m --format short
 ```
 
 ### 3) [본 PC] 채점 직전 상태 — 버킷·테이블을 완전히 비운다

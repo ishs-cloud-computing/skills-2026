@@ -135,6 +135,39 @@
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
 
+### 2026-08-24 [module-1] 처리 Lambda 를 CSV 인코딩·헤더에 견디게 하고, 전 행 탈락을 실패로 보고한다
+- 증상: 리허설에서 채점 1-5 가 `None` 이었다. `aws dynamodb scan` 결과가 `Count: 0` 인데
+  `processed/test.csv` 는 생성돼 있었다 — Step Functions 는 SUCCEEDED, S3 는 정상 이동인데
+  DynamoDB 만 비어 있는 조합이다
+- 원인 분석: 로컬에서 `provided/module1/test.csv` 를 처리 로직에 통과시키면 processed 5 / errors 4
+  로 기대값이 그대로 나온다(2026-08-23 실측과 동일). IAM 도 `dynamodb:PutItem` 이 테이블 ARN 에
+  붙어 있어 권한 문제가 아니다. 코드상 "DynamoDB 0건 + statusCode 200 + processed/ 이동" 이
+  동시에 성립하는 경로는 **모든 행이 검증에서 탈락**하거나 **행이 0개로 파싱**되는 경우뿐이다.
+  두 경우 모두 `handler` 가 200 을 돌려주므로 `CheckResult` 가 `MoveToProcessed` 로 간다.
+  가장 현실적인 진입점은 헤더 불일치다 — BOM 이 붙은 CSV 를 `decode("utf-8")` 로 읽으면 첫
+  헤더가 `"﻿examDate"` 가 되어 전 행이 `MISSING_FIELD` 로 떨어진다. 제공 원본
+  `lambda-function.py` 스켈레톤이 그대로 `utf-8` 이었고 우리도 그 줄을 손대지 않았다
+- 채택(4가지, `terraform/lambda/index.py`):
+  1. `decode_csv` — `utf-8-sig` → `cp949` 순으로 시도. BOM 저장본·한글 Windows 엑셀 저장본을 모두 받는다
+  2. `normalize_header` — 헤더의 BOM·공백·따옴표를 털어 `REQUIRED_FIELDS` 와 맞춘다
+  3. 헤더/행수/처리결과를 `print` 로 남기고, `REQUIRED_FIELDS` 가 헤더에 없으면 400 을 돌려준다.
+     전 행 탈락이 헤더 탓인지 값 탓인지 CloudWatch 로그 한 줄로 갈린다
+  4. 행은 읽혔는데 `processed == 0` 이면 500. 정상 종료로 위장하면 파일이 `processed/` 로 넘어가
+     채점 직후에야 실패를 발견하게 된다 — 이번 증상이 정확히 그 경로였다
+- 곁들여 고친 것: `error/` 키의 timestamp 를 벽시계(`datetime.now`)가 아니라 입력 객체의
+  `LastModified` 에서 뽑는다. `ProcessStudentData` 는 `States.ALL` 로 3회 재시도하는데 벽시계면
+  재시도마다 새 timestamp 의 JSON 이 쌓여 채점 1-6(정확히 4개)이 깨진다. 이제 키가 같아 덮어써진다.
+  채점지의 `error_(timestamp)_STU2001.json` 은 timestamp 형식을 지정하지 않으므로 안전하다
+- 검증: 평문 utf-8 / BOM / cp949 / 헤더에 공백 섞임 4가지 입력 모두 `processed 5, errors 4`,
+  STU1020 = `96.6 A`, `error/` 정확히 4개(STU2001·STU2002·STU2004·unknown) 재현. 헤더가 다른
+  CSV 는 400, 헤더만 있는 CSV 는 200/0건
+- 남은 확인: 실제 원인 확정은 `wsc2026-student-score-function` 의 CloudWatch 로그와 Step Functions
+  실행 이력이다. 이번 변경으로 다음 실행부터는 `[processor] key=… fieldnames=… rows=…` 한 줄에
+  다 찍힌다. 재배포는 `terraform apply` — `source_code_hash` 가 바뀌어 함수만 갱신된다
+- 기각: (1) 처리 Lambda 에서 `put_item` 예외를 삼키고 계속 진행 — 부분 저장이 더 진단하기 어렵다.
+  (2) `CheckResult` 에 `processed > 0` 조건 추가 — 판정을 ASL 로 올리면 Lambda 단독 테스트에서
+  같은 실패가 안 보인다. 판정은 Lambda 안에 둔다
+
 ### 2026-08-23 [공통] RC 판 반영 — module-3-event 삭제, MSK 를 module-3 으로 재번호
 - 맥락: RC 문제지 유의사항 12번이 3번 과제를 삭제하고 채점지가 "4번 MSK 가 3번 채점항목" 을
   명시했다. 저장소가 구 번호를 유지하면 대회 당일 과제지 "3)" 과 디렉터리 `module-4-msk` 가

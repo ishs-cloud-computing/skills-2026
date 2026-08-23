@@ -8,7 +8,7 @@
 다시 잡는다 — 안 잡힌 셸에서 3단계를 돌리면 다른 리전을 조회해 ESM 이 `None`, DynamoDB 가 0 으로
 나온다(리소스는 멀쩡한데 안 보이는 것).
 
-배부물 바이너리를 `../provided/module4/app` 에 먼저 놓는다(저장소엔 문서만 있다) — 없으면 `select-auth-mode` 가 "제공 바이너리 없음"(exit 2)으로 멈춘다. iam 판정에 대비해 자체 바이너리 `app/producer` 가 LFS 포인터(133B)가 아니라 실물(약 10MB)인지도 확인한다 — 포인터면 `git lfs pull`.
+배부물 바이너리를 `../provided/module3/app` 에 먼저 놓는다(저장소엔 문서만 있다) — 없으면 `select-auth-mode` 가 "제공 바이너리 없음"(exit 2)으로 멈춘다. iam 판정에 대비해 자체 바이너리 `app/producer` 가 LFS 포인터(133B)가 아니라 실물(약 10MB)인지도 확인한다 — 포인터면 `git lfs pull`.
 
 그날 지급된 제공 바이너리가 IAM 인증을 지원하는지에 따라 1단계 apply 명령이 갈린다:
 
@@ -102,7 +102,7 @@ aws logs tail /aws/lambda/wsc2026-sensor-alert-consumer --since 15m --format sho
 aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | grep "ALERT -"   # 위가 비면 여기부터
 ```
 
-개별 바이너리 판별(cwd: module-3-msk): `./check-binary-auth.sh app/producer` / `./check-binary-auth.sh ../provided/module4/app`. 모드 판별 자체는 0단계 `./select-auth-mode.sh`.
+개별 바이너리 판별(cwd: module-3-msk): `./check-binary-auth.sh app/producer` / `./check-binary-auth.sh ../provided/module3/app`. 모드 판별 자체는 0단계 `./select-auth-mode.sh`.
 
 ### 5) kafka 디버깅 [producer EC2·SSM] + 셀프 채점 [CloudShell]
 

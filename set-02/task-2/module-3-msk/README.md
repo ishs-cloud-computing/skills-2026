@@ -22,8 +22,8 @@ module-3-msk/
 ├── teardown-eni.ps1/.sh              # destroy 멈춤 대응 — Lambda/MSK 잔여 ENI 정리
 └── BINARY-ANALYSIS.md                # 제공 바이너리 리버싱 분석 (2026-08-17 배포본 기준)
 
-# 제공 원본: task-2/provided/module4/ (수정 금지)
-#   과제 번호는 RC 에서 4 → 3 으로 내려갔지만 배부 zip 의 디렉터리 이름은 module4 다.
+# 제공 원본: task-2/provided/module3/ (수정 금지)
+#   RC 배부본의 디렉터리 이름도 module3 이다 (구판 zip 은 module4 였다).
 #   재번호되면 terraform/terraform.tfvars 에 provided_dir 한 줄만 넣는다.
 # 채점: task-2/mark/mark2-3.sh (CloudShell, ap-northeast-1)
 ```
@@ -41,7 +41,7 @@ DynamoDB 가 0 으로 나온다(리소스는 멀쩡한데 안 보이는 것).
 "실행할 수 없습니다" 로 막힌다. `-Scope Process` 라 이 셸에만 적용되고 새 터미널을 열면 다시
 잡아야 한다 — 위 리전 설정과 생명주기가 같다.
 
-배부물 바이너리를 `..\provided\module4\app` 에 먼저 놓는다(저장소엔 문서만 있다) — 없으면 `select-auth-mode` 가 "제공 바이너리 없음"(exit 2)으로 멈춘다. iam 판정에 대비해 자체 바이너리 `app\producer` 가 LFS 포인터(133B)가 아니라 실물(약 10MB)인지도 확인한다 — 포인터면 `git lfs pull`.
+배부물 바이너리를 `..\provided\module3\app` 에 먼저 놓는다(저장소엔 문서만 있다) — 없으면 `select-auth-mode` 가 "제공 바이너리 없음"(exit 2)으로 멈춘다. iam 판정에 대비해 자체 바이너리 `app\producer` 가 LFS 포인터(133B)가 아니라 실물(약 10MB)인지도 확인한다 — 포인터면 `git lfs pull`.
 
 ```powershell
 # cwd: module-3-msk
@@ -203,7 +203,7 @@ aws s3 rm "s3://$(terraform output -raw alert_bucket)/bin/app"
 | | `iam` — 정통 (기본값) | `tls` — 대회 제출 우회 |
 |---|---|---|
 | apply | `terraform apply` | `terraform apply -var "producer_auth_mode=tls"` |
-| 바이너리 | 자체 구현 `app/producer` (저장소 산출물, 빌드 불필요) | 제공 원본 `provided/module4/app` |
+| 바이너리 | 자체 구현 `app/producer` (저장소 산출물, 빌드 불필요) | 제공 원본 `provided/module3/app` |
 | MSK 접속 | SASL/IAM 9098 | TLS 9094 (비인증) |
 | 클러스터 | `unauthenticated=false`, 9094 리스너·SG 규칙 없음 | `unauthenticated=true` + 9094 리스너, producer↔MSK 간에만 9094 인바운드·아웃바운드 |
 | 엔드포인트 | `bootstrap_brokers_sasl_iam` (`_tls` 는 빈 값) | `bootstrap_brokers_tls` |
@@ -220,7 +220,7 @@ aws s3 rm "s3://$(terraform output -raw alert_bucket)/bin/app"
 ```powershell
 # cwd: module-3-msk (terraform\ 에서 왔다면 cd ..)
 .\check-binary-auth.ps1 app\producer             # 자체 바이너리 — IAM 마커 있음
-.\check-binary-auth.ps1 ..\provided\module4\app  # 제공 바이너리 — 이 판정이 모드를 정한다
+.\check-binary-auth.ps1 ..\provided\module3\app  # 제공 바이너리 — 이 판정이 모드를 정한다
 ```
 
 ## Teardown
