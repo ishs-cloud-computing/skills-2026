@@ -7,7 +7,7 @@
 # 주의: 문자열 휴리스틱 — 마커가 난독화되면 미탐 가능. 확정은 BINARY-ANALYSIS.md 의 r2/pclntab.
 set -euo pipefail
 
-BIN="${1:-$(dirname "$0")/../provided/module4/app}"
+BIN="${1:-$(dirname "$0")/../provided/module3/app}"
 [ -f "$BIN" ] || { echo "바이너리 없음: $BIN" >&2; exit 2; }
 
 # 결정적 마커 — MSK IAM 구현에만 존재. 하나라도 있으면 iam 판정.

@@ -8,7 +8,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROVIDED="${1:-$HERE/../provided/module4/app}"
+PROVIDED="${1:-$HERE/../provided/module3/app}"
 [ -f "$PROVIDED" ] || { echo "제공 바이너리 없음: $PROVIDED" >&2; exit 2; }
 
 "$HERE/check-binary-auth.sh" "$PROVIDED"
@@ -23,7 +23,7 @@ if [ "$provided_supports_iam" -eq 0 ]; then
   echo
   echo "주의: s3.tf 의 app_source 는 iam 모드에서 자체 바이너리(app/producer)를 올린다."
   echo "      제공 바이너리가 IAM 을 지원하면 자체 바이너리를 쓸 이유가 없으므로,"
-  echo "      -var 'iam_producer_binary_path=../../provided/module4/app' 로 제공본을 쓴다."
+  echo "      -var 'iam_producer_binary_path=../../provided/module3/app' 로 제공본을 쓴다."
 else
   echo "판정: 제공 바이너리가 IAM 인증 불가 → tls (대회 제출 우회 경로)"
   echo
