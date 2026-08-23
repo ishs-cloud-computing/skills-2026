@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Lambda Consumer 2개 + MSK 트리거 (과제지 5. Lambda — mark 4-2/4-4)
+# Lambda Consumer 2개 + MSK 트리거 (과제지 5. Lambda — mark 3-2/3-4)
 # - sensor-consumer 는 alert 토픽에 produce 하므로 VPC 내 배치 (9098 접근).
 #   kafka-python + aws-msk-iam-sasl-signer 를 zip 에 번들 — 배포 전
 #   `pip install -r requirements.txt -t .` 필수 (README 배포 1단계).

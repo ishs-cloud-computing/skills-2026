@@ -1,5 +1,5 @@
 {
-  "Comment": "wsc2026 student score workflow (workflow.md)",
+  "Comment": "wsc2026 student score workflow (workflow.md, 과제지 6. Workflow 구성)",
   "StartAt": "CheckS3File",
   "States": {
     "CheckS3File": {
@@ -58,15 +58,6 @@
         "Key.$": "States.Format('processed/{}', States.ArrayGetItem(States.StringSplit($.key, '/'), 1))"
       },
       "ResultPath": null,
-      "Next": "DeleteInputProcessed"
-    },
-    "DeleteInputProcessed": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::aws-sdk:s3:deleteObject",
-      "Parameters": {
-        "Bucket": "${bucket}",
-        "Key.$": "$.key"
-      },
       "End": true
     },
     "MoveToError": {
@@ -78,15 +69,6 @@
         "Key.$": "States.Format('error/{}', States.ArrayGetItem(States.StringSplit($.key, '/'), 1))"
       },
       "ResultPath": null,
-      "Next": "DeleteInputError"
-    },
-    "DeleteInputError": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::aws-sdk:s3:deleteObject",
-      "Parameters": {
-        "Bucket": "${bucket}",
-        "Key.$": "$.key"
-      },
       "Next": "WorkflowFailed"
     },
     "WorkflowFailed": {

@@ -1,4 +1,4 @@
-# Module 4 — Linux 런북 (개인 리눅스 로컬 전용)
+# Module 3 — Linux 런북 (개인 리눅스 로컬 전용)
 
 [README.md](README.md) 의 본 PC 단계를 bash 로 옮긴 것. 번호는 README.md 와 1:1 대응이며, CloudShell 단계는 자리에 stub 으로 표시했다. 대회 본 PC(Windows 11 + PowerShell 7)에서는 README.md 를 쓴다.
 
@@ -13,7 +13,7 @@
 그날 지급된 제공 바이너리가 IAM 인증을 지원하는지에 따라 1단계 apply 명령이 갈린다:
 
 ```bash
-# cwd: module-4-msk
+# cwd: module-3-msk
 export AWS_DEFAULT_REGION=ap-northeast-1
 
 ./select-auth-mode.sh
@@ -24,7 +24,7 @@ export AWS_DEFAULT_REGION=ap-northeast-1
 ### 1) [본 PC] 의존성 번들 + 배포
 
 ```bash
-# terraform.tfvars 의 player_number 를 본인 비번호로 먼저 수정한다 (-var 로 넘기지 않는다)
+# terraform.tfvars 의 player_number 를 본인 등번호로 먼저 수정한다 (-var 로 넘기지 않는다)
 cd terraform
 pip install -r lambda/sensor_consumer/requirements.txt -t lambda/sensor_consumer/
 terraform init
@@ -84,24 +84,25 @@ aws ssm get-command-invocation --command-id "$CMD" --instance-id "$PID" --query 
 
 ```bash
 source .env
-# 4-1 DynamoDB + S3
+# 3-1 DynamoDB + S3
 aws dynamodb describe-table --table-name wsc2026-sensor-data --query "Table.[TableName,KeySchema[*].AttributeName]" --output text && aws s3api head-bucket --bucket $BUCKET 2>&1
-# 4-2 Lambda (python3.14)
+# 3-2 Lambda (python3.14)
 for fn in wsc2026-sensor-consumer wsc2026-sensor-alert-consumer; do aws lambda get-function --function-name $fn --query "Configuration.[FunctionName,Runtime]" --output text; done
-# 4-3 MSK
+# 3-3 MSK + 토픽 (alert 2/1, raw 2/3)
 aws kafka describe-cluster --cluster-arn $CLUSTER_ARN --query "ClusterInfo.[ClusterName,State,CurrentBrokerSoftwareInfo.KafkaVersion,BrokerNodeGroupInfo.InstanceType,ClientAuthentication.Sasl.Iam.Enabled]" --output text
-# 4-4 ESM Enabled ×2
+aws kafka list-topics --output json --cluster-arn $CLUSTER_ARN --query "Topics[].[TopicName,ReplicationFactor,PartitionCount]"
+# 3-4 ESM Enabled ×2
 for fn in wsc2026-sensor-consumer wsc2026-sensor-alert-consumer; do aws lambda list-event-source-mappings --function-name $fn --query "EventSourceMappings[0].[State]" --output text; done
-# 4-5-A / 4-5-B
+# 3-5 / 3-6
 aws dynamodb scan --table-name wsc2026-sensor-data --max-items 1 --query "Items[0].{sensorId:sensorId.S,temperature:temperature.S,status:status.S}" --output json
 aws dynamodb scan --table-name wsc2026-sensor-data --max-items 3 --query "Items[*].{sensorId:sensorId.S,timestamp:timestamp.S}" --output json
-# 4-5-C/D 이상치 경로 (alert consumer → S3 + SNS publish 로그)
+# 3-6-C/D 이상치 경로 (alert consumer → S3 + SNS publish 로그)
 aws s3 ls s3://$BUCKET/alert/ --recursive | head
 aws logs tail /aws/lambda/wsc2026-sensor-alert-consumer --since 15m --format short | grep "alert forwarded"
 aws logs tail /aws/lambda/wsc2026-sensor-consumer --since 15m --format short | grep "ALERT -"   # 위가 비면 여기부터
 ```
 
-개별 바이너리 판별(cwd: module-4-msk): `./check-binary-auth.sh app/producer` / `./check-binary-auth.sh ../provided/module4/app`. 모드 판별 자체는 0단계 `./select-auth-mode.sh`.
+개별 바이너리 판별(cwd: module-3-msk): `./check-binary-auth.sh app/producer` / `./check-binary-auth.sh ../provided/module4/app`. 모드 판별 자체는 0단계 `./select-auth-mode.sh`.
 
 ### 5) kafka 디버깅 [producer EC2·SSM] + 셀프 채점 [CloudShell]
 
@@ -125,7 +126,7 @@ terraform destroy                     # 실측 23분 5초 (MSK 클러스터 삭�
 `msk-priv-a`·`msk-priv-d` 와 `msk-vpc` 삭제가 `DependencyViolation` 으로 걸리면 VPC Lambda·MSK ESM 의 Hyperplane ENI 가 아직 회수되지 않은 것이다(배경은 [README.md](README.md) 같은 절). 5~10분 뒤 재시도 → 그래도 걸리면 `teardown-eni.sh` 로 직접 정리한다. VPC ID 는 `terraform output vpc_id` 에서 자동으로 읽는다.
 
 ```bash
-# cwd: module-4-msk (terraform/ 에서 왔다면 cd ..)
+# cwd: module-3-msk (terraform/ 에서 왔다면 cd ..)
 export AWS_DEFAULT_REGION=ap-northeast-1
 chmod +x teardown-eni.sh
 ./teardown-eni.sh

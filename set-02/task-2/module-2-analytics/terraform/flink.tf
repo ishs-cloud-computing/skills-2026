@@ -1,11 +1,11 @@
 # ---------------------------------------------------------------------------
-# Managed Apache Flink Studio Notebook (과제지 5, mark 2-4)
-# - mark 2-4 기대값: [wsc2026-analytics-flink, READY, ZEPPELIN-FLINK-3_0]
-#   (task.md 의 "Apache Flink 1.19" 표기와 다르지만 mark 스크립트가 우선)
+# Managed Apache Flink Studio Notebook (과제지 5, mark 2-5)
+# - mark 2-5 기대값: [wsc2026-analytics-flink, READY, ZEPPELIN-FLINK-3_0]
+#   (과제지 5 의 "노트북 환경 버전" 값. 같은 절의 "Runtime: Apache Flink 1.19" 와 별개 축)
 # - aws_kinesisanalyticsv2_application 은 zeppelin_application_configuration
 #   블록을 지원하지 않아(provider issue #41233) INTERACTIVE 생성이 실패한다.
 #   → CloudFormation 스택으로 래핑 (CFN 은 Zeppelin 설정 완전 지원, 단일 provider 유지)
-# - 생성 직후 상태가 READY. 자동 시작 설정 금지 — RUNNING 이면 2-4 오답.
+# - 생성 직후 상태가 READY. 자동 시작 설정 금지 — RUNNING 이면 2-5 오답.
 # ---------------------------------------------------------------------------
 
 # Studio Notebook 이 SQL 의 CREATE TABLE DDL 을 저장할 Glue 카탈로그 DB

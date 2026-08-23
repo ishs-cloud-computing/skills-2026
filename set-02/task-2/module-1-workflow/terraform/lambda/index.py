@@ -74,7 +74,7 @@ def calculate_grade(average):
 
 def save_student(table, row):
     # 평균은 Decimal 나눗셈으로 계산: float 는 96.60000000000001 이 되어
-    # mark 1-5-A(average.N == 96.6) 오답이고, boto3 는 float 저장 자체를 거부한다
+    # mark 1-5(average.N == 96.6) 오답이고, boto3 는 float 저장 자체를 거부한다
     scores = {field: int(row[field].strip()) for field in SCORE_FIELDS}
     # 분모는 과목 수와 이중 관리하지 않는다 — 30% 변동으로 과목이 바뀌면 SCORE_FIELDS 만 고친다
     average = Decimal(str(sum(scores.values()))) / Decimal(len(SCORE_FIELDS))

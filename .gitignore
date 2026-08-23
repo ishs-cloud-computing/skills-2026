@@ -22,7 +22,7 @@ __pycache__/
 # CloudShell 업로드용 전송 아카이브 (과제 폴더에 생성, 모듈별 mN.zip · 1과제는 task.tgz)
 **/m[0-9].zip
 **/task.tgz
-# set-02 module-4: sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
+# set-02 module-3(MSK): sensor_consumer 는 pip install -t 로 의존성을 소스 옆에 설치
 **/lambda/sensor_consumer/*
 !**/lambda/sensor_consumer/index.py
 !**/lambda/sensor_consumer/requirements.txt
@@ -36,5 +36,4 @@ set-02/task-2/provided/module1/lambda-function.py
 set-02/task-2/provided/module1/test.csv
 set-02/task-2/provided/module2/app.py
 set-02/task-2/provided/module2/requirements.txt
-set-02/task-2/provided/module3/lambda-function.py
 set-02/task-2/provided/module4/app

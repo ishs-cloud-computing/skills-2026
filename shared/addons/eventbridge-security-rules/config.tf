@@ -3,7 +3,7 @@
 
 # ---------------------------------------------------------------------------
 # AWS Config — recorder + delivery channel + managed rule + (선택) SSM 자동 복구
-# 원본: set-02 task-2 module-3-event config.tf·cloudtrail.tf(버킷 정책 Config 문장)
+# 원본: set-02 task-2 module-3-event(RC 판에서 삭제 — git 이력) config.tf·cloudtrail.tf(버킷 정책 Config 문장)
 # recorder 는 리전당 1개 — 이미 있으면 addon_evb_config_enabled = false 로 끄고 룰만 쓴다.
 # ---------------------------------------------------------------------------
 

@@ -5,7 +5,7 @@
 # MSK 하드닝 부착 스니펫 — 새 리소스만 (로그 그룹·configuration·Lambda ESM).
 # aws_msk_cluster 안에 넣는 인자(logging_info·open_monitoring·enhanced_monitoring·
 # configuration_info·encryption_at_rest)는 README "블록" 절.
-# 원본: set-02 task-2 module-4-msk terraform/msk.tf·lambda.tf·iam.tf
+# 원본: set-02 task-2 module-3-msk terraform/msk.tf·lambda.tf·iam.tf
 # ---------------------------------------------------------------------------
 
 # ----- 브로커 로그 대상 로그 그룹 -----

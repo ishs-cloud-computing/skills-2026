@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Producer EC2 (과제지 4. EC2, Application.md — mark 4-5-B)
+# Producer EC2 (과제지 4. EC2, Application.md — mark 3-6)
 # - user_data 가 bootstrap_brokers_sasl_iam 을 참조 → MSK ACTIVE(~30분) 이후
 #   생성되는 암묵 의존성. 부팅 시 토픽 생성이 첫 시도에 성공한다.
 # - 토픽 생성(kafka CLI + IAM jar) → app 바이너리 S3 다운로드 → systemd 상시 실행

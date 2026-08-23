@@ -4,7 +4,7 @@
 # ---------------------------------------------------------------------------
 # Kinesis Data Stream → Firehose → S3 부착 스니펫 (+ Lambda ESM 옵션).
 # aws_kinesis_stream 안에 넣는 하드닝 인자(KMS·retention·용량 모드)는 README "블록" 절.
-# 원본: set-02 task-2 module-2-analytics terraform/kinesis.tf, module-4-msk lambda.tf
+# 원본: set-02 task-2 module-2-analytics terraform/kinesis.tf, module-3-msk lambda.tf
 # ---------------------------------------------------------------------------
 
 data "aws_caller_identity" "addon_firehose" {}

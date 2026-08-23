@@ -2,6 +2,7 @@ import base64
 import json
 import os
 from datetime import datetime
+from decimal import Decimal
 
 import boto3
 from aws_msk_iam_sasl_signer import MSKAuthTokenProvider
@@ -79,12 +80,15 @@ def handler(event, context):
             alerted = True
             log(f"{sensor_id}: ALERT - temp={temperature}°C ({reason.split(':')[0]})")
         else:
-            # mark 4-5-A 가 temperature.S / status.S 를 조회 — 전 속성 String 저장
+            # 속성 타입은 과제지 6. DynamoDB 표를 그대로 따른다 — humidity 만 Number,
+            # 나머지는 String. 채점 3-5 가 temperature.S / status.S 로 조회하므로
+            # temperature 를 Number 로 바꾸면 그 항목이 빈다.
+            # boto3 는 float 저장을 거부해 Decimal 로 넣는다.
             table.put_item(Item={
                 "sensorId": sensor_id,
                 "timestamp": str(data.get("timestamp", "")),
                 "temperature": str(temperature),
-                "humidity": str(humidity),
+                "humidity": Decimal(str(humidity)),
                 "location": str(data.get("location", "")),
                 "status": "NORMAL",
             })

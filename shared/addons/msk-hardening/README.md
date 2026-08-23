@@ -5,7 +5,7 @@
 ## USE WHEN
 
 기존 `aws_msk_cluster` 에 브로커 로그·모니터링·암호화·server.properties·Lambda 트리거를 얹는다.
-2과제 MSK 모듈(set-02 task-2 module-4-msk) 의 당일 추가 문항("브로커 로그를 CloudWatch 로",
+2과제 MSK 모듈(set-02 task-2 module-3-msk) 의 당일 추가 문항("브로커 로그를 CloudWatch 로",
 "Prometheus 모니터링 활성화", "CMK 암호화", "auto.create.topics 비활성", "Lambda 로 토픽 소비") 에 대응한다.
 
 ## CHANGE — 당일 고치는 값
@@ -193,6 +193,6 @@ encryption_info {
 
 ## 실전 구현 (참고용)
 
-- `set-02/task-2/module-4-msk/terraform/msk.tf` — 클러스터 본체 (IAM 인증·TLS)
-- `set-02/task-2/module-4-msk/terraform/lambda.tf` — Lambda 2개 + MSK ESM
-- `set-02/task-2/module-4-msk/terraform/iam.tf` — ESM 폴러·kafka-cluster 데이터 액션 정책
+- `set-02/task-2/module-3-msk/terraform/msk.tf` — 클러스터 본체 (IAM 인증·TLS)
+- `set-02/task-2/module-3-msk/terraform/lambda.tf` — Lambda 2개 + MSK ESM
+- `set-02/task-2/module-3-msk/terraform/iam.tf` — ESM 폴러·kafka-cluster 데이터 액션 정책

@@ -2,15 +2,14 @@
 
 | 직종명 | 클라우드컴퓨팅 |
 |---|---|
-| 과제명 / 과제번호 | 제2과제 |
+| 과제명 / 과제번호 | Small Challenge / 제2과제 |
 | 경기시간 | 4시간 |
 
 ## 1. 요구사항
 
 1) Workflow
 2) Real-time data analytics
-3) Cloud event handling
-4) MSK
+3) MSK
 
 ## 2. 선수 유의사항
 
@@ -27,6 +26,7 @@
 9) Tag 정보가 맞지 않거나 권한 문제가 생겨 채점이 불가하지 않도록 주의합니다.
 10) 채점을 위한 Bastion을 생성하고, Bastion은 모든 Resource를 Access 할 수 있어야 합니다.
 11) 채점지와 문제지 마다 사용하는 Region이 모두 다르니 확인 하도록 합니다.
+12) 문제 구성의 핵심을 채점항목에서 확인하지 않고, 정의된 Lambda가 채점지와 다른 부분이 많은 등 문제 오류로 인해 3번 Cloud Event Handling 과제는 삭제합니다.
 
 ---
 
@@ -34,17 +34,19 @@
 
 ### 개요
 
-S3, Lambda, DynamoDB, Step Functions를 활용하여 학생 성적 데이터를 자동으로 수집, 변환, 저장하는 서버리스 데이터 처리 워크플로우를 구성합니다. Region은 **ap-southeast-1**을 사용합니다.
+S3, Lambda, DynamoDB, Step Functions를 활용하여 학생 성적 데이터를 자동으로 수집, 변환, 저장하는 서버리스 데이터 처리 워크플로우를 구성합니다. Region은 **ap-southeast-1**을 사용합니다. S3 버킷에 `input/test.csv` 파일 업로드 시점부터 60초 이내에 워크플로우 실행이 완료되어야 합니다. 워크플로우가 완료되면 DynamoDB 데이터 삽입과 S3 버킷의 `processed` 폴더와 `error` 폴더에 Object가 존재하는 상태여야 합니다.
 
 ### 과제 설명
 
 #### 1. S3
 
-학생 성적 원본 데이터를 저장하기 위한 S3 버킷을 구성합니다. 사용자는 학생 이름이 포함된 CSV 파일을 S3에 업로드하며, Step Functions는 해당 파일을 기준으로 워크플로우를 실행합니다. 채점 시 S3의 `/processed/`, `/error/` 폴더는 비어있어야 하며, 배포된 `test.csv` 파일을 S3의 `/input` 경로에 업로드 해야합니다.
+학생 성적 원본 데이터를 저장하기 위한 S3 버킷을 구성합니다. 사용자는 학생 이름이 포함된 CSV 파일을 S3에 업로드하며, Step Functions는 해당 파일을 기준으로 워크플로우를 실행합니다. 선수는 대회 종료전 해당 버킷의 데이터를 모두 삭제해야 합니다. 채점 시작시 먼저 해당 버킷의 데이터가 삭제되어 있는지 확인하고, 데이터가 존재한다면 데이터 처리에 대한 채점 항목인 1-1과 1-5, 1-6 는 모두 틀린 것으로 간주합니다. 데이터가 없는게 확인 된다면 채점 시작 시 S3 버킷의 `/input/test.csv` 경로에 데이터를 업로드 하고 채점을 진행합니다.
 
-- **Bucket Name** : `wsc2026-student-score-bucket-<비번호>`
+- **Bucket Name** : `wsc2026-student-score-bucket-<등번호>`
 
-| Folder Prefix | Folder Description |
+**S3 Folder Prefix**
+
+| Folder | Description |
 |---|---|
 | `/input/` | 원본 학생 성적 csv 파일 저장 |
 | `/processed/` | 처리 완료된 파일 저장 |
@@ -52,14 +54,21 @@ S3, Lambda, DynamoDB, Step Functions를 활용하여 학생 성적 데이터를 
 
 #### 2. Lambda
 
-S3에 업로드된 학생 성적 데이터를 읽고, 평균 점수와 등급을 계산한 뒤 DynamoDB에 저장하기 위한 Lambda 함수를 구성합니다. Lambda 함수의 이름은 `wsc2026-student-score-function`으로 명명합니다. Lambda Function에 대한 세부 사항은 `lambda.md`를 참고하세요.
+S3에 업로드된 학생 성적 데이터를 읽고, 평균 점수와 등급을 계산한 뒤 DynamoDB에 저장하기 위한 Lambda 함수를 구성합니다. Lambda 함수의 이름은 `wsc2026-student-score-function`으로 명명합니다. Lambda Function에 대한 세부 사항은 `lambda.md`를 참고하세요. Lambda 구성 시 아래 환경변수를 구성하도록 합니다. 구성시 Python 버전은 3.12를 사용합니다.
+
+| | |
+|---|---|
+| `S3_BUCKET` | 학생 성적 CSV 파일이 저장된 S3 버킷 이름 |
+| `DDB_TABLE` | 처리된 학생 성적 데이터를 저장할 DynamoDB 테이블 이름 |
 
 #### 3. DynamoDB
 
-Lambda에서 처리한 학생 성적 데이터를 저장하기 위한 DynamoDB 테이블을 구성합니다. 채점 시 DynamoDB의 모든 데이터를 삭제해야합니다.
+Lambda에서 처리한 학생 성적 데이터를 저장하기 위한 DynamoDB 테이블을 구성합니다. 채점 시 DynamoDB의 모든 데이터를 삭제해야합니다. 선수는 대회 종료전 해당 테이블의 데이터를 모두 삭제해야 합니다. 채점 시작시 먼저 해당 테이블의 데이터가 삭제되어 있는지 확인하고, 데이터가 존재한다면 데이터 처리에 대한 채점 항목인 1-1과 1-5, 1-6 는 모두 틀린 것으로 간주합니다. 데이터가 없는게 확인 된다면 채점을 진행합니다.
 
 - **Table Name** : `wsc2026-student-score`
 - **Key** : (PK : `studentId`) (SK : `examDate`)
+
+언급된 PK와 SK외에는 다른 KeyScheme는 구성하지 않습니다.
 
 #### 4. Step Functions
 
@@ -76,6 +85,22 @@ Lambda와 Step Functions가 S3, DynamoDB에 접근할 수 있도록 IAM Role과 
 |---|---|
 | `wsc2026-lambda-student-role` | Lambda |
 | `wsc2026-stepfunction-student-role` | Step Function |
+
+#### 6. Workflow 구성
+
+워크플로우 구성은 아래와 같은 플로우를 참고합니다. S3의 `/input` 디렉토리에 `.csv` 파일이 생성될 경우 자동으로 실행되어야 합니다. 자동 실행은 트리거 Lambda를 통해 구현합니다. 워크플로우는 `{"key": "input/test.csv"}` 형식 입력을 받습니다.
+
+```
+[Start]
+↓
+[CheckS3File]
+↓
+[ProcessStudentData] ← Lambda 호출
+↓
+[CheckResult] ← Choice
+├─ statusCode == 200 → [MoveToProcessed] → [End]
+└─ Otherwise → [MoveToError] → [Fail]
+```
 
 ---
 
@@ -104,7 +129,7 @@ Lambda와 Step Functions가 S3, DynamoDB에 접근할 수 있도록 IAM Role과 
 
 #### 2. EC2
 
-주문 로그를 발생시키는 Python 애플리케이션 서버를 구성합니다. EC2는 Private Subnet에 배치하며, Load Balancer를 통해서만 외부 접근이 가능하도록 합니다. 애플리케이션에 대한 자세한 설명은 배포파일의 `Application.md`를 참고하세요. 채점시 SSM을 사용하므로 SSM으로 접근이 가능하도록 구성해야 합니다.
+주문 로그를 발생시키는 Python 애플리케이션 서버를 구성합니다. EC2는 **Private Subnet A**에 배치하며, Load Balancer를 통해서만 외부 접근이 가능하도록 합니다. 애플리케이션에 대한 자세한 설명은 배포파일의 `Application.md`를 참고하세요. 채점시 SSM을 사용하므로 SSM으로 접근이 가능하도록 구성해야 합니다.
 
 - **Instance Name** : `wsc2026-analytics-ec2`
 - **Instance Type** : t3.small
@@ -112,11 +137,12 @@ Lambda와 Step Functions가 S3, DynamoDB에 접근할 수 있도록 IAM Role과 
 
 #### 3. Load Balancer
 
-EC2에 대한 외부 트래픽을 처리하는 Application Load Balancer를 구성합니다.
+EC2에 대한 외부 트래픽을 처리하는 Application Load Balancer를 구성합니다. ALB를 통해 `/health` API도 서빙이 되어야 합니다.
 
 - **Load Balancer Name** : `wsc2026-analytics-alb`
 - **Load Balancer Listener** : HTTP 80
 - **Target Group Name** : `wsc2026-analytics-tg`
+- **Target Group Port 번호** : 5000
 
 #### 4. Kinesis Data Stream
 
@@ -124,6 +150,17 @@ EC2에 대한 외부 트래픽을 처리하는 Application Load Balancer를 구�
 
 - **Stream Name** : `wsc2026-order-stream`
 - **Capacity Mode** : On-demand
+- 출력 데이터 샘플
+
+```json
+{
+  "order_id": "uuid",
+  "product_name": "Laptop",
+  "price": 1200000,
+  "quantity": 2,
+  "event_time": "2026-05-30 12:00:00"
+}
+```
 
 #### 5. Managed Apache Flink
 
@@ -131,6 +168,7 @@ Kinesis Data Stream에 수집된 주문 로그를 실시간으로 분석하기 �
 
 - **Application Name** : `wsc2026-analytics-flink`
 - **Runtime** : Apache Flink 1.19
+- **노트북 환경 버전** : `ZEPPELIN-FLINK-3_0`
 
 Notebook에서 아래 SQL 쿼리가 정상 실행되어야 합니다.
 
@@ -138,16 +176,16 @@ Notebook에서 아래 SQL 쿼리가 정상 실행되어야 합니다.
 
 ```sql
 SELECT COUNT(*) as order_count
-FROM order_stream
-WHERE event_time > CURRENT_TIMESTAMP - INTERVAL '1' MINUTE;
+  FROM order_stream
+  WHERE event_time > CURRENT_TIMESTAMP - INTERVAL '1' MINUTE;
 ```
 
 **2) 상품별 누적 매출**
 
 ```sql
 SELECT product_name, SUM(price * quantity) as total_revenue
-FROM order_stream
-GROUP BY product_name;
+  FROM order_stream
+  GROUP BY product_name;
 ```
 
 #### 6. IAM
@@ -159,75 +197,7 @@ EC2와 Managed Flink가 Kinesis Data Stream에 접근할 수 있도록 IAM Role�
 
 ---
 
-## 3) Cloud Event Handling
-
-### 개요
-
-보안 또는 비용 상 위협이 발생할 시, 원래 상태로 복구하거나 관리자에게 알림을 발송하는 자동화 시스템을 구성합니다. Region은 **eu-west-1**을 사용합니다.
-
-### 과제 설명
-
-#### 1. VPC
-
-보안 정책 자동화 대상이 되는 네트워크를 구성합니다.
-
-| VPC Name | VPC CIDR |
-|---|---|
-| event-vpc | 172.16.0.0/16 |
-
-| Subnet Name | Subnet CIDR | Route Table | Internet Access |
-|---|---|---|---|
-| event-pub-a | 172.16.0.0/24 | event-pub-rtb | event-igw (IGW) |
-| event-pub-b | 172.16.1.0/24 | event-pub-rtb | event-igw (IGW) |
-
-#### 2. EC2
-
-보안 정책 모니터링 대상이 되는 EC2 인스턴스를 구성합니다.
-
-- **Instance Name** : `wsc2026-event-ec2`
-- **Instance Type** : t3.micro
-- **IAM Role Name** : `wsc2026-event-ec2-role`
-- **Subnet** : event-pub-a
-
-#### 3. Security Group
-
-EC2에 연결된 보안 그룹을 구성합니다. 보안그룹은 최소한으로 구성해야합니다.
-
-- **Security Group Name** : `wsc2026-event-sg`
-
-#### 4. EventBridge
-
-보안 및 비용에 관한 문제가 발생할 경우를 감지하는 EventBridge Rule을 각각 구성합니다.
-
-| Rule Name | Detection conditions |
-|---|---|
-| `wsc2026-sg-change-rule` | EC2 Security Group 인바운드 규칙 추가 |
-| `wsc2026-role-change-rule` | EC2 IAM Role 변경 |
-| `wsc2026-ec2-terminate-rule` | EC2 인스턴스 종료 |
-| `wsc2026-ec2-type-change-rule` | EC2 인스턴스 타입 변경 |
-
-#### 5. CloudTrail
-
-EventBridge가 API 호출 이벤트를 감지할 수 있도록 CloudTrail을 구성합니다.
-
-- **Trail Name** : `wsc2026-event-trail`
-- **Management Events** : Read/Write
-
-#### 6. Lambda
-
-정책 위반을 감지하여 자동 복구 및 SNS 알림을 수행하는 Lambda 함수를 구성합니다. Lambda 함수에 대한 자세한 설명은 배포파일의 `lambda.md`를 참고하세요.
-
-- **Role Name** : `wsc2026-event-lambda-role`
-
-#### 7. SNS
-
-정책 위반 발생 시 알림 메시지를 발행하기 위한 SNS Topic을 구성합니다. Lambda 함수는 위반 감지 시 해당 Topic에 메시지를 Publish합니다.
-
-- **Topic Name** : `wsc2026-event-alert`
-
----
-
-## 4) MSK
+## 3) MSK
 
 ### 개요
 
@@ -273,7 +243,7 @@ MSK 클러스터와 Producer 서버를 위한 네트워크를 구성합니다.
 
 Producer 애플리케이션을 실행하는 EC2 인스턴스를 구성합니다. EC2는 Private 환경에 구성하며 MSK 클러스터와 통신할 수 있어야 합니다. EC2의 IAM 권한은 최소로 설정해야 합니다. 애플리케이션에 대한 자세한 설명은 배포파일의 `Application.md`를 참고하세요.
 
-- **Instance Name** : `wsc2026-sensor-producer`
+- **Instance Tag** : `Name=wsc2026-sensor-producer`
 - **Instance Type** : t3.small
 - **Role Name** : `wsc2026-msk-ec2-role`
 
@@ -292,22 +262,22 @@ MSK 토픽에서 메시지를 소비하여 처리하는 Lambda Consumer를 구�
 
 #### 6. DynamoDB
 
-Lambda Consumer가 처리한 센서 데이터를 저장하기 위한 DynamoDB 테이블을 구성합니다.
+Lambda Consumer가 처리한 센서 데이터를 저장하기 위한 DynamoDB 테이블을 구성합니다. DynamoDB에 `timestamp` Attribute가 저장될 때 `timestamp` 값은 ISO 8601 KST 형식(`YYYY-MM-DDTHH:mm:ss±HH:mm`)으로 저장될 수 있도록 합니다.
 
 - **Table Name** : `wsc2026-sensor-data`
 - **Key** : (PK: `sensorId`) (SK: `timestamp`)
 
 | Attribute | Type | Description |
 |---|---|---|
-| studentId | String | PK |
-| examDate | String | SK |
-| name | String | Student Name |
-| average | Number | Average Score |
-| grade | String | Grade (A~F) |
-| korean, english, math, science, social | Number | Score |
+| sensorId | String | PK |
+| timestamp | String | SK |
+| humidity | Number | |
+| location | String | |
+| status | String | |
+| temperature | String | |
 
 #### 7. S3
 
-오류 데이터를 저장하기 위한 S3 버킷을 구성합니다.
+오류 데이터를 저장하기 위한 S3 버킷을 구성합니다. S3 버킷을 위한 AccessPointAlias는 별도 설정하지 않습니다. `aws s3api head-bucket` 실행시 AccessPointAlias가 `false`로 출력 되어야합니다.
 
-- **Bucket Name** : `wsc2026-sensor-alert-bucket-<비번호>`
+- **Bucket Name** : `wsc2026-sensor-alert-bucket-<등번호>`

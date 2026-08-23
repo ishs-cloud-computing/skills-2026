@@ -2,22 +2,26 @@
 
 > 이 과제의 설계 이력. squash merge로 중간 커밋이 사라지므로 여기가 유일한 기록이다.
 > git이 담는 "무엇이 바뀌었나"는 적지 마라. git이 못 담는 "왜"만 적는다.
-> 모듈 기본 4개. 당일 최대 6개까지 늘 수 있다. 각 모듈은 독립적이다.
+> RC 판(2026-08-23)에서 구 3번 Cloud Event Handling 이 삭제돼 **모듈 3개**다. 당일 최대 6개까지
+> 늘 수 있다. 각 모듈은 독립적이다.
 
 ## 모듈 현황
 <!-- 덮어쓴다. 코드와 어긋난 칸은 고쳐 쓴다. -->
 
 | 모듈 | 이름 | 리전 | 미해결 |
 |------|------|------|--------|
-| 1 | workflow | ap-southeast-1 | 없음 |
-| 2 | analytics | ap-northeast-2 | 없음 (EC2 Role 리네임은 이슈 #133 으로 종결 — 정정 로그 참고) |
-| 3 | event | eu-west-1 | 없음 |
-| 4 | msk | ap-northeast-1 | iam(기본) 실배포 검증 2026-08-16. tls(`-var` 지정) 실배포 미검증. 당일 모드는 `select-auth-mode` 판정을 따른다 |
+| 1 | workflow | ap-southeast-1 | 없음. RC 로 채점 절차가 바뀌어 **채점 직전 버킷·테이블을 비운 상태**로 둔다 |
+| 2 | analytics | ap-northeast-2 | 없음 |
+| 3 | msk | ap-northeast-1 | iam(기본) 실배포 검증 2026-08-16. tls(`-var` 지정) 실배포 미검증. 당일 모드는 `select-auth-mode` 판정을 따른다. mark 3-3 의 `aws kafka list-topics` 는 실배포 미검증 |
+
+> **번호 매핑**: 아래 결정 로그의 `[module-4]` 는 전부 지금의 **module-3-msk**, `[module-3]` 은
+> 삭제된 event 모듈이다(git 이력 · 커밋 `6c9e827` 이전). 결정 로그는 append 전용이라 과거 태그를
+> 고치지 않는다.
 
 ## 실측 소요시간
 <!-- 감이 아니라 숫자로. 무엇을 미리 만들어둘지 판단 근거. -->
 
-### module-4 (2026-08-16 실 apply, `producer_auth_mode=iam`)
+### module-3(MSK, 당시 module-4) (2026-08-16 실 apply, `producer_auth_mode=iam`)
 
 - apply 전체: 50 리소스 / **35분 17초** (22:15:42 → 22:50:59)
 - `aws_msk_cluster`: **31분 40초** — 전체의 90%. 나머지는 NAT GW 1분 55초,
@@ -37,6 +41,44 @@
 ---
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
+
+### 2026-08-23 [재배부] Release Candidate 판 배부 — 3번 Cloud Event Handling 과제 삭제
+- 출처: 배부된 `day2 release candidate` 문제지(6p)·채점기준표(8p). PDF CreationDate 는 양쪽 다
+  `2026-08-23`(macOS Quartz 재인쇄), 구판은 `2026-08-21` 신판이었다
+- **이 저장소의 `task.pdf`·`mark.pdf` 를 RC 본으로 교체했다.** 구판 blob:
+  `task 0f4c464b12b2f2101d9f5627ad4be4903f06014f`(108,698B),
+  `mark b9de077ec2b85ee0facad04ce8f6bc3598a02048`(96,980B). 2026-08-21 재배부와 같은 방침이다
+- 대조 방법: `pdftotext` 계열을 쓰지 않았다. PyMuPDF 로 **글자 색과 얇은 가로 그래픽 좌표**를
+  span bbox 와 대조해 변경분을 뽑고, 그 위에 6+8 페이지를 **PNG 로 렌더해 육안 확인**했다
+  (작업규칙 11). 변경분은 전부 파란색 `#0000ff`, 배점 2건만 빨간색 `#ff0000`, **취소선은 없다**
+- 문제지 유의사항 12번과 채점지 유의사항이 "3번 Cloud Event Handling 삭제 / 4번 MSK 가 3번 채점
+  항목" 을 명시한다. 총 배점 30 → **22.5** (7.5 × 3)
+
+| # | 문서 | 변경 | 판정 |
+|---|---|---|---|
+| **T2/M1** | 양쪽 | 3번 Cloud Event Handling **삭제**, MSK 가 3번 | **구조 변경** — `module-3-event/`·`provided/module3/`·구 `mark2-3.sh` 삭제, `module-4-msk` → `module-3-msk`, `mark2-4.sh` → `mark2-3.sh` |
+| T1 | 양쪽 | `비번호` → **`등번호`** | **수정완료** — 전사본·런북·변수 설명·mark 프롬프트 |
+| **T5/T7/M4** | 문제지 m1 §1·§3, 채점지 1-0 | 선수는 **종료 전 버킷·테이블 데이터 전부 삭제**. 미삭제면 1-1·1-5·1-6 오답. 채점자가 `input/test.csv` 를 올리고 60초 뒤 확인 | **구현·런북 변경** — 아래 결정 로그 `[module-1]` 항목 |
+| **T8** | 문제지 m1 §6 신설 | Workflow 플로우도 + "자동 실행은 트리거 Lambda", 입력 `{"key": "input/test.csv"}` | **구현 정합** — ASL 이 플로우도와 1:1이 됐다(같은 결정 로그) |
+| T4 | 문제지 m1 개요 | 업로드부터 **60초 이내** 완료 | **영향없음** — 실측 수초. 런북 리허설에 `sleep 60` 만 넣었다 |
+| T6 | 문제지 m1 §2 | Python **3.12** + `S3_BUCKET`·`DDB_TABLE` 환경변수 표 명문화 | **영향없음** — `variables.tf: lambda_runtime`·`lambda.tf` 가 이미 그 값 |
+| T7b | 문제지 m1 §3 | "언급된 PK·SK 외 다른 KeyScheme 구성 금지" | **영향없음** — GSI/LSI 없음 |
+| T9~T12 | 문제지 m2 | `Private Subnet **A**`, `/health` API 서빙, **TG Port 5000**, Kinesis 출력 샘플, **노트북 환경 버전 `ZEPPELIN-FLINK-3_0`** | **영향없음** — 전부 현행 구현값. 구판에서 "task.md 는 1.19 라는데 mark 는 ZEPPELIN…" 이라 달아둔 변수 주석만 걷어냈다 |
+| T13 | 문제지 m3 §4 | `Instance Name` → **`Instance Tag : Name=...`** | **영향없음** — 이미 Name 태그 |
+| **T14** | 문제지 m3 §6 | 속성 표가 module-1 복붙 오류에서 **정정**됨 → `humidity` **Number**, `temperature`·`location`·`status`·`sensorId`·`timestamp` String | **수정완료** — `sensor_consumer/index.py` 의 humidity 를 `Decimal` 로. temperature 는 채점 3-5 가 `.S` 로 조회하므로 String 유지 |
+| T15 | 문제지 m3 §7 | AccessPointAlias 미설정 / head-bucket 이 `false` | **영향없음** — 일반 버킷이라 자동 충족 |
+| M5 | 채점지 1-3 | 기대값 `…bucket-103` → **`<등번호>`** | **해소** — NAMING-AUDIT N3 이 이걸로 닫힌다 |
+| M6 | 채점지 2-4 | `"price": "<number>"` → **`"price": <number>`** (quantity 동일) | **수정완료(전사본만)** — provided `app.py` 가 이미 숫자로 낸다 |
+| **M7** | 채점지 3-3 | `aws kafka list-topics` **검사 추가** — 기대값 alert `2,1` / raw `2,3` | **수정완료(전사본·스크립트)** — 구현은 이미 그 파티션/RF. 아래 별도 항목 |
+| M8 | 채점지 3-5·3-6 | "Value 는 달라도 **Key 는 모두 같아야**", 3-6 은 `+09:00` 표기 강제 | **영향없음** — 이미 충족 |
+| M9 | 채점지 3-0 | `BUCKET_NAME="wsc2026-student-score-bucket-…"` 이 여전히 module-1 버킷명 | **미수정 원문 오류** — 기대 출력은 `wsc2026-sensor-alert-bucket-<등번호>` 이고 `mark2-3.sh` 도 후자를 쓴다. 질의 마감(2026-08-13) 경과로 게시판 정정 불가 |
+
+- **`aws kafka list-topics` 는 실재하는 API 다.** MSK 컨트롤플레인의 `ListTopics`
+  (`GET /v1/clusters/{clusterArn}/topics`, 응답 `Topics[].{TopicName,ReplicationFactor,PartitionCount}`)
+  를 botocore 1.43 서비스 모델에서 확인했다. 토픽을 producer user_data 의 `kafka-topics.sh` 로
+  만들어도 클러스터 메타데이터라 그대로 조회된다 — 토픽 생성 방식은 바꾸지 않았다.
+  다만 **이 API 자체는 실배포로 확인하지 못했다**(모듈 현황 미해결 칸)
+- 채점지 원문의 `—query`·`grep –A2`(em/en dash)는 조판 아티팩트로 보고 전사본에선 ASCII 로 적었다
 
 ### 2026-08-23 [기록] 원문 오류 3건 — 질의 마감(2026-08-13) 경과로 게시판 정정 불가, 구현 영향 없음
 - task.md "4) MSK" §6 DynamoDB 속성 표가 module-1 내용(studentId/examDate/korean…) 복붙 오류.
@@ -92,6 +134,39 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-23 [공통] RC 판 반영 — module-3-event 삭제, MSK 를 module-3 으로 재번호
+- 맥락: RC 문제지 유의사항 12번이 3번 과제를 삭제하고 채점지가 "4번 MSK 가 3번 채점항목" 을
+  명시했다. 저장소가 구 번호를 유지하면 대회 당일 과제지 "3)" 과 디렉터리 `module-4-msk` 가
+  어긋나 매핑을 사람이 매번 환산해야 한다 — 4시간짜리 경기에서 그 환산이 사고를 만든다
+- 채택: `module-3-event/`·`provided/module3/`·구 `mark2-3.sh` 를 지우고 `module-4-msk` →
+  `module-3-msk`, `mark2-4.sh` → `mark2-3.sh` 로 옮겼다. `.tf` 주석·런북·루트 문서의 채점 항목
+  번호(`4-x` → `3-x`, `2-3-A/B` → `2-3/2-4` …)도 채점지 세부표와 1:1로 맞췄다. 삭제분은 git
+  이력에 남으므로 3번 과제가 되살아나면 되돌릴 수 있다
+- 부수: `provided/` 디렉터리 이름은 **module4 그대로** 뒀다 — 배부 zip 이 정하는 이름이고 아직
+  재배부되지 않았다. 대신 `module-3-msk/terraform/variables.tf` 에 `provided_dir` 변수를 신설해
+  당일 zip 이 재번호되면 tfvars 한 줄로 흡수한다(작업규칙 5)
+- 기각: 디렉터리를 그대로 두고 문서로만 안내 — 이름이 곧 색인인데 색인이 틀린 채로 남는다.
+  `_removed/` 로 옮겨 보관 — 배포 대상에서 빠졌다는 걸 눈으로 확인시켜 주는 대신, 당일 착오
+  배포 위험이 남는다(git 이력으로 충분하다고 봤다)
+
+### 2026-08-23 [module-1] 워크플로우의 input 삭제 단계를 없앤다 — 채점 클렌징 요구와의 충돌
+- 맥락: RC 는 채점 시작 시 버킷이 **비어 있음을 먼저 확인**하고(아니면 1-1·1-5·1-6 전부 오답)
+  채점자가 `input/test.csv` 를 올린다. 그런데 1-1 은 워크플로우가 끝난 뒤에도 `PRE input/` 을
+  요구한다. 기존 구현은 `MoveToProcessed` → `DeleteInputProcessed` 로 input 객체를 지우고
+  0바이트 `input/` 마커로 PRE 를 유지했는데, 그 마커가 클렌징 확인에서 잔존 데이터로 잡히면
+  세 항목이 한꺼번에 날아간다. 마커를 지우면 이번엔 1-1 의 `PRE input/` 이 사라진다
+- 채택: **삭제 단계를 없앤다.** `DeleteInputProcessed`·`DeleteInputError` 상태를 걷어내고
+  `MoveToProcessed` 는 `End`, `MoveToError` 는 `WorkflowFailed` 로 바로 간다. 채점자가 올린
+  `input/test.csv` 가 남아 `PRE input/` 이 뜨므로 마커(`aws_s3_object.input_marker`)를 지워
+  버킷을 진짜로 비울 수 있다. sfn 역할의 `s3:DeleteObject` 도 함께 뺐다(최소권한)
+- 부수 이득: 상태 구성이 RC 문제지 §6 플로우도(`[MoveToProcessed] → [End]`,
+  `[MoveToError] → [Fail]`)와 **정확히 1:1**이 됐다. 육안 채점 여지도 같이 닫힌다
+- 기각: (1) 마커 유지 + 런북에 "마커는 폴더 표시라 데이터가 아니다" 주석 — 판정 주체가
+  채점자라 우리 주석으로 못 막는다. (2) 마커 유지 + 삭제 제거 이중 방어 — 버킷이 완전히 비지
+  않아 클렌징 확인에서 지적받을 여지가 가장 크다
+- 대가: `Move` 라는 상태 이름과 달리 원본이 input 에 남는다. 채점은 `processed/`·`error/` 목록만
+  보므로 영향 없고, 런북 함정 절에 이유를 적었다
 
 ### 2026-08-23 [공통] bastion 을 module-2·4 에서 제거 — task-2 전체 "bastion 없음" 으로 통일
 - 맥락: bastion 판정이 모듈별로 정반대였다(1·3 없음 / 2·4 있음). mark2-1~4.sh 는 전부

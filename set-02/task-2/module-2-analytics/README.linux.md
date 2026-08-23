@@ -26,14 +26,14 @@ aws ec2 describe-subnets --subnet-ids $(aws ec2 describe-instances --instance-id
 # 2-2 리스너 80 HTTP / TG wsc2026-analytics-tg 5000
 aws elbv2 describe-listeners --load-balancer-arn $(aws elbv2 describe-load-balancers --names wsc2026-analytics-alb --query "LoadBalancers[0].LoadBalancerArn" --output text) --query "Listeners[].[Port,Protocol]" --output text
 aws elbv2 describe-target-groups --names wsc2026-analytics-tg --query "TargetGroups[].[TargetGroupName,Port]" --output text
-# 2-3-A 스트림 ACTIVE ON_DEMAND
+# 2-3 스트림 ACTIVE ON_DEMAND
 aws kinesis describe-stream-summary --stream-name wsc2026-order-stream --query "StreamDescriptionSummary.[StreamName,StreamStatus,StreamModeDetails.StreamMode]" --output text
-# 2-3-B / 2-5 앱 동작
+# 2-4 / 2-6 앱 동작
 curl -s -X POST http://$ALB_DNS/order | jq .
 curl -s http://$ALB_DNS/health          # {"status":"healthy"}
-# 2-4 Flink READY ZEPPELIN-FLINK-3_0
+# 2-5 Flink READY ZEPPELIN-FLINK-3_0
 aws kinesisanalyticsv2 describe-application --application-name wsc2026-analytics-flink --query "ApplicationDetail.[ApplicationName,ApplicationStatus,RuntimeEnvironment]" --output text
-# 2-6 systemd (active / enabled)
+# 2-7 systemd (active / enabled)
 CMD_ID=$(aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["systemctl is-active app && systemctl is-enabled app"]}' --query "Command.CommandId" --output text); sleep 3; aws ssm get-command-invocation --command-id $CMD_ID --instance-id $EC2_ID --query "StandardOutputContent" --output text
 ```
 

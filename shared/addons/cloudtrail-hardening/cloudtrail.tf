@@ -4,7 +4,7 @@
 # ---------------------------------------------------------------------------
 # CloudTrail 하드닝 부착 스니펫 — 로그 버킷+정책 · 파일 무결성 검증 · 멀티리전 · management
 # 이벤트 선택 · (선택) CloudWatch Logs 연동 · (선택) CMK(SSE-KMS)
-# 원본: set-02 task-2 module-3-event cloudtrail.tf, set-08 task-2 module-3-event-handling cloudtrail.tf
+# 원본: set-02 task-2 module-3-event(RC 판에서 삭제 — git 이력) cloudtrail.tf, set-08 task-2 module-3-event-handling cloudtrail.tf
 # ---------------------------------------------------------------------------
 
 data "aws_caller_identity" "addon_trail" {}

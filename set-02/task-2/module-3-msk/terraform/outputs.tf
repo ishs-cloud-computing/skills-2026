@@ -1,5 +1,5 @@
 output "cluster_arn" {
-  description = "MSK 클러스터 ARN (mark 4-3/4-4)"
+  description = "MSK 클러스터 ARN (mark 3-3/3-4)"
   value       = aws_msk_cluster.this.arn
 }
 
@@ -14,13 +14,13 @@ output "bootstrap_brokers_tls" {
 }
 
 output "alert_bucket" {
-  description = "wsc2026-sensor-alert-bucket-<비번호> (mark 4-1)"
+  description = "wsc2026-sensor-alert-bucket-<등번호> (mark 3-1)"
   value       = aws_s3_bucket.alert.id
 }
 
-# 런북이 버킷 이름을 직접 조립하는 자리가 여럿이라, 비번호를 사람이 다시 입력하지 않게 내보낸다
+# 런북이 버킷 이름을 직접 조립하는 자리가 여럿이라, 등번호를 사람이 다시 입력하지 않게 내보낸다
 output "player_number" {
-  description = "비번호 (런북 $NUM — 버킷 이름 접미사)"
+  description = "등번호 (런북 $NUM — 버킷 이름 접미사)"
   value       = var.player_number
 }
 

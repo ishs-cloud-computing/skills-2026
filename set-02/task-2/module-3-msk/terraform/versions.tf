@@ -13,7 +13,7 @@ terraform {
   }
 }
 
-# 모듈 4는 ap-northeast-1 리전 사용 (과제지 4) MSK 개요)
+# 모듈 3(MSK)은 ap-northeast-1 리전 사용 (과제지 3) MSK 개요)
 provider "aws" {
   region = var.region
 

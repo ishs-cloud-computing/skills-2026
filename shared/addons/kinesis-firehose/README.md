@@ -144,5 +144,5 @@ CloudFormation 스택으로 래핑한다 — `set-02/task-2/module-2-analytics/t
 
 - `set-02/task-2/module-2-analytics/terraform/kinesis.tf` — ON_DEMAND 스트림
 - `set-02/task-2/module-2-analytics/terraform/flink.tf` — Managed Flink Studio (CFN 래핑)
-- `set-02/task-2/module-4-msk/terraform/lambda.tf` — Lambda ESM 패턴
+- `set-02/task-2/module-3-msk/terraform/lambda.tf` — Lambda ESM 패턴
 - Firehose 실전 구현: 없음

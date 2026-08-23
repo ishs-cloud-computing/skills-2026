@@ -45,14 +45,14 @@ aws ec2 describe-subnets --subnet-ids $SUBNET_ID --query "Subnets[0].Tags[?Key==
 $ALB_ARN = aws elbv2 describe-load-balancers --names wsc2026-analytics-alb --query "LoadBalancers[0].LoadBalancerArn" --output text
 aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --query "Listeners[].[Port,Protocol]" --output text
 aws elbv2 describe-target-groups --names wsc2026-analytics-tg --query "TargetGroups[].[TargetGroupName,Port]" --output text
-# 2-3-A 스트림 ACTIVE ON_DEMAND
+# 2-3 스트림 ACTIVE ON_DEMAND
 aws kinesis describe-stream-summary --stream-name wsc2026-order-stream --query "StreamDescriptionSummary.[StreamName,StreamStatus,StreamModeDetails.StreamMode]" --output text
-# 2-3-B / 2-5 앱 동작
+# 2-4 / 2-6 앱 동작
 Invoke-RestMethod -Method Post -Uri "http://$ALB_DNS/order"
 Invoke-RestMethod -Uri "http://$ALB_DNS/health"    # status : healthy
-# 2-4 Flink READY ZEPPELIN-FLINK-3_0
+# 2-5 Flink READY ZEPPELIN-FLINK-3_0
 aws kinesisanalyticsv2 describe-application --application-name wsc2026-analytics-flink --query "ApplicationDetail.[ApplicationName,ApplicationStatus,RuntimeEnvironment]" --output text
-# 2-6 systemd (active / enabled)
+# 2-7 systemd (active / enabled)
 $CMD_ID = aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["systemctl is-active app && systemctl is-enabled app"]}' --query "Command.CommandId" --output text
 Start-Sleep 3
 aws ssm get-command-invocation --command-id $CMD_ID --instance-id $EC2_ID --query "StandardOutputContent" --output text
@@ -174,11 +174,11 @@ terraform destroy
 |---|---|---|
 | 2-1 | EC2가 analytics-priv-a (서브넷 Name 태그) | `ec2.tf` + `vpc.tf` (서브넷 Name 태그 정확 일치) |
 | 2-2 | 리스너 80 HTTP, TG wsc2026-analytics-tg 5000 | `alb.tf` |
-| 2-3-A | wsc2026-order-stream ACTIVE ON_DEMAND | `kinesis.tf` |
-| 2-3-B | POST /order → 주문 JSON (Kinesis 전송) | `userdata.sh.tpl` 앱 배포 + `iam.tf` kinesis:PutRecord |
-| 2-4 | wsc2026-analytics-flink READY ZEPPELIN-FLINK-3_0 | `flink.tf` (CFN 스택) |
-| 2-5 | /health → {"status":"healthy"} | `userdata.sh.tpl` + TG 헬스체크 /health |
-| 2-6 | systemd `app` active + enabled (SSM) | `userdata.sh.tpl` 유닛 + `iam.tf` SSM 정책 |
+| 2-3 | wsc2026-order-stream ACTIVE ON_DEMAND | `kinesis.tf` |
+| 2-4 | POST /order → 주문 JSON (Kinesis 전송) | `userdata.sh.tpl` 앱 배포 + `iam.tf` kinesis:PutRecord |
+| 2-5 | wsc2026-analytics-flink READY ZEPPELIN-FLINK-3_0 | `flink.tf` (CFN 스택) |
+| 2-6 | /health → {"status":"healthy"} | `userdata.sh.tpl` + TG 헬스체크 /health |
+| 2-7 | systemd `app` active + enabled (SSM) | `userdata.sh.tpl` 유닛 + `iam.tf` SSM 정책 |
 | VPC | 표의 이름/CIDR/RTB 정확 일치 | `vpc.tf` (`variables.tf` subnets·rtb 맵) |
 | IAM | 최소권한 | `iam.tf` (SSM+PutRecord), `flink.tf` (Kinesis 읽기+Glue) |
 

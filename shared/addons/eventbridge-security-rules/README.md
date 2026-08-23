@@ -396,7 +396,7 @@ aws logs tail (terraform output -raw evb_lambda_log_group) --since 5m    # lambd
 
 ## 실전 구현 (참고용)
 
-- set-02 task-2 module-3-event `terraform/eventbridge.tf`(룰 6종 + Lambda 타깃·permission) · `terraform/config.tf`(recorder + `INCOMING_SSH_DISABLED`·`REQUIRED_TAGS`) · `terraform/lambda/tag_alert/index.py`
+- set-02 task-2 module-3-event(RC 판에서 삭제 — git 이력) `terraform/eventbridge.tf`(룰 6종 + Lambda 타깃·permission) · `terraform/config.tf`(recorder + `INCOMING_SSH_DISABLED`·`REQUIRED_TAGS`) · `terraform/lambda/tag_alert/index.py`
 - set-08 task-2 module-3-event-handling `terraform/eventbridge.tf`(AuthorizeSecurityGroupIngress → Lambda) · `terraform/sns.tf`
 
 ---
