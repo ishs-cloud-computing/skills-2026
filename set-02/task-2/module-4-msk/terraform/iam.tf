@@ -45,10 +45,18 @@ data "aws_iam_policy_document" "producer" {
     resources = [aws_msk_cluster.this.arn]
   }
 
+  # 토픽 생성은 userdata 가 raw·alert 둘 다 하지만 발행(WriteData)은 raw 뿐이다
+  # (alert 발행은 sensor_consumer Lambda 의 몫) — 과제지 "EC2 IAM 권한 최소" 대응.
   statement {
-    sid       = "ManageAndProduceTopics"
-    actions   = ["kafka-cluster:CreateTopic", "kafka-cluster:DescribeTopic", "kafka-cluster:WriteData"]
+    sid       = "ManageTopics"
+    actions   = ["kafka-cluster:CreateTopic", "kafka-cluster:DescribeTopic"]
     resources = [local.raw_topic_arn, local.alert_topic_arn]
+  }
+
+  statement {
+    sid       = "ProduceRawTopic"
+    actions   = ["kafka-cluster:WriteData"]
+    resources = [local.raw_topic_arn]
   }
 
   statement {
@@ -87,7 +95,14 @@ data "aws_iam_policy_document" "lambda" {
     sid = "ConnectCluster"
     # WriteDataIdempotently: kafka-python 3.x KafkaProducer 는 기본이 멱등 프로듀서라
     # alert 토픽 발행 시 InitProducerId(클러스터 레벨)를 호출한다 — 없으면 Error 31.
-    actions   = ["kafka-cluster:Connect", "kafka-cluster:DescribeCluster", "kafka-cluster:WriteDataIdempotently"]
+    # DescribeClusterDynamicConfiguration: IAM 인증 클러스터의 Lambda ESM 실행 역할
+    # 필수 목록(AWS Lambda MSK 튜토리얼의 kafka-cluster 6종)에 포함된다.
+    actions = [
+      "kafka-cluster:Connect",
+      "kafka-cluster:DescribeCluster",
+      "kafka-cluster:DescribeClusterDynamicConfiguration",
+      "kafka-cluster:WriteDataIdempotently",
+    ]
     resources = [aws_msk_cluster.this.arn]
   }
 

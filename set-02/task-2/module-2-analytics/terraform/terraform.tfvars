@@ -1,3 +1,2 @@
-# 대회 당일 비번호만 바꿔서 apply
-player_number = "0122"
-region        = "ap-northeast-2"
+# 이 모듈은 비번호를 쓰는 리소스 이름이 없다 — 리전만 주입
+region = "ap-northeast-2"

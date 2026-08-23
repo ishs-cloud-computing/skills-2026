@@ -10,7 +10,7 @@ module-3-event/
 └── terraform/
     ├── vpc.tf ec2.tf sns.tf iam.tf
     ├── cloudtrail.tf                # 트레일 + CloudTrail·Config 공용 로그 버킷
-    ├── lambda.tf eventbridge.tf     # 함수 6개 + 룰 6개 (task ∪ mark 합집합)
+    ├── lambda.tf eventbridge.tf     # 함수 6개 + 룰 7개 (task ∪ mark 합집합 + sg 스위퍼)
     ├── config.tf                    # 레코더 + sg-ssh / required-tags 룰
     └── lambda/<function>/index.py   # provided 스켈레톤 TODO 완성본
 
@@ -103,10 +103,10 @@ terraform destroy
 
 ## 설계 근거 · 함정
 
-- **task.md와 mark2-3.sh의 리소스가 불일치 → 합집합 구현.** task.md/lambda.md는 sg/role/terminate/type 4개 함수·4개 룰을, 채점 스크립트는 stop/terminate/sg/tag 4개 함수·stop/terminate 룰·Config 룰 2개를 요구한다. 채점 스크립트가 1순위(작업규칙 4)지만 task.md 항목은 수동 채점 가능성이 있어 **함수 6개·룰 6개** 전부 만든다.
-- **stop 복구는 `stopping` 상태에서 트리거** — mark 3-4는 stop 후 (3-1~3-3 수행 + sleep 30) 시점에 `running`을 기대한다. `stopped`를 기다렸다 시작하면 늦다. 네이티브 State-change 이벤트(수 초)로 받고 waiter(5초 간격)로 stopped 직후 start.
-- **SG 복구는 CloudTrail→EventBridge 경로라 전달 지연(보통 수십 초~1분)이 있다.** SG 규칙 변경엔 네이티브 이벤트가 없다. 채점 첫 시도에서 SG Inbound가 1이면 잠시 후 3-4 블록만 재실행. **apply 직후엔 트레일 활성화까지 몇 분 걸리므로 배포 직후 바로 테스트하지 말 것.**
-- **type-remediation 시연 전 `wsc2026-ec2-stop-rule` 비활성화 필수** — 타입 원복 절차(stop→modify→start)의 stop이 stop-remediation과 레이스해 modify가 `IncorrectInstanceState`로 실패한다. 시연 후 재활성화.
+- **task.md와 mark2-3.sh의 리소스가 불일치 → 합집합 구현.** task.md/lambda.md는 sg/role/terminate/type 4개 함수·4개 룰을, 채점 스크립트는 stop/terminate/sg/tag 4개 함수·stop/terminate 룰·Config 룰 2개를 요구한다. 채점 스크립트가 1순위(작업규칙 4)지만 task.md 항목은 수동 채점 가능성이 있어 **함수 6개·룰 6개(+ 아래 sg 스위퍼 1개)** 전부 만든다.
+- **stop 복구는 `stopping` 상태에서 트리거** — mark 3-4는 stop 후 (3-1~3-3 수행 + sleep 60) 시점에 `running`을 기대한다. `stopped`를 기다렸다 시작하면 늦다. 네이티브 State-change 이벤트(수 초)로 받고 waiter(5초 간격)로 stopped 직후 start.
+- **SG 복구는 CloudTrail→EventBridge 경로라 전달 지연(보통 수십 초~1분)이 있다.** SG 규칙 변경엔 네이티브 이벤트가 없다. 그래서 `wsc2026-sg-sweep-schedule` 룰이 1분 주기로 `sg_remediation` 을 스위퍼로 호출한다 — 기준선이 인바운드 0 이라 남은 규칙 전부 제거가 곧 복구이고, 이벤트를 놓쳐도 채점 sleep 60 안에 0 이 된다(스위퍼 경유 호출은 실제로 걷어낸 게 있을 때만 SNS 알림). **apply 직후엔 트레일 활성화까지 몇 분 걸리므로 배포 직후 바로 테스트하지 말 것.**
+- **type↔stop 레이스는 코드 가드로 차단** — type-remediation 의 원복 절차(stop→modify→start)가 유발하는 stopping 이벤트에 stop-remediation 이 깨어나도, 현재 타입이 기대값(`INSTANCE_TYPE`)과 다르면 start 를 걸지 않고 type-remediation 에 맡긴다(`IncorrectInstanceState` 레이스 차단). 채점자가 개입 없이 타입 테스트를 수행해도 자동 원복이 안전하게 끝난다. 단 **사람이 손으로 stop→modify 를 치는 수동 시연은 여전히 stop rule 을 먼저 끈다** — stopping 시점엔 타입이 아직 원래 값이라 가드를 통과해, 사람 손보다 빠른 waiter 가 먼저 재시작해 버린다(README.linux.md 시연 절차 참고).
 - **무한 루프 차단 2중 장치**: type-change 룰은 `anything-but: t3.micro`로 원복 이벤트를 제외하고, 람다도 값 비교로 스킵. role-remediation은 현재 프로파일이 원본이면 즉시 return.
 - **Config 스코프는 EC2 Instance·SecurityGroup만 기록** — 스코프를 넓히면 태그 없는 관리형 리소스가 3-5(NON_COMPLIANT=None)를 깨뜨린다. required-tags는 `Project` 키를 검사하고 provider `default_tags`가 인스턴스에 항상 부착한다. 첫 평가는 몇 분 걸리므로 필요 시 `start-config-rules-evaluation`.
 - **인스턴스 프로파일 이름 = 역할 이름(wsc2026-event-ec2-role)** — role-remediation이 `ROLE_NAME`을 프로파일 Name으로 사용해 원복한다. 프로파일 이름에 `-profile` 접미사를 붙이면 복구가 깨진다.

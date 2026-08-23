@@ -11,7 +11,8 @@ locals {
     role_remediation     = { INSTANCE_ID = aws_instance.event.id, ROLE_NAME = var.ec2_role_name }
     ec2_terminate_alert  = {}
     ec2_type_remediation = { INSTANCE_ID = aws_instance.event.id, INSTANCE_TYPE = var.instance_type }
-    ec2_stop_remediation = { INSTANCE_ID = aws_instance.event.id }
+    # INSTANCE_TYPE: 타입이 변조된 채 stopping 이면 start 를 type remediation 에 맡기는 가드용
+    ec2_stop_remediation = { INSTANCE_ID = aws_instance.event.id, INSTANCE_TYPE = var.instance_type }
     tag_alert            = {}
   }
 

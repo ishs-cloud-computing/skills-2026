@@ -4,7 +4,7 @@ output "cluster_arn" {
 }
 
 output "bootstrap_brokers_sasl_iam" {
-  description = "SASL/IAM 부트스트랩 브로커 (bastion kafka CLI 디버깅용)"
+  description = "SASL/IAM 부트스트랩 브로커 (producer EC2 kafka CLI 디버깅용 — SSM 접속)"
   value       = aws_msk_cluster.this.bootstrap_brokers_sasl_iam
 }
 
@@ -27,17 +27,6 @@ output "player_number" {
 output "producer_instance_id" {
   description = "wsc2026-sensor-producer 인스턴스 ID (SSM 접속용)"
   value       = aws_instance.producer.id
-}
-
-output "bastion_public_ip" {
-  description = "Bastion 고정 IP (SSH: ec2-user + 패스워드)"
-  value       = aws_eip.bastion.public_ip
-}
-
-# 아웃바운드 22 가 막힌 망에서 bastion 에 붙는 경로가 SSM 뿐이라 인스턴스 ID 가 필요하다
-output "bastion_instance_id" {
-  description = "Bastion 인스턴스 ID (SSM send-command·start-session 용)"
-  value       = aws_instance.bastion.id
 }
 
 output "sns_topic_arn" {

@@ -40,7 +40,8 @@ def validate_row(row):
 
 
 def save_error(bucket, row, error_reason, timestamp):
-    student_id = (row.get("studentId") or "unknown").strip()
+    # 공백뿐인 studentId 도 unknown 으로 — strip 을 먼저 해야 "error_..._.json" 이 안 생긴다
+    student_id = (row.get("studentId") or "").strip() or "unknown"
     error_key = f"error/error_{timestamp}_{student_id}.json"
 
     body = {
@@ -75,7 +76,8 @@ def save_student(table, row):
     # 평균은 Decimal 나눗셈으로 계산: float 는 96.60000000000001 이 되어
     # mark 1-5-A(average.N == 96.6) 오답이고, boto3 는 float 저장 자체를 거부한다
     scores = {field: int(row[field].strip()) for field in SCORE_FIELDS}
-    average = Decimal(str(sum(scores.values()))) / Decimal("5")
+    # 분모는 과목 수와 이중 관리하지 않는다 — 30% 변동으로 과목이 바뀌면 SCORE_FIELDS 만 고친다
+    average = Decimal(str(sum(scores.values()))) / Decimal(len(SCORE_FIELDS))
 
     item = {
         "studentId": row["studentId"].strip(),

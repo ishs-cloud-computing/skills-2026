@@ -3,11 +3,6 @@ output "alb_dns" {
   value       = aws_lb.analytics.dns_name
 }
 
-output "bastion_public_ip" {
-  description = "Bastion 접속 IP (ec2-user / SSH 패스워드)"
-  value       = aws_eip.bastion.public_ip
-}
-
 output "app_instance_id" {
   description = "애플리케이션 EC2 인스턴스 ID (SSM 세션용)"
   value       = aws_instance.app.id

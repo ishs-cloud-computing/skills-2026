@@ -231,18 +231,3 @@ variable "sns_topic_name" {
   type        = string
   default     = "wsc2026-sensor-alert-topic"
 }
-
-# ----- Bastion (유의사항 10: 채점용 Bastion — kafka 디버깅 겸용) -----
-
-variable "bastion_instance_type" {
-  description = "Bastion 인스턴스 타입"
-  type        = string
-  default     = "t3.micro"
-}
-
-variable "ssh_password" {
-  description = "Bastion ec2-user SSH 패스워드"
-  type        = string
-  default     = "Skill53##"
-  sensitive   = true
-}

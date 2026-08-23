@@ -89,6 +89,16 @@ resource "aws_cloudwatch_event_rule" "ec2_stop" {
   })
 }
 
+# mark 3-4 는 인바운드 추가 후 sleep 60 시점에 한 번만 확인하는데, sg_change 는
+# CloudTrail 경유라 이벤트 전달이 수십 초~수 분 늦을 수 있다. 그 단일 확인 윈도를
+# 놓치지 않도록 1분 주기로 sg_remediation 을 스위퍼로 호출한다 — 이 SG 의 기준선이
+# 인바운드 0 이라 남은 규칙 전부 제거가 곧 원상복구다. (이름 비채점)
+resource "aws_cloudwatch_event_rule" "sg_sweep" {
+  name                = var.rule_names.sg_sweep
+  description         = "Periodic sweep - keep event SG inbound at baseline 0"
+  schedule_expression = "rate(1 minute)"
+}
+
 resource "aws_cloudwatch_event_rule" "tag_compliance" {
   name        = var.rule_names.tag_compliance
   description = "Config required-tags rule NON_COMPLIANT"
@@ -115,6 +125,7 @@ locals {
     ec2_type_change = "ec2_type_remediation"
     ec2_stop        = "ec2_stop_remediation"
     tag_compliance  = "tag_alert"
+    sg_sweep        = "sg_remediation"
   }
 
   event_rules = {
@@ -124,6 +135,7 @@ locals {
     ec2_type_change = aws_cloudwatch_event_rule.ec2_type_change
     ec2_stop        = aws_cloudwatch_event_rule.ec2_stop
     tag_compliance  = aws_cloudwatch_event_rule.tag_compliance
+    sg_sweep        = aws_cloudwatch_event_rule.sg_sweep
   }
 }
 

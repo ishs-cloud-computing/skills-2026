@@ -10,8 +10,7 @@ module-2-analytics/
 ├── terraform/
 │   ├── vpc.tf security.tf iam.tf
 │   ├── ec2.tf userdata.sh.tpl        # 앱 배포 + systemd 유닛 'app'
-│   ├── alb.tf kinesis.tf flink.tf    # flink = Glue DB + 역할 + CFN 스택(Studio)
-│   └── bastion.tf
+│   └── alb.tf kinesis.tf flink.tf    # flink = Glue DB + 역할 + CFN 스택(Studio)
 └── images/                           # 런북 스크린샷 (무손실 WebP)
 
 # 제공 원본: task-2/provided/module2/ (수정 금지)
@@ -22,7 +21,7 @@ module-2-analytics/
 
 ### 1) [본 PC·PowerShell] 배포
 
-배부물 `app.py`·`requirements.txt` 를 `..\..\provided\module2\` 에 먼저 놓는다 — `ec2.tf` 가 `file()` 로 직접 읽으므로 없으면 plan 단계에서 실패한다. 그다음 `terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼 뒤:
+배부물 `app.py`·`requirements.txt` 를 `..\..\provided\module2\` 에 먼저 놓는다 — `ec2.tf` 가 `file()` 로 직접 읽으므로 없으면 plan 단계에서 실패한다. 그다음:
 
 ```powershell
 cd terraform
@@ -71,10 +70,10 @@ Managed Apache Flink → Studio → `wsc2026-analytics-flink` → **실행** (RE
 1..30 | ForEach-Object { Invoke-RestMethod -Method Post -Uri "http://$ALB_DNS/orders/generate" | Out-Null }
 ```
 
-bastion 에서 넣어도 된다 (`$ALB_DNS` 는 본 PC 세션 변수라 bastion 에는 없다 — 먼저 값을 넣는다):
+CloudShell 에서 넣어도 된다 (ALB 가 퍼블릭이라 어디서든 닿는다 — `$ALB_DNS` 는 본 PC 세션 변수이므로 먼저 값을 넣는다):
 
 ```bash
-ALB_DNS=<ALB DNS>   # 본 PC에서 terraform output -raw alb_dns_name 값
+ALB_DNS=<ALB DNS>   # 본 PC에서 terraform output -raw alb_dns 값
 for i in $(seq 1 30); do curl -s -X POST http://$ALB_DNS/orders/generate > /dev/null; done
 ```
 

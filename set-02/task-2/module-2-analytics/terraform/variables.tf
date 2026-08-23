@@ -4,12 +4,6 @@ variable "region" {
   default     = "ap-northeast-2"
 }
 
-variable "player_number" {
-  description = "비번호 (이 모듈의 채점 이름에는 쓰이지 않지만 태깅·식별용)"
-  type        = string
-  default     = "103"
-}
-
 # ----- Network (과제지 1. VPC) -----
 
 variable "vpc_name" {
@@ -148,19 +142,4 @@ variable "glue_db_name" {
   description = "Studio Notebook 이 테이블 DDL 을 저장할 Glue 데이터베이스 (소문자/언더스코어만 허용)"
   type        = string
   default     = "wsc2026_analytics_db"
-}
-
-# ----- Bastion (유의사항: 채점은 Bastion/CloudShell 에서 수행) -----
-
-variable "bastion_instance_type" {
-  description = "Bastion 인스턴스 타입"
-  type        = string
-  default     = "t3.small"
-}
-
-variable "ssh_password" {
-  description = "Bastion ec2-user SSH 패스워드"
-  type        = string
-  default     = "Skill53##"
-  sensitive   = true
 }

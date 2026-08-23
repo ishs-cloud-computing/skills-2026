@@ -38,6 +38,16 @@
 ## 정정 로그
 <!-- 과제지·채점지 정정과 그에 따른 구현 변경. 질의일·답변일·출처를 함께 적는다. 최신이 위로. -->
 
+### 2026-08-23 [기록] 원문 오류 3건 — 질의 마감(2026-08-13) 경과로 게시판 정정 불가, 구현 영향 없음
+- task.md "4) MSK" §6 DynamoDB 속성 표가 module-1 내용(studentId/examDate/korean…) 복붙 오류.
+  키 정의(PK sensorId / SK timestamp)와 mark 4-1 이 진짜 기준 — 구현은 키 스키마를 따른다
+  (`module-4-msk/terraform/dynamodb.tf` 주석, README 함정 절에 기존 문서화)
+- mark.md 4-0 채점 준비의 `BUCKET_NAME="wsc2026-student-score-bucket-…"` 은 module-1 버킷명
+  오기. 실제 스크립트 `mark/mark2-4.sh` 는 `wsc2026-sensor-alert-bucket-<비번호>` 를 검사한다
+- mark.md 채점기준표(3-4: SG/EC2 Type Remediation Test, 3-1 CloudTrail 0.5)와 세부 채점
+  항목(3-1~3-5)이 불일치 — 세부 절차·스크립트에는 type 테스트와 CloudTrail 검증이 없다.
+  채점기준표가 수행될 가능성에 대비해 type 레이스 가드를 넣었다(결정 로그 2026-08-23 module-3)
+
 ### 2026-08-21 [재배부] 문제지·채점기준표 신판 배부 — PDF 자체가 교체됐다
 - 출처: 재배부된 `2과제_문제.pdf`·`2과제_채점기준.pdf` (PDF CreationDate `2026-08-21`, 구판은
   문제지 `2026-07-12` / 채점지 `2026-07-13`). 페이지 수는 양쪽 다 문제지 6p / 채점지 9p 로 동일
@@ -82,6 +92,54 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-23 [공통] bastion 을 module-2·4 에서 제거 — task-2 전체 "bastion 없음" 으로 통일
+- 맥락: bastion 판정이 모듈별로 정반대였다(1·3 없음 / 2·4 있음). mark2-1~4.sh 는 전부
+  CloudShell 실행 전제라 채점이 bastion 을 한 줄도 쓰지 않고, module-3 README 는 이미
+  "Bastion 없음" 을 명시 결정한 상태였다. 유지 비용도 컸다 — AdministratorAccess 역할,
+  SSH 22 0.0.0.0/0, 평문 패스워드 기본값(`ssh_password`)이 리뷰 규칙(과도 IAM·anyopen SG·
+  평문 시크릿) 3개에 동시에 걸린다
+- 채택: module-2·4 의 bastion.tf(역할·프로파일·EIP·인스턴스·SG)와 관련 변수(`ssh_password`·
+  `bastion_instance_type`)·출력·런북 절차를 제거. module-4 의 kafka 디버깅은 producer EC2 에
+  이미 있는 `/opt/kafka` CLI(SSM 경유)로 대체 — 단 producer 역할엔 `ReadData` 가 없어(최소권한)
+  console-consumer 는 불가, 소비 확인은 DynamoDB 건수·consumer 로그로 한다. 부수: module-2 의
+  미사용 `player_number` 변수 제거, module-3 tfvars 실습값(12345)을 플레이스홀더 103 으로 통일
+- 반론(기록): 유의사항 7·10 은 "채점용 Bastion 생성, 모든 Resource Access" 를 문언으로 요구한다.
+  채점 스크립트·채점 준비 어디에도 bastion 사용이 없어 사문으로 판단했지만, 육안 채점이 문언을
+  본다면 감점 여지는 있다 — 그때는 git 이력의 bastion.tf 를 되살린다(모듈 독립이라 apply 추가로
+  끝난다). 반대로 CLAUDE.md 는 "과제지가 요구하지 않는 bastion 은 불필요 리소스 감점"이라
+  양쪽 리스크가 상쇄된다고 봤다
+
+### 2026-08-23 [module-3] 채점 3-4 안정화 — type↔stop 레이스 가드 + SG 스위퍼 룰
+- 맥락: ① 채점기준표에 "EC2 Type Remediation Test 1.5" 가 있는데(세부 절차는 없음) 채점자가
+  실제 수행하면 type-remediation 의 stop→modify→start 도중 stop-remediation 이 먼저 start 를
+  걸어 modify 가 `IncorrectInstanceState` 로 실패한다 — 기존 완화책(시연 전 룰 수동 비활성화)은
+  채점 중 조작 불가라 무효. ② sg_change 는 CloudTrail 경유라 이벤트 전달이 수 분까지 늦을 수
+  있는데 채점 3-4 는 authorize 후 sleep 60 한 번만 본다
+- 채택: ① stop-remediation 에 타입 가드 — 현재 타입이 `INSTANCE_TYPE` 과 다르면 start 를 걸지
+  않고 ALERT_ONLY 만 발행(원복은 type-remediation 몫). 수동 시연(사람이 stop→modify)은 stopping
+  시점 타입이 아직 원값이라 가드를 통과하므로 여전히 룰을 먼저 끈다 — README 함정 절 갱신.
+  ② `wsc2026-sg-sweep-schedule` rate(1분) 룰이 sg_remediation 을 스위퍼로 호출 — 기준선 인바운드
+  0 이라 잔여 규칙 전부 revoke 가 곧 복구다. 이벤트 파싱 실패 폴백도 같은 sweep 으로 흡수하고,
+  스위퍼 경유 호출은 실제 걷어낸 게 있을 때만 SNS 발행(1분 주기 스팸 방지)
+- 검증: boto3 스텁 시뮬레이션 6케이스(정상 stop 복구 / 타입 변조 중 스킵 / 이벤트 revoke /
+  스위퍼 잔여 제거 / 스위퍼 무동작·무알림 / 파싱 실패 폴백) 전부 통과. IAM 은 기존
+  Describe*·Revoke(SG 스코프)로 충분해 추가 권한 없음
+- 기각: type-remediation 이 `events:DisableRule` 로 stop 룰을 잠깐 끄는 안 — IAM 확장 + 끄고
+  못 켜는 실패 모드(룰이 꺼진 채 남음)가 가드보다 나쁘다
+
+### 2026-08-23 [module-4] check-binary-auth 판정을 "결정적 마커" 기준으로 강화 + ESM 권한 보강
+- 맥락: 기존 판정은 마커 5개 중 하나라도 있으면 iam 이었다. 그런데 `kafka-cluster`·
+  `AWS4-HMAC-SHA256`·`aws4_request` 는 MSK IAM 이 아니라 **SigV4 를 쓰는 모든 AWS SDK 바이너리**
+  에 박히는 문자열이다 — 당일 교체 바이너리가 S3/SSM 만 호출해도 iam 오판 → 접속 불가 배포
+- 채택: 판정을 결정적 마커(`AWS_MSK_IAM` 와이어 필수 문자열, `aws-msk-iam-sasl-signer` 모듈 경로)
+  로만 하고 SigV4 3종은 보조(참고 출력)로 강등. sh/ps1 동일 로직, exit 계약(0=iam/1=tls/2=없음)
+  불변. 검증: 실제 제공 바이너리(tls, 마커 0/5)·합성 IAM·SigV4-only 오탐 케이스·부재 4케이스 통과
+- 함께: Lambda 역할에 `kafka-cluster:DescribeClusterDynamicConfiguration` 추가 — AWS Lambda MSK
+  튜토리얼의 IAM 인증 ESM 필수 6액션 중 유일하게 빠져 있던 것(클러스터 ARN 스코프). 2026-08-16
+  실배포는 이것 없이도 동작했으나 문서 요구 목록을 채워 회귀 위험을 없앤다. producer 의
+  `WriteData` 는 raw 토픽으로 축소(alert 발행은 Lambda 몫 — "EC2 IAM 최소" 문언 대응),
+  producer SG 의 9094 egress 는 MSK 쪽 인바운드와 대칭으로 tls 모드에서만 생성(count)
 
 ### 2026-08-23 [공통] 배포파일 저장소 제거의 후속 — 배부물 로컬 배치를 런북·.gitignore 로 명문화
 - 맥락: 커밋 f395d62·2988555 가 배포 소스·바이너리·데이터(test.csv, app.py, requirements.txt,
