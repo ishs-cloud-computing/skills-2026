@@ -4,7 +4,7 @@
 # 아무 AWS SDK 호출만 있어도 박히므로, 그것만으로 iam 판정하면 접속 불가 바이너리를
 # iam 모드로 배포하는 오탐이 난다.
 # 주의: 문자열 휴리스틱 — 마커가 난독화되면 미탐 가능. 확정은 BINARY-ANALYSIS.md 의 r2/pclntab.
-param([string]$Path = "$PSScriptRoot/../provided/module4/app")
+param([string]$Path = "$PSScriptRoot/../provided/module3/app")
 
 if (-not (Test-Path $Path)) { Write-Error "바이너리 없음: $Path"; exit 2 }
 
