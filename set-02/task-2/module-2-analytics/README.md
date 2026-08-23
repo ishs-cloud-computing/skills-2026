@@ -45,14 +45,14 @@ aws ec2 describe-subnets --subnet-ids $SUBNET_ID --query "Subnets[0].Tags[?Key==
 $ALB_ARN = aws elbv2 describe-load-balancers --names wsc2026-analytics-alb --query "LoadBalancers[0].LoadBalancerArn" --output text
 aws elbv2 describe-listeners --load-balancer-arn $ALB_ARN --query "Listeners[].[Port,Protocol]" --output text
 aws elbv2 describe-target-groups --names wsc2026-analytics-tg --query "TargetGroups[].[TargetGroupName,Port]" --output text
-# 2-3-A 스트림 ACTIVE ON_DEMAND
+# 2-3 스트림 ACTIVE ON_DEMAND
 aws kinesis describe-stream-summary --stream-name wsc2026-order-stream --query "StreamDescriptionSummary.[StreamName,StreamStatus,StreamModeDetails.StreamMode]" --output text
-# 2-3-B / 2-5 앱 동작
+# 2-4 / 2-6 앱 동작
 Invoke-RestMethod -Method Post -Uri "http://$ALB_DNS/order"
 Invoke-RestMethod -Uri "http://$ALB_DNS/health"    # status : healthy
-# 2-4 Flink READY ZEPPELIN-FLINK-3_0
+# 2-5 Flink READY ZEPPELIN-FLINK-3_0
 aws kinesisanalyticsv2 describe-application --application-name wsc2026-analytics-flink --query "ApplicationDetail.[ApplicationName,ApplicationStatus,RuntimeEnvironment]" --output text
-# 2-6 systemd (active / enabled)
+# 2-7 systemd (active / enabled)
 $CMD_ID = aws ssm send-command --instance-ids $EC2_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["systemctl is-active app && systemctl is-enabled app"]}' --query "Command.CommandId" --output text
 Start-Sleep 3
 aws ssm get-command-invocation --command-id $CMD_ID --instance-id $EC2_ID --query "StandardOutputContent" --output text
@@ -148,7 +148,7 @@ GROUP BY product_name;
 
 ### 6) [AWS 콘솔] 시연 후 노트북 중지
 
-상태가 READY 로 복귀해야 mark 2-4 통과 (**RUNNING 이면 오답**). CREATE TABLE/VIEW DDL 은 Glue DB 에 저장되므로 중지해도 유지된다. 이전에 `order_stream` 을 테이블로 만들었다면 뷰로 바꾸기 전에 `DROP TABLE order_stream;` 먼저 실행한다.
+상태가 READY 로 복귀해야 mark 2-5 통과 (**RUNNING 이면 오답**). CREATE TABLE/VIEW DDL 은 Glue DB 에 저장되므로 중지해도 유지된다. 이전에 `order_stream` 을 테이블로 만들었다면 뷰로 바꾸기 전에 `DROP TABLE order_stream;` 먼저 실행한다.
 
 ![시연 후 노트북 중지](images/studio-notebook-stop.webp)
 
@@ -174,22 +174,22 @@ terraform destroy
 |---|---|---|
 | 2-1 | EC2가 analytics-priv-a (서브넷 Name 태그) | `ec2.tf` + `vpc.tf` (서브넷 Name 태그 정확 일치) |
 | 2-2 | 리스너 80 HTTP, TG wsc2026-analytics-tg 5000 | `alb.tf` |
-| 2-3-A | wsc2026-order-stream ACTIVE ON_DEMAND | `kinesis.tf` |
-| 2-3-B | POST /order → 주문 JSON (Kinesis 전송) | `userdata.sh.tpl` 앱 배포 + `iam.tf` kinesis:PutRecord |
-| 2-4 | wsc2026-analytics-flink READY ZEPPELIN-FLINK-3_0 | `flink.tf` (CFN 스택) |
-| 2-5 | /health → {"status":"healthy"} | `userdata.sh.tpl` + TG 헬스체크 /health |
-| 2-6 | systemd `app` active + enabled (SSM) | `userdata.sh.tpl` 유닛 + `iam.tf` SSM 정책 |
+| 2-3 | wsc2026-order-stream ACTIVE ON_DEMAND | `kinesis.tf` |
+| 2-4 | POST /order → 주문 JSON (Kinesis 전송) | `userdata.sh.tpl` 앱 배포 + `iam.tf` kinesis:PutRecord |
+| 2-5 | wsc2026-analytics-flink READY ZEPPELIN-FLINK-3_0 | `flink.tf` (CFN 스택) |
+| 2-6 | /health → {"status":"healthy"} | `userdata.sh.tpl` + TG 헬스체크 /health |
+| 2-7 | systemd `app` active + enabled (SSM) | `userdata.sh.tpl` 유닛 + `iam.tf` SSM 정책 |
 | VPC | 표의 이름/CIDR/RTB 정확 일치 | `vpc.tf` (`variables.tf` subnets·rtb 맵) |
 | IAM | 최소권한 | `iam.tf` (SSM+PutRecord), `flink.tf` (Kinesis 읽기+Glue) |
 
 ## 설계 근거 · 함정
 
-- **task.md는 "Apache Flink 1.19"라고 쓰지만 mark 2-4는 `ZEPPELIN-FLINK-3_0`을 채점** — mark 스크립트 우선. Studio Notebook(Zeppelin)이며 Flink 애플리케이션 프로그래밍 금지 조건과도 일치.
+- **과제지 §5 는 축이 둘이다** — `Runtime : Apache Flink 1.19` 와 `노트북 환경 버전 : ZEPPELIN-FLINK-3_0`. 채점 2-5 가 읽는 `RuntimeEnvironment` 는 후자다(RC 판에서 과제지에도 명문화). Studio Notebook(Zeppelin)이며 Flink 애플리케이션 프로그래밍 금지 조건과도 일치.
 - **Studio Notebook은 terraform provider의 `aws_kinesisanalyticsv2_application`으로 생성 불가** (zeppelin 설정 블록 미지원, provider issue #41233) → `aws_cloudformation_stack`으로 래핑.
 - **Kinesis SQL 커넥터는 CFN에 명시 필요.** 콘솔 위저드로 만들면 커넥터가 자동 추가되지만 bare CFN엔 Flink 코어 빌트인만 남아 `Could not find any factory for identifier 'kinesis'`가 난다 → `flink.tf`의 `CustomArtifactsConfiguration`에 `flink-sql-connector-kinesis:1.15.4`(런타임 1.15 대응)를 Maven 의존성으로 주입. 커넥터 변경 시 노트북은 **새 세션**으로 다시 열어야 jar가 로드된다.
 - **Flink 역할 Glue 권한은 카탈로그 전체(`database/*`,`table/*/*`)에 부여.** Zeppelin이 SQL 플래닝 시 `hive`/`default` DB 존재도 `glue:GetDatabase`로 탐침해서, analytics DB로만 스코프하면 `database/hive`에서 AccessDenied가 난다.
 - **`RejectedExecutionException: ShardConsumer ... [Shutting down]`은 세션 문제.** 한 세션에서 실패한 잡을 여러 번 던지면 Flink minicluster의 스레드풀이 망가진다 (Studio 인터랙티브는 `NoRestartBackoffTimeStrategy`라 한 번 실패=잡 사망). → 인터프리터 재시작으로 세션을 비우고 `parallelism.default 1`로 재실행.
-- 노트북 상태는 채점 시 **READY** — Run 상태(RUNNING)로 두면 2-4 오답. 시연 후 중지 필수.
+- 노트북 상태는 채점 시 **READY** — Run 상태(RUNNING)로 두면 2-5 오답. 시연 후 중지 필수.
 - **PowerShell 7.3+ 주의**: JSON 인자는 작은따옴표로만 감싼다 — `\"` 이스케이프하면 백슬래시가 그대로 전달돼 파싱 오류. HTTP 확인은 `Invoke-RestMethod` 사용.
 - EC2는 NAT 라우트에 `depends_on` — user_data의 pip 설치가 부팅 시 아웃바운드를 요구한다. 설치 실패 시: SSM 세션 접속 후 `cat /var/log/cloud-init-output.log` 확인, `sudo bash /var/lib/cloud/instance/scripts/part-001` 재실행.
 - systemd 유닛 이름은 정확히 `app` — env는 [Service] 레벨 (app.py가 import 시점에 STREAM_NAME/AWS_REGION 없으면 raise).

@@ -23,6 +23,7 @@ Usage:
     py restore_placeholders.py --selftest
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -96,9 +97,21 @@ def push_target():
     raise SystemExit("no upstream and no origin/main|master -- pass --against explicitly")
 
 
+def ref_text(ref, path):
+    """File content at ref, or None when the path doesn't exist there (a tfvars
+    added or renamed into place locally). None means 'no remote baseline'."""
+    try:
+        return git("show", f"{ref}:{path}")
+    except subprocess.CalledProcessError:
+        return None
+
+
 def changed_tfvars(ref):
+    """tfvars changed vs ref, minus the ones deleted locally — a file that no
+    longer exists (module removed or renamed) has no local value to leak, and
+    opening it would crash the scan."""
     out = git("diff", "--name-only", ref, "--", "*.tfvars")
-    return [p for p in out.splitlines() if p.strip()]
+    return [p for p in out.splitlines() if p.strip() and os.path.exists(p)]
 
 
 def assignments(text):
@@ -136,10 +149,19 @@ def restore_keys(ref_text, work_text, keys):
 def cmd_report(ref):
     rows = []  # (tag, reason, path, key, ref_value, local_value)
     for path in changed_tfvars(ref):
-        ref_text = git("show", f"{ref}:{path}")
+        base = ref_text(ref, path)
         with open(path, encoding="utf-8") as f:
             work_text = f.read()
-        for key, ref_value, local_value in diff_file(ref_text, work_text):
+        if base is None:
+            # 원격에 대응 파일이 없다 (새 모듈이거나 이름이 바뀐 경로).
+            # 비교 기준이 없으니 자동 판정하지 않고 사람이 보게 UNSURE 로 올린다.
+            for key, local_value in assignments(work_text).items():
+                rows.append((
+                    "UNSURE", "new path -- no remote baseline to compare against",
+                    path, key, "(none)", local_value,
+                ))
+            continue
+        for key, ref_value, local_value in diff_file(base, work_text):
             tag, reason = classify(key, local_value)
             rows.append((tag, reason, path, key, ref_value, local_value))
 
@@ -165,10 +187,12 @@ def cmd_restore(ref, keys):
     keys = set(keys)
     drifted = False
     for path in changed_tfvars(ref):
-        ref_text = git("show", f"{ref}:{path}")
+        base = ref_text(ref, path)
+        if base is None:
+            continue  # 되돌릴 기준값이 없다 (cmd_report 가 UNSURE 로 이미 표시)
         with open(path, encoding="utf-8") as f:
             work_text = f.read()
-        fixed, hits = restore_keys(ref_text, work_text, keys)
+        fixed, hits = restore_keys(base, work_text, keys)
         if not hits:
             continue
         drifted = True

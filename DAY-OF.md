@@ -183,7 +183,7 @@ flowchart LR
 
 | 대기 | 실측 | 출처 |
 | --- | --- | --- |
-| MSK 클러스터 | **31분 40초** (모듈 전체 35분, destroy 23분) | set-02 m4 |
+| MSK 클러스터 | **31분 40초** (모듈 전체 35분, destroy 23분) | set-02 m3 |
 | eksctl 클러스터 | **19~20분** (삭제 8분) | set-07 task-2 m3 |
 | CloudFront 배포 | 5~10분 | set-03 task-1 |
 | NAT GW | ~2분 | set-02 / set-07 |
@@ -289,13 +289,13 @@ terraform apply     # 여기서 이 창을 두고 다음 모듈로 넘어간다
 | 4  | Real-time data analytics | VPC, EC2, ELB, Managed Flink         | set-02 m2                       |
 | 5  | VPC Lattice              | VPC                                  | **없음** — `shared/addons/lattice-hardening/` |
 | 6  | Workflow                 | S3, Lambda, DynamoDB, Step Functions | set-02 m1                       |
-| 7  | Cloud event handling     | VPC, EC2                             | set-02 m3                       |
+| 7  | Cloud event handling     | VPC, EC2                             | **없음** — set-02 RC 판에서 삭제(구 m3, git 이력) · `shared/addons/eventbridge-security-rules/` |
 | 8  | RDS Connection           | RDS, VPC                             | **없음** — `shared/addons/rds-connection/` |
 | 9  | VPN                      | Client VPN, VPC, EC2                 | **없음** — `shared/addons/client-vpn/` |
 | 10 | Keycloak                 | VPC, EC2, IAM, Keycloak              | **없음** — `shared/addons/keycloak/` |
 | 11 | Container logging        | VPC, Loki, Grafana, EKS, EC2         | set-07 m4                       |
 | 12 | REST API Implement       | Lambda                               | **없음** — `shared/addons/`     |
-| 13 | MSK                      | MSK, VPC                             | set-02 m4                       |
+| 13 | MSK                      | MSK, VPC                             | set-02 m3                       |
 
 - 구현이 있는 모듈이면 **그 세트 디렉토리를 통째로 복사**하고 이름·리전만 교체한다. 처음부터 쓰지 않는다.
 - 5·8·9·10·12 는 현재 세트에 없다. 이게 걸리면 `shared/addons/` 의 해당 키트로 시작하되 **시간을 여기에 먼저 배분**한다.
@@ -439,7 +439,7 @@ docker push "${ECR}:v2"
 
 | 세트 | task-1 특징 | task-2 특징 |
 | --- | --- | --- |
-| set-02 | 접두어 `wskorea26`, "Korea Skills Concert", VPC `172.16.0.0/16`, AZ **c/d**, EKS + Grafana(`skills-<비번호>-admin`), 채점 SG `wskorea26-vpc-environment-sg` | 접두어 `wsc2026`, **Workflow(성적 CSV) / Real-time analytics(Flink Studio) / Event handling / MSK(센서)**, 리전 `ap-southeast-1 / ap-northeast-2 / eu-west-1 / ap-northeast-1`, VPC `analytics-vpc`·`event-vpc`·`msk-vpc` |
+| set-02 | 접두어 `wskorea26`, "Korea Skills Concert", VPC `172.16.0.0/16`, AZ **c/d**, EKS + Grafana(`skills-<비번호>-admin`), 채점 SG `wskorea26-vpc-environment-sg` | 접두어 `wsc2026`, **Workflow(성적 CSV) / Real-time analytics(Flink Studio) / MSK(센서)** — RC 판에서 Event handling 삭제, 리전 `ap-southeast-1 / ap-northeast-2 / ap-northeast-1`, VPC `analytics-vpc`·`msk-vpc` |
 | set-03 | 회사 **skills.inc**, 접두어 `wsc2026`, VPC `wsc2026-skills-vpc` `192.168.0.0/16` + `hub`/`app` 서브넷, CMK 5개, CloudFront `/booking`, Lambda Function URL, Grafana 비번 `Skills$#$@!` | 없음 |
 | set-07 | **Unicorn Tickets**, 접두어 `unicorn-`, VPC `10.97.0.0/16` 3AZ, KMS `unicorn-kms-{app,data,platform}`, WAF `Request blocked by Unicorn WAF`, 채점 VPC env `unicorn-mark` | "Small Challenge", **NoSQL(BigBae Trains) / CDN Function(SkillsPhone) / EKS Scaling(SkillsMarket) / EKS O11y**, 리전 `ap-southeast-1 / us-east-1 / ap-northeast-2 / ap-northeast-1`, 접두 `bigbae-nosql-`·`skillsphone-cdn-ab-`·`skm-`·`o11y-`, EC2 `t3.small` |
 | task-3 | "System operation" 3시간, Go 바이너리 `user`·`product`·`stress`, `load_user.dump`, `apdev-rds-instance`, `/images/<path>`, `t3.medium` 단일, "Fargate·Lambda 사용 불가" | — |
@@ -479,74 +479,60 @@ docker push "${ECR}:v2"
 
 #### set-02 task-2
 
-각 모듈 `terraform/terraform.tfvars` 의 `player_number` 를 본인 비번호로 바꾼다 — **현재 값이 모듈마다 다르다**(개인 실습값 잔재). 4곳 전부.
+각 모듈 `terraform/terraform.tfvars` 의 `player_number` 를 본인 등번호로 바꾼다 — module-1·module-3 두 곳(module-2 는 등번호를 쓰는 이름이 없다).
+
+> RC 판(2026-08-23)에서 구 3번 **Cloud Event Handling 이 삭제**되고 MSK 가 3번이 됐다. 저장소도 `module-3-event/` 를 지우고 `module-4-msk` → `module-3-msk` 로 옮겼다. 삭제된 모듈의 대조표는 git 이력에 있다.
 
 ##### module-1-workflow (`ap-southeast-1`)
 
 | 축 | 준비본 값 | 다르면 고칠 곳 |
 |---|---|---|
 | 리전 | `ap-southeast-1` | `terraform/terraform.tfvars: region` |
-| 비번호 | `<비번호>` | `terraform.tfvars: player_number` |
-| S3 버킷·폴더 | `wsc2026-student-score-bucket-<비번호>` · `input/`·`processed/`·`error/` | `variables.tf: bucket_name_prefix` ⚠ 폴더명은 `s3.tf`(input 마커·notification prefix `input/` suffix `.csv`)·`lambda/index.py`·`statemachine/workflow.asl.json` 리터럴 |
+| 등번호 | `<등번호>` | `terraform.tfvars: player_number` |
+| S3 버킷·폴더 | `wsc2026-student-score-bucket-<등번호>` · `input/`·`processed/`·`error/` | `variables.tf: bucket_name_prefix` ⚠ 폴더명은 `s3.tf`(notification prefix `input/` suffix `.csv`)·`lambda/index.py`·`statemachine/workflow.asl.json` 리터럴. **폴더 마커 객체는 만들지 않는다** |
 | DynamoDB | `wsc2026-student-score` · PK `studentId` SK `examDate` | `variables.tf: table_name` (키는 `dynamodb.tf` 리터럴 ⚠ + `lambda/index.py`) |
 | Lambda 처리함수 | `wsc2026-student-score-function` · `python3.12` · `index.handler` · env `S3_BUCKET`·`DDB_TABLE` | `variables.tf: processor_function_name`·`lambda_runtime` (env 키는 `lambda.tf` 리터럴) |
 | Lambda 트리거 | `wsc2026-student-score-trigger` (S3 `input/*.csv` ObjectCreated → StartExecution) | `variables.tf: trigger_function_name` (`lambda/trigger.py`) |
 | State Machine | `wsc2026-student-score-workflow` · `STANDARD` · 상태 `CheckS3File→ProcessStudentData→CheckResult→MoveToProcessed/MoveToError` | `variables.tf: state_machine_name` ⚠ 타입·상태명은 `stepfunctions.tf`·`statemachine/workflow.asl.json` 리터럴 |
 | IAM Role | `wsc2026-lambda-student-role` / `wsc2026-stepfunction-student-role` | `variables.tf: lambda_role_name` / `sfn_role_name` |
 | 채점 데이터 | `test.csv` → `STU1020 96.6 A`, error 4건(`STU2001/2002/2004/unknown`) | `provided/module1/test.csv` (수정 금지) — 등급·검증 규칙은 `lambda/index.py` |
+| **채점 직전 상태** | 버킷·테이블을 **완전히 비운다**. test.csv 는 채점자가 올린다(60초 뒤 확인) | 런북 3단계 — 남으면 1-1·1-5·1-6 전부 오답 |
 
 ##### module-2-analytics (`ap-northeast-2`)
 
 | 축 | 준비본 값 | 다르면 고칠 곳 |
 |---|---|---|
 | 리전 | `ap-northeast-2` (AZ `a`/`b`) | `terraform.tfvars: region` ⚠ `variables.tf: subnets` 의 `az` |
-| 비번호 | (채점 이름에 미사용) | `terraform.tfvars: player_number` |
+| 등번호 | (채점 이름에 미사용 — tfvars 에 항목 없음) | — |
 | VPC | `analytics-vpc` · `10.20.0.0/16` | `variables.tf: vpc_name`·`vpc_cidr` |
 | 서브넷 4개 | `analytics-pub-a` `10.20.0.0/24` / `-pub-b` `10.20.1.0/24` / `-priv-a` `10.20.100.0/24` / `-priv-b` `10.20.101.0/24` | `variables.tf: subnets` |
 | IGW / NAT / RTB | `analytics-igw` / `analytics-ngw`(단일, pub-a) / `analytics-pub-rtb`·`analytics-priv-a-rtb`·`analytics-priv-b-rtb` | `variables.tf: igw_name`·`nat_name`·`nat_subnet_name`·`pub_rtb_name`·`priv_rtb_names` |
-| EC2 | `wsc2026-analytics-ec2` · `t3.small` · `analytics-priv-a` · SSM | `variables.tf: instance_name`·`instance_type`·`app_subnet_name` |
+| EC2 | `wsc2026-analytics-ec2` · `t3.small` · `analytics-priv-a`(과제지 "Private Subnet A") · SSM | `variables.tf: instance_name`·`instance_type`·`app_subnet_name` |
 | 앱 | 포트 `5000` · systemd 유닛 `app` · `/opt/app` · env `STREAM_NAME`·`AWS_REGION` · gunicorn | `variables.tf: app_port` ⚠ 유닛명·경로·env 키는 `userdata.sh.tpl` 리터럴 |
 | ALB / TG | `wsc2026-analytics-alb` · HTTP 80 · `wsc2026-analytics-tg`(5000) · 헬스 `/health` | `variables.tf: alb_name`·`tg_name` (80·`/health` 는 `alb.tf` 리터럴) |
 | Kinesis | `wsc2026-order-stream` · ON_DEMAND | `variables.tf: stream_name` (모드는 `kinesis.tf` 리터럴) |
-| Flink | `wsc2026-analytics-flink` · 과제지 "Flink 1.19" / 채점 `ZEPPELIN-FLINK-3_0` · INTERACTIVE · Glue DB `wsc2026_analytics_db` · SQL 테이블 `order_stream` | `variables.tf: flink_app_name`·`flink_runtime`·`glue_db_name` ⚠ `order_stream` DDL·쿼리는 `README.md` §5 Zeppelin 문단 리터럴 |
-| IAM Role | `wsc2026-alaytics-ec2-role`(과제지 오타 그대로) / `wsc2026-analytics-flink-role` | `variables.tf: ec2_role_name` / `flink_role_name` |
-| bastion | `t3.small` · `Skill53##` | `variables.tf: bastion_instance_type`·`ssh_password` |
+| Flink | `wsc2026-analytics-flink` · Runtime "Apache Flink 1.19" / 노트북 환경 버전 `ZEPPELIN-FLINK-3_0`(채점값) · INTERACTIVE · Glue DB `wsc2026_analytics_db` · SQL 테이블 `order_stream` | `variables.tf: flink_app_name`·`flink_runtime`·`glue_db_name` ⚠ `order_stream` DDL·쿼리는 `README.md` §5 Zeppelin 문단 리터럴 |
+| IAM Role | `wsc2026-analytics-ec2-role` / `wsc2026-analytics-flink-role` | `variables.tf: ec2_role_name` / `flink_role_name` |
 
-##### module-3-event (`eu-west-1`)
-
-| 축 | 준비본 값 | 다르면 고칠 곳 |
-|---|---|---|
-| 리전 | `eu-west-1` (AZ `a`/`b`) | `variables.tf: region` (tfvars 에 없음 — 바뀌면 tfvars 에 `region` 추가) ⚠ `variables.tf: subnets` 의 `az` |
-| 비번호 | (로그 버킷 접미) | `terraform.tfvars: player_number` |
-| VPC | `event-vpc` · `172.16.0.0/16` | `variables.tf: vpc_name`·`vpc_cidr` |
-| 서브넷 / IGW / RTB | `event-pub-a` `172.16.0.0/24` · `event-pub-b` `172.16.1.0/24` / `event-igw` / `event-pub-rtb` | `variables.tf: subnets`·`igw_name`·`pub_rtb_name` |
-| EC2 | `wsc2026-event-ec2` · `t3.micro` · `event-pub-a` · Role `wsc2026-event-ec2-role` | `variables.tf: instance_name`·`instance_type`·`instance_subnet_name`·`ec2_role_name` |
-| SG | `wsc2026-event-sg` (인바운드 0) | `variables.tf: sg_name` |
-| EventBridge Rule | `wsc2026-sg-change-rule`·`-role-change-rule`·`-ec2-terminate-rule`·`-ec2-type-change-rule` + 채점 전용 `wsc2026-ec2-stop-rule`·`wsc2026-tag-compliance-rule` | `variables.tf: rule_names` 맵 (이벤트 패턴은 `eventbridge.tf` 리터럴) |
-| CloudTrail | `wsc2026-event-trail` · Management Read/Write · 로그 버킷 `wsc2026-event-logs-<비번호>` | `variables.tf: trail_name`·`logs_bucket_prefix` |
-| Lambda | Role `wsc2026-event-lambda-role` · `python3.12` · `index.handler` · 함수 `wsc2026-sg-remediation`·`-role-remediation`·`-ec2-terminate-alert`·`-ec2-type-remediation`·`-ec2-stop-remediation`·`-tag-alert` · env `SNS_TOPIC_ARN`/`SECURITY_GROUP_ID`/`INSTANCE_ID`/`ROLE_NAME`/`INSTANCE_TYPE` | `variables.tf: lambda_role_name`·`lambda_runtime`·`function_names` 맵 ⚠ env 키·SNS 메시지 `event` 값은 `lambda.tf`·`lambda/*/index.py` 리터럴 |
-| SNS | `wsc2026-event-alert` | `variables.tf: topic_name` |
-| Config Rule | `wsc2026-sg-ssh-rule` · `wsc2026-required-tags-rule` · 필수 태그 키 `Project` | `variables.tf: config_rule_ssh_name`·`config_rule_tags_name`·`required_tag_key` ⚠ `versions.tf` default_tags `Project = "wsc2026"` 과 짝 |
-
-##### module-4-msk (`ap-northeast-1`)
+##### module-3-msk (`ap-northeast-1`)
 
 | 축 | 준비본 값 | 다르면 고칠 곳 |
 |---|---|---|
 | 리전 | `ap-northeast-1` (AZ `a`/`d`) | `variables.tf: region` (tfvars 에 없음) ⚠ `variables.tf: subnets`·`broker_subnet_names`·`producer_subnet_name` |
-| 비번호 | `<비번호>` (alert 버킷 접미) | `terraform.tfvars: player_number` |
+| 등번호 | `<등번호>` (alert 버킷 접미) | `terraform.tfvars: player_number` |
 | VPC | `msk-vpc` · `192.168.0.0/16` | `variables.tf: vpc_name`·`vpc_cidr` |
 | 서브넷 4개 | `msk-pub-a` `192.168.0.0/24` / `msk-pub-d` `192.168.1.0/24` / `msk-priv-a` `192.168.10.0/24` / `msk-priv-d` `192.168.11.0/24` | `variables.tf: subnets` |
 | IGW / NAT / RTB | `msk-igw` / `msk-ngw`(단일, pub-a) / `msk-pub-rtb`·`msk-priv-a-rtb`·`msk-priv-d-rtb` | `variables.tf: igw_name`·`nat_name`·`nat_subnet_name`·`pub_rtb_name`·`priv_rtb_names` |
 | MSK | `wsc2026-msk-cluster` · Kafka `3.6.0` · `kafka.t3.small` · 브로커 2(priv-a/d) · IAM 인증만 | `variables.tf: cluster_name`·`kafka_version`·`broker_instance_type`·`broker_subnet_names`·`broker_volume_size` (SASL/IAM 은 `msk.tf` 리터럴) |
-| 토픽 | `wsc2026-sensor-raw` 3/2 · `wsc2026-sensor-alert` 1/2 · 키 `sensorId` | `variables.tf: topic_raw`·`topic_alert` (생성은 `userdata.sh.tpl`, 키는 producer/consumer 코드 리터럴) |
-| Producer EC2 | `wsc2026-sensor-producer` · `t3.small` · `msk-priv-a` · Role `wsc2026-msk-ec2-role` · env `BOOTSTRAP_SERVERS`·`TOPIC_RAW` · systemd `app` | `variables.tf: producer_name`·`producer_type`·`producer_subnet_name`·`ec2_role_name` ⚠ env 키·유닛명은 `userdata.sh.tpl` 리터럴 |
+| 토픽 | `wsc2026-sensor-raw` 3/2 · `wsc2026-sensor-alert` 1/2 · 키 `sensorId` | `variables.tf: topic_raw`·`topic_alert` (생성은 `userdata.sh.tpl`, 키는 producer/consumer 코드 리터럴). 채점 3-3 이 `aws kafka list-topics` 로 확인 |
+| Producer EC2 | Name 태그 `wsc2026-sensor-producer` · `t3.small` · `msk-priv-a` · Role `wsc2026-msk-ec2-role` · env `BOOTSTRAP_SERVERS`·`TOPIC_RAW` · systemd `app` | `variables.tf: producer_name`·`producer_type`·`producer_subnet_name`·`ec2_role_name` ⚠ env 키·유닛명은 `userdata.sh.tpl` 리터럴 |
 | 인증 모드 | `iam`(기본) / `tls`(제공 바이너리 우회) | `terraform.tfvars: producer_auth_mode` ⚠ **당일 `select-auth-mode.ps1` 판정값을 따른다** — 제공 바이너리가 IAM 을 못 하면 `-var "producer_auth_mode=tls"` |
 | Lambda | Role `wsc2026-msk-lambda-role` · `python3.14` · `wsc2026-sensor-consumer`(raw) · `wsc2026-sensor-alert-consumer`(alert) · env `DDB_TABLE`/`ALERT_TOPIC`/`BOOTSTRAP_SERVER`, `SNS_TOPIC_ARN`/`S3_BUCKET` | `variables.tf: lambda_role_name`·`lambda_runtime`·`consumer_fn_name`·`alert_fn_name` ⚠ 임계치(temp 80/10, hum 90/20)·`alert_reason` 문구·S3 경로 `alert/{sensorId}/{date}/{ts}.json` 은 `lambda/*/index.py` 리터럴 |
-| DynamoDB | `wsc2026-sensor-data` · PK `sensorId` SK `timestamp` | `variables.tf: table_name` (키는 `dynamodb.tf` 리터럴) |
-| S3 / SNS | `wsc2026-sensor-alert-bucket-<비번호>` / `wsc2026-sensor-alert-topic`(비채점) | `variables.tf: bucket_prefix` / `sns_topic_name` |
-| bastion | `t3.micro` · `Skill53##` | `variables.tf: bastion_instance_type`·`ssh_password` |
+| DynamoDB | `wsc2026-sensor-data` · PK `sensorId` SK `timestamp` · 속성 타입 `humidity` **Number** / 나머지 String · timestamp ISO 8601 KST | `variables.tf: table_name` (키는 `dynamodb.tf`, 속성 타입은 `lambda/sensor_consumer/index.py` put_item 리터럴) |
+| S3 / SNS | `wsc2026-sensor-alert-bucket-<등번호>` / `wsc2026-sensor-alert-topic`(비채점) | `variables.tf: bucket_prefix` / `sns_topic_name` |
+| 배부물 경로 | `provided/module4/app` (과제 번호는 3 이지만 zip 디렉터리는 module4) | `variables.tf: provided_dir` |
 
-참고: `mark.md` 4-0 의 `BUCKET_NAME="wsc2026-student-score-bucket-…"` 은 module-1 복붙 오류이고 `mark/mark2-4.sh:7` 은 `wsc2026-sensor-alert-bucket-${NUM}` 로 맞다. 과제지 module-4 DynamoDB 속성표(`studentId`…)도 module-1 복붙 오류 — 키 스키마가 채점 기준.
+참고: `mark.md` 3-0 의 `BUCKET_NAME="wsc2026-student-score-bucket-…"` 은 module-1 복붙 오류이고 `mark/mark2-3.sh:7` 은 `wsc2026-sensor-alert-bucket-${NUM}` 로 맞다 — RC 판에서도 안 고쳐졌다. 구판 과제지의 DynamoDB 속성표 복붙 오류(`studentId`…)는 RC 에서 정정됐다(`humidity` Number, 나머지 String).
 
 #### set-02 task-2 — 추가 가능 문항
 
@@ -555,7 +541,7 @@ docker push "${ECR}:v2"
 | 후보 | 근거 | 대처 |
 |---|---|---|
 | Step Functions 실행 로그(CloudWatch Logs)·X-Ray 추적 | 카탈로그 6 필수 서비스 확장, SFN 흔한 채점 필드(`loggingConfiguration`) | `shared/addons/sfn-hardening/` (`logging_configuration` + 로그 그룹 + Role `logs:*Delivery*`) |
-| 실패 시 SNS 알림 (MoveToError → Publish) | workflow.md Fail 경로 확장 | `set-02/task-2/module-3-event/terraform/sns.tf` 복사 + `statemachine/workflow.asl.json` 에 `arn:aws:states:::sns:publish` Task 추가, `iam.tf` sfn 정책에 `sns:Publish`. 예시: `shared/addons/sfn-hardening/` |
+| 실패 시 SNS 알림 (MoveToError → Publish) | workflow.md Fail 경로 확장 | `set-02/task-2/module-3-msk/terraform/sns.tf` 복사 + `statemachine/workflow.asl.json` 에 `arn:aws:states:::sns:publish` Task 추가, `iam.tf` sfn 정책에 `sns:Publish`. 예시: `shared/addons/sfn-hardening/` |
 | S3 → EventBridge → Step Functions 직접 트리거(트리거 Lambda 대체) | 워크플로우 흔한 변형 | `shared/addons/sfn-hardening/` (`aws_s3_bucket_notification.eventbridge=true` + `aws_cloudwatch_event_rule`/`target` role) |
 | DynamoDB PITR / TTL / Stream | 카탈로그 1번 항목 결합 | PITR·stream 은 `set-07/task-2/module-1-nosql/terraform/dynamodb.tf` 블록 복사(in-place); TTL: `shared/addons/dynamodb-hardening/` |
 | S3 SSE-KMS / 버전관리 / `error/` 라이프사이클 | S3 흔한 항목 | KMS 는 `shared/addons/kms/` S3 블록(in-place); 버전관리·라이프사이클: `shared/addons/s3-hardening/` |
@@ -572,24 +558,11 @@ docker push "${ECR}:v2"
 | Flink Studio 노트북 → 애플리케이션 배포(DeployAsApplication) / 추가 SQL(윈도우 집계) | 카탈로그 4 "Managed Flink" 확장 | 노트북 배포는 `flink.tf` CFN 템플릿에 `DeployAsApplicationConfiguration` + S3 버킷 (예시 `shared/addons/kinesis-firehose/README.md`); 추가 SQL 은 `README.md` §5 Zeppelin 문단에 추가 |
 | EC2 → ASG + Launch Template (고가용성) | 과제지 "VPC 고가용성", ELB+EC2 흔한 변형 | `shared/addons/ec2-asg-alb/` (`aws_launch_template` + `aws_autoscaling_group` + TG attach, userdata 재사용) |
 | ALB 액세스 로그 / 삭제 방지 / HTTPS | ELB 흔한 항목 | `shared/addons/alb-hardening/` |
-| Kinesis 소비 Lambda → DynamoDB 적재 | 스트림 소비 패턴 | `set-02/task-2/module-4-msk/terraform/lambda.tf` consumer 패턴 + `aws_lambda_event_source_mapping`(kinesis) — ESM 소스만 교체 |
+| Kinesis 소비 Lambda → DynamoDB 적재 | 스트림 소비 패턴 | `set-02/task-2/module-3-msk/terraform/lambda.tf` consumer 패턴 + `aws_lambda_event_source_mapping`(kinesis) — ESM 소스만 교체 |
 | VPC Flow Logs / S3·Kinesis VPC Endpoint | 네트워크 흔한 항목 | `shared/addons/vpc-flow-log/`·`shared/addons/vpc-endpoints/` |
 | CloudWatch Agent·알람(EC2 CPU, ALB 5xx) | 관측성 | ALB 5xx 알람은 `shared/addons/cw-alarms/`; EC2 CloudWatch Agent는 전용 KIT가 없으므로 과제지·대상 세트의 설치 경로를 따르고 새 리소스·정책을 중복 생성하지 않는다. |
 
-##### module-3-event
-
-| 후보 | 근거 | 대처 |
-|---|---|---|
-| Lambda timeout ≥30·Handler 지정·로그 그룹 `/aws/lambda/<fn>` 존재·보존기간 | 카탈로그 7 흔한 채점 | `shared/addons/lambda-hardening/` 의 `aws_cloudwatch_log_group` 선생성 + `timeout` 변수 패턴 복사, `lambda.tf` `lambda_timeouts` 로컬에 값 |
-| 복구 SLA "180초 이내" / Lambda 직접 invoke 검증 | 이벤트 복구 검증 | 이미 동작 — `README.md` §3 복구 테스트에 `aws lambda invoke` 경로 추가만 |
-| CloudTrail 로그 파일 검증·멀티리전·CloudWatch Logs 전달·KMS | CloudTrail 흔한 항목 | `cloudtrail.tf` 에 `enable_log_file_validation=true`, `is_multi_region_trail=true`(현재 false) 한 줄; Logs 전달·KMS: `shared/addons/cloudtrail-hardening/` |
-| SNS 이메일 구독 / SNS KMS | 과제지 "관리자에게 알림" 구체화 | `shared/addons/cw-alarms/` (`aws_sns_topic_subscription` email, `kms_master_key_id`) |
-| Config 룰 추가(예: `EC2_INSTANCE_NO_PUBLIC_IP`, `ENCRYPTED_VOLUMES`) / Config 자동 교정(SSM Automation) | mark 3-3 Config 룰 패턴 확장 | 룰은 `config.tf` `aws_config_config_rule` 블록 복사 + 이름 변수 추가; 자동 교정: `shared/addons/eventbridge-security-rules/` (`aws_config_remediation_configuration`) |
-| EventBridge 룰 추가(루트 로그인, IAM 정책 변경, EBS 생성, 스케줄 rule) + Lambda | 카탈로그 7 "Cloud event handling" 확장 | `eventbridge.tf` 패턴 + `variables.tf: rule_names`·`function_names` 맵에 항목 추가 + `lambda/<key>/index.py` 디렉토리 추가(코드는 `lambda/tag_alert/index.py` 골격). 패턴 모음: `shared/addons/eventbridge-security-rules/` |
-| GuardDuty 탐지 → EventBridge → SNS | 보안 이벤트 흔한 확장 | `shared/addons/eventbridge-security-rules/` (`aws_guardduty_detector` + `aws.guardduty` 패턴 rule) |
-| EC2 종료 방지·IMDSv2 / SG 변경 감사 | EC2 흔한 항목 | `ec2.tf` 에 `disable_api_termination`, `metadata_options` 한 줄. `shared/addons/ec2-hardening/` |
-
-##### module-4-msk
+##### module-3-msk
 
 | 후보 | 근거 | 대처 |
 |---|---|---|
@@ -925,15 +898,15 @@ URL 패턴 고정: `https://registry.terraform.io/providers/hashicorp/aws/latest
 | CloudFront | `cloudfront_distribution` `cloudfront_origin_access_control` `cloudfront_function` `cloudfront_key_value_store` `cloudfront_cache_policy` `cloudfront_vpc_origin` · data `cloudfront_cache_policy` `cloudfront_origin_request_policy` | task-1 CDN, set-07 m2, `cloudfront-hardening/` |
 | WAF | `wafv2_web_acl` `wafv2_web_acl_association` `wafv2_web_acl_logging_configuration` `wafv2_regex_pattern_set` `wafv2_ip_set` | `waf/` `waf-extra-rules/`, task-3 |
 | S3 | `s3_bucket` `s3_bucket_policy` `s3_bucket_versioning` `s3_bucket_server_side_encryption_configuration` `s3_bucket_lifecycle_configuration` `s3_bucket_logging` `s3_bucket_notification` `s3_bucket_public_access_block` `s3_object` | task-1 Static hosting, `s3-hardening/` `kms/` |
-| DynamoDB | `dynamodb_table` `dynamodb_table_item` | task-1, set-07 m1, set-02 m1/m4, `dynamodb-hardening/` |
+| DynamoDB | `dynamodb_table` `dynamodb_table_item` | task-1, set-07 m1, set-02 m1/m3, `dynamodb-hardening/` |
 | Lambda | `lambda_function` `lambda_permission` `lambda_event_source_mapping` `lambda_function_url` `lambda_layer_version` | `lambda-hardening/` `lambda-get-api/` `lambda-vpc-rds/` |
 | API Gateway | `api_gateway_rest_api` `api_gateway_resource` `api_gateway_method` `api_gateway_integration` `api_gateway_deployment` `api_gateway_stage` `api_gateway_method_settings` `api_gateway_usage_plan` `api_gateway_api_key` `api_gateway_model` `api_gateway_gateway_response` | **없음** — `shared/addons/`, `apigw-hardening/` |
-| Step Functions·이벤트 | `sfn_state_machine` `cloudwatch_event_rule` `cloudwatch_event_target` `cloudtrail` `config_configuration_recorder` `config_config_rule` `config_remediation_configuration` `guardduty_detector` | set-02 m1/m3, `sfn-hardening/` `eventbridge-security-rules/` `cloudtrail-hardening/` |
+| Step Functions·이벤트 | `sfn_state_machine` `cloudwatch_event_rule` `cloudwatch_event_target` `cloudtrail` `config_configuration_recorder` `config_config_rule` `config_remediation_configuration` `guardduty_detector` | set-02 m1, `sfn-hardening/` `eventbridge-security-rules/` `cloudtrail-hardening/` |
 | CloudWatch | `cloudwatch_log_group` `cloudwatch_log_metric_filter` `cloudwatch_metric_alarm` `cloudwatch_dashboard` `cloudwatch_query_definition` `sns_topic` `sns_topic_subscription` | `cw-alarms/` `cw-dashboard/` `cw-logs-insights/` |
 | KMS·Secrets·IAM | `kms_key` `kms_alias` `kms_replica_key` `secretsmanager_secret` `secretsmanager_secret_version` `secretsmanager_secret_rotation` `iam_role` `iam_policy` `iam_role_policy` `iam_instance_profile` `iam_openid_connect_provider` · data `iam_policy_document` | `kms/` `secrets-manager/` `iam-audit-role/` `irsa/` |
 | 컨테이너 | `ecr_repository` `ecr_lifecycle_policy` `ecr_pull_through_cache_rule` `ecs_cluster` `ecs_service` `ecs_task_definition` `eks_access_entry` `eks_pod_identity_association` | task-1 ECR/ECS, `ecr-hardening/`, EKS 는 eksctl |
 | 컴퓨트 | `instance` `launch_template` `autoscaling_group` `autoscaling_policy` `key_pair` · data `ami` `ssm_parameter` | 2과제 EC2 모듈, `ec2-hardening/` `ec2-asg-alb/` |
-| 데이터·스트림 | `db_instance` `db_subnet_group` `db_parameter_group` `db_proxy` `db_proxy_default_target_group` `db_proxy_target` `docdb_cluster` `docdb_cluster_instance` `docdb_cluster_parameter_group` `msk_cluster` `msk_configuration` `kinesis_stream` `kinesis_firehose_delivery_stream` `sqs_queue` `sqs_queue_redrive_allow_policy` `glue_catalog_database` | task-3, set-02 m2/m4, `rds-connection/` `docdb-hardening/` `msk-hardening/` `kinesis-firehose/` `sqs-hardening/` |
+| 데이터·스트림 | `db_instance` `db_subnet_group` `db_parameter_group` `db_proxy` `db_proxy_default_target_group` `db_proxy_target` `docdb_cluster` `docdb_cluster_instance` `docdb_cluster_parameter_group` `msk_cluster` `msk_configuration` `kinesis_stream` `kinesis_firehose_delivery_stream` `sqs_queue` `sqs_queue_redrive_allow_policy` `glue_catalog_database` | task-3, set-02 m2/m3, `rds-connection/` `docdb-hardening/` `msk-hardening/` `kinesis-firehose/` `sqs-hardening/` |
 | Lattice·VPN | `vpclattice_service_network` `vpclattice_service` `vpclattice_target_group` `vpclattice_listener` `vpclattice_listener_rule` `vpclattice_service_network_vpc_association` `vpclattice_service_network_service_association` `vpclattice_auth_policy` `vpclattice_access_log_subscription` `ec2_client_vpn_endpoint` `ec2_client_vpn_network_association` `ec2_client_vpn_authorization_rule` `ec2_client_vpn_route` `acm_certificate` | `lattice-hardening/` `client-vpn/` |
 
 인터넷이 느리면 로컬 스키마로 인자 이름만 뽑는다(`terraform init` 끝난 디렉터리에서):

@@ -2,7 +2,7 @@
 # IAM (과제지 6. IAM — 최소권한)
 # - wsc2026-lambda-student-role: 과제가 Lambda 역할을 하나만 명명하므로
 #   처리 함수(S3 get/put + DDB put)와 트리거 함수(StartExecution)가 공용
-# - wsc2026-stepfunction-student-role: HeadObject/Copy/Delete + Lambda Invoke
+# - wsc2026-stepfunction-student-role: HeadObject/CopyObject + Lambda Invoke
 # ---------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "lambda_assume" {
@@ -86,7 +86,8 @@ data "aws_iam_policy_document" "sfn" {
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.score.arn}/input/*"]
   }
-  # CopyObject 대상 쓰기 (processed/ 정상, error/ 실패)
+  # CopyObject 대상 쓰기 (processed/ 정상, error/ 실패). input 은 지우지 않으므로
+  # DeleteObject 는 부여하지 않는다 — 채점 1-1 의 PRE input/ 이 원본으로 유지된다
   statement {
     sid     = "WriteMoved"
     effect  = "Allow"
@@ -95,12 +96,6 @@ data "aws_iam_policy_document" "sfn" {
       "${aws_s3_bucket.score.arn}/processed/*",
       "${aws_s3_bucket.score.arn}/error/*",
     ]
-  }
-  statement {
-    sid       = "DeleteInput"
-    effect    = "Allow"
-    actions   = ["s3:DeleteObject"]
-    resources = ["${aws_s3_bucket.score.arn}/input/*"]
   }
   statement {
     sid       = "InvokeProcessor"

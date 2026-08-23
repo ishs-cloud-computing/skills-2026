@@ -1,11 +1,11 @@
 variable "region" {
-  description = "모듈 4 리전 (과제지: ap-northeast-1)"
+  description = "모듈 3(MSK) 리전 (과제지: ap-northeast-1)"
   type        = string
   default     = "ap-northeast-1"
 }
 
 variable "player_number" {
-  description = "비번호 (mark 4-1 버킷 이름 접미사: wsc2026-sensor-alert-bucket-<비번호>)"
+  description = "등번호 (mark 3-1 버킷 이름 접미사: wsc2026-sensor-alert-bucket-<등번호>)"
   type        = string
   default     = "103"
 }
@@ -73,22 +73,22 @@ variable "priv_rtb_names" {
   }
 }
 
-# ----- MSK (과제지 2. MSK, 3. MSK Topic — mark 4-3) -----
+# ----- MSK (과제지 2. MSK, 3. MSK Topic — mark 3-3) -----
 
 variable "cluster_name" {
-  description = "MSK 클러스터 이름 (mark 4-3 정확 일치)"
+  description = "MSK 클러스터 이름 (mark 3-3 정확 일치)"
   type        = string
   default     = "wsc2026-msk-cluster"
 }
 
 variable "kafka_version" {
-  description = "Kafka 버전 (mark 4-3: 3.6.0)"
+  description = "Kafka 버전 (mark 3-3: 3.6.0)"
   type        = string
   default     = "3.6.0"
 }
 
 variable "broker_instance_type" {
-  description = "브로커 인스턴스 타입 (mark 4-3: kafka.t3.small)"
+  description = "브로커 인스턴스 타입 (mark 3-3: kafka.t3.small)"
   type        = string
   default     = "kafka.t3.small"
 }
@@ -106,7 +106,7 @@ variable "broker_volume_size" {
 }
 
 variable "topic_raw" {
-  description = "원시 센서 토픽 (과제지 3. MSK Topic 표)"
+  description = "원시 센서 토픽 (과제지 3. MSK Topic 표, mark 3-3 list-topics)"
   type = object({
     name               = string
     partitions         = number
@@ -120,7 +120,7 @@ variable "topic_raw" {
 }
 
 variable "topic_alert" {
-  description = "이상치 토픽 (과제지 3. MSK Topic 표)"
+  description = "이상치 토픽 (과제지 3. MSK Topic 표, mark 3-3 list-topics)"
   type = object({
     name               = string
     partitions         = number
@@ -135,8 +135,16 @@ variable "topic_alert" {
 
 # ----- EC2 Producer (과제지 4. EC2, provided/module4/Application.md) -----
 
+# 배부 zip 의 디렉터리 이름. RC 에서 과제 번호는 4 → 3 으로 내려갔지만 배부물 경로는
+# 그날 zip 이 정하므로 재번호되면 이 변수 한 줄만 바꾼다 (terraform.tfvars).
+variable "provided_dir" {
+  description = "제공 배포파일 디렉터리 (terraform/ 기준 상대경로)"
+  type        = string
+  default     = "../../provided/module4"
+}
+
 variable "producer_name" {
-  description = "Producer EC2 이름 태그"
+  description = "Producer EC2 이름 태그 (과제지 4. EC2: Instance Tag Name=...)"
   type        = string
   default     = "wsc2026-sensor-producer"
 }
@@ -186,7 +194,7 @@ variable "iam_producer_binary_path" {
   default     = "../app/producer"
 }
 
-# ----- Lambda Consumer (과제지 5. Lambda, provided/module4/lambda.md — mark 4-2/4-4) -----
+# ----- Lambda Consumer (과제지 5. Lambda, provided/module4/lambda.md — mark 3-2/3-4) -----
 
 variable "lambda_role_name" {
   description = "Lambda 공용 실행 역할 이름 (과제지 5. Lambda, 최소권한)"
@@ -195,33 +203,33 @@ variable "lambda_role_name" {
 }
 
 variable "lambda_runtime" {
-  description = "Lambda 런타임 (mark 4-2 가 python3.14 정확 일치 채점)"
+  description = "Lambda 런타임 (mark 3-2 가 python3.14 정확 일치 채점)"
   type        = string
   default     = "python3.14"
 }
 
 variable "consumer_fn_name" {
-  description = "raw 토픽 소비 Lambda 이름 (mark 4-2)"
+  description = "raw 토픽 소비 Lambda 이름 (mark 3-2)"
   type        = string
   default     = "wsc2026-sensor-consumer"
 }
 
 variable "alert_fn_name" {
-  description = "alert 토픽 소비 Lambda 이름 (mark 4-2)"
+  description = "alert 토픽 소비 Lambda 이름 (mark 3-2)"
   type        = string
   default     = "wsc2026-sensor-alert-consumer"
 }
 
-# ----- DynamoDB / S3 / SNS (과제지 6. DynamoDB, 7. S3 — mark 4-1) -----
+# ----- DynamoDB / S3 / SNS (과제지 6. DynamoDB, 7. S3 — mark 3-1) -----
 
 variable "table_name" {
-  description = "센서 데이터 테이블 이름 (mark 4-1: PK sensorId, SK timestamp)"
+  description = "센서 데이터 테이블 이름 (mark 3-1: PK sensorId, SK timestamp)"
   type        = string
   default     = "wsc2026-sensor-data"
 }
 
 variable "bucket_prefix" {
-  description = "오류 데이터 버킷 이름 접두사 (mark 4-1 이 <prefix>-<비번호> 로 head-bucket)"
+  description = "오류 데이터 버킷 이름 접두사 (mark 3-1 이 <prefix>-<등번호> 로 head-bucket)"
   type        = string
   default     = "wsc2026-sensor-alert-bucket"
 }

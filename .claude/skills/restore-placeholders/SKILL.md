@@ -60,7 +60,7 @@ region drift the same way as a personal-value leak.
    resolve yourself; for those, say why you're unsure in a few words, not a full report dump.
 
    ```
-   player_number "1032134" -> "103" (set-02/task-2/module-4-msk/terraform/terraform.tfvars)
+   player_number "1032134" -> "103" (set-02/task-2/module-3-msk/terraform/terraform.tfvars)
    ```
 
    Options: restore-and-continue / skip restore and continue anyway / cancel. Don't run `restore`

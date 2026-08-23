@@ -16,13 +16,13 @@
 필요 없다.** LFS 추적(루트 `.gitattributes`). 확인:
 
 ```powershell
-# 본 PC (PowerShell) — cwd: module-4-msk
+# 본 PC (PowerShell) — cwd: module-3-msk
 .\check-binary-auth.ps1 app\producer
 # 판정: IAM 인증 지원 → SASL/IAM(9098). producer_auth_mode=iam 사용 가능.
 ```
 
 ```bash
-# 리눅스 로컬 — cwd: module-4-msk
+# 리눅스 로컬 — cwd: module-3-msk
 ./check-binary-auth.sh app/producer
 ```
 

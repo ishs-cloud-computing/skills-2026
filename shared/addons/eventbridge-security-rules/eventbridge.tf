@@ -3,7 +3,7 @@
 
 # ---------------------------------------------------------------------------
 # EventBridge 보안 룰 부착 스니펫 — 룰 패턴 모음 + SNS 직접 / Lambda 핸들러 타깃
-# 원본: set-02 task-2 module-3-event eventbridge.tf, set-08 task-2 module-3-event-handling eventbridge.tf·sns.tf
+# 원본: set-02 task-2 module-3-event(RC 판에서 삭제 — git 이력) eventbridge.tf, set-08 task-2 module-3-event-handling eventbridge.tf·sns.tf
 # "AWS API Call via CloudTrail" 패턴은 리전에 management 이벤트를 기록하는 활성 Trail 이 필요
 # (cloudtrail-hardening 키트). State-change·GuardDuty·EBS 이벤트는 Trail 불필요.
 # ---------------------------------------------------------------------------

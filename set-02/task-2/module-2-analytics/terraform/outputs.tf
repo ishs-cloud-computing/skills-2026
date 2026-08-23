@@ -1,5 +1,5 @@
 output "alb_dns" {
-  description = "ALB DNS (mark 2-3-B/2-5 curl 대상)"
+  description = "ALB DNS (mark 2-4/2-6 curl 대상)"
   value       = aws_lb.analytics.dns_name
 }
 

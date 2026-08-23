@@ -195,4 +195,4 @@ ordered_cache_behavior {
 - `task-3/terraform/cloudfront.tf` — 기존 배포(`local.cache_caching_disabled`, strip Function)
 - `set-05/task-1/terraform/lambda.tf` — `vpc_config` + 인라인 ENI 권한 + Lambda SG
 - `set-03/task-1/terraform/lambda.tf`·`cloudfront.tf` — Function URL(AWS_IAM) + OAC + ORP
-- `set-02/task-2/module-4-msk/terraform/lambda.tf` — 의존성 zip 동봉 precondition 패턴
+- `set-02/task-2/module-3-msk/terraform/lambda.tf` — 의존성 zip 동봉 precondition 패턴

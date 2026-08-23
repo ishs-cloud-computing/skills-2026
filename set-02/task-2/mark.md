@@ -2,7 +2,7 @@
 
 ## 1. 채점상의 유의사항
 
-| 직종명 | 클라우드 컴퓨팅 |
+| 직종명 | 클라우드컴퓨팅 |
 |---|---|
 
 ※ 다음 사항을 유의하여 채점하시오.
@@ -10,7 +10,9 @@
 - 채점하는 서버가 선수의 서버가 맞는지 확인합니다.
 - 채점시 명령어 입력은 CloudShell을 이용할 수 있습니다.
 
-※ 채점기준 양식은 반드시 양식에 맞추어 작성해야 합니다. (채점사이트 입력에 필요)
+※ 채점기준 양식은 반드시, 양식에 맞추어 작성해야 합니다.(채점사이트 입력에 필요)
+
+※ 기존 3번 Cloud Event Handling 문제의 경우 과제에 존재하는 핵심 풀이에 대해 채점지에서 검사하지 않고, 존재하지 않은 많은 리소스를 검사하는 등 오류가 많아 삭제 하였습니다. 4번 MSK가 3번 채점항목이 되었습니다.
 
 ---
 
@@ -22,39 +24,33 @@
 |---|---|---|---|---|---|
 | 제2과제 | 1 | Workflow | 7.5 | 독립 ○ | 종료후 ○ |
 | 제2과제 | 2 | Real-time Data Analytics | 7.5 | 독립 ○ | 종료후 ○ |
-| 제2과제 | 3 | Cloud Event Handling | 7.5 | 독립 ○ | 종료후 ○ |
-| 제2과제 | 4 | MSK | 7.5 | 독립 ○ | 종료후 ○ |
-| | | **합계** | **30** | | |
+| 제2과제 | 3 | MSK | 7.5 | 독립 ○ | 종료후 ○ |
+| | | **합계** | **22.5** | | |
 
 ### 2) 채점방법 및 기준
 
 | 과제번호 | 일련번호 | 주요항목 | 일련번호 | 세부항목(채점방법) | 배점 |
 |---|---|---|---|---|---|
-| 제2과제 | 1-1 | S3 Bucket | 1-1 | S3 Bucket + Folder Structure | 1 |
-| 제2과제 | 1-2 | DynamoDB | 2-1 | DynamoDB Table + Key Schema | 1 |
-| 제2과제 | 1-3 | Lambda | 3-1 | Lambda Function + Runtime + Env | 1.5 |
-| 제2과제 | 1-4 | Step Functions | 4-1 | Step Functions State Machine | 1 |
-| 제2과제 | 1-5 | Workflow | 5-1 | Workflow Result (Normal) | 1.5 |
-| 제2과제 | 1-5 | Workflow | 5-2 | Workflow Result (Error) | 1.5 |
-| 제2과제 | 2-1 | EC2 | 1-1 | EC2 Instance | 1 |
-| 제2과제 | 2-2 | ALB | 2-1 | ALB Resources | 1 |
-| 제2과제 | 2-3 | Kinesis | 3-1 | Kinesis Stream | 1 |
-| 제2과제 | 2-3 | Kinesis | 3-2 | Kinesis Data | 1 |
-| 제2과제 | 2-4 | Flink | 4-1 | Flink Application | 1 |
-| 제2과제 | 2-5 | Application | 5-1 | Application Health | 1 |
-| 제2과제 | 2-6 | Systemd Service | 6-1 | Systemd Service | 1.5 |
-| 제2과제 | 3-1 | CloudTrail | 1-1 | CloudTrail | 0.5 |
-| 제2과제 | 3-2 | SNS | 2-1 | SNS Topic | 1 |
-| 제2과제 | 3-3 | Lambda | 3-1 | Lambda Functions | 1.5 |
-| 제2과제 | 3-4 | EventBridge | 4-1 | EventBridge Rules | 1.5 |
-| 제2과제 | 3-4 | EventBridge | 4-2 | SG Remediation Test | 1.5 |
-| 제2과제 | 3-4 | EventBridge | 4-3 | EC2 Type Remediation Test | 1.5 |
-| 제2과제 | 4-1 | Resources | 1-1 | Resources | 1 |
-| 제2과제 | 4-2 | Lambda | 2-1 | Lambda Functions | 1.5 |
-| 제2과제 | 4-3 | MSK | 3-1 | MSK Cluster Configuration | 1.5 |
-| 제2과제 | 4-3 | MSK | 3-2 | MSK Trigger Mapping | 1.5 |
-| 제2과제 | 4-4 | DynamoDB | 4-1 | Data Processing Result | 1 |
-| 제2과제 | 4-4 | DynamoDB | 4-2 | Producer Running | 1 |
+| 제2과제 | 1 | Workflow | 1 | S3 Bucket + Folder Structure | 1 |
+| 제2과제 | 1 | Workflow | 2 | DynamoDB Table + Key Schema | 1 |
+| 제2과제 | 1 | Workflow | 3 | Lambda Function + Runtime + Env | 1.5 |
+| 제2과제 | 1 | Workflow | 4 | Step Functions State Machine | 1 |
+| 제2과제 | 1 | Workflow | 5 | Workflow Result (Normal) | 1.5 |
+| 제2과제 | 1 | Workflow | 6 | Workflow Result (Error) | 1.5 |
+| 제2과제 | 2 | Real-time Data Analytics | 1 | EC2 Instance | 1 |
+| 제2과제 | 2 | Real-time Data Analytics | 2 | ALB Resoureces | 1 |
+| 제2과제 | 2 | Real-time Data Analytics | 3 | Kinesis Stream | 1 |
+| 제2과제 | 2 | Real-time Data Analytics | 4 | Kinesis Data | 1 |
+| 제2과제 | 2 | Real-time Data Analytics | 5 | Flink Application | 1 |
+| 제2과제 | 2 | Real-time Data Analytics | 6 | Application Health | 1 |
+| 제2과제 | 2 | Real-time Data Analytics | 7 | Systemd Service | 1.5 |
+| 제2과제 | 3 | MSK | 1 | Resources | 1 |
+| 제2과제 | 3 | MSK | 2 | Lambda Functions | 1.5 |
+| 제2과제 | 3 | MSK | 3 | MSK Cluster Configuration | 1.5 |
+| 제2과제 | 3 | MSK | 4 | MSK Trigger Mapping | 1.5 |
+| 제2과제 | 3 | MSK | 5 | Data Processing Result | 1 |
+| 제2과제 | 3 | MSK | 6 | Producer Running | 1 |
+| | | | | **합계** | **22.5** |
 
 ---
 
@@ -74,10 +70,12 @@ aws sts get-caller-identity --query Account --output text
 3) 아래 명령어를 실행해 채점환경을 준비합니다. (스크립트 사용 시 스킵)
 
 ```bash
-BUCKET_NAME="wsc2026-student-score-bucket-(선수 비번호)"
+BUCKET_NAME="wsc2026-student-score-bucket-<선수 등번호>"
 ```
 
-#### 1-1. S3 Bucket
+채점 전 S3 버킷과 DynamoDB의 데이터 클렌징이 완료된지 확인하며, 클렌징이 안되었다면 1-1과 1-5, 1-6은 틀린 것으로 간주합니다. 이후 S3 버킷에 `input/test.csv` 파일을 업로드 하며 60초 이후에 아래 명령어 들을 수행하여 워크플로가 정상 동작 하였는지 확인합니다.
+
+#### 1-1. S3 Bucket + Folder Structure
 
 1) 아래 명령어를 실행합니다.
 
@@ -93,7 +91,7 @@ PRE input/
 PRE processed/
 ```
 
-#### 1-2. DynamoDB
+#### 1-2. DynamoDB Table + Key Schema
 
 1) 아래 명령어를 입력합니다.
 
@@ -119,7 +117,7 @@ aws dynamodb describe-table --table-name wsc2026-student-score --query "Table.[T
 ]
 ```
 
-#### 1-3. Lambda
+#### 1-3. Lambda Function + Runtime + Env
 
 1) 아래 명령어를 입력합니다.
 
@@ -134,13 +132,13 @@ aws lambda get-function-configuration --function-name wsc2026-student-score-func
   "wsc2026-student-score-function",
   "python3.12",
   {
-    "S3_BUCKET": "wsc2026-student-score-bucket-103",
+    "S3_BUCKET": "wsc2026-student-score-bucket-<등번호>",
     "DDB_TABLE": "wsc2026-student-score"
   }
 ]
 ```
 
-#### 1-4. Step Functions
+#### 1-4. Step Functions State Machine
 
 1) 아래 명령어를 입력합니다.
 
@@ -155,7 +153,7 @@ aws stepfunctions describe-state-machine --state-machine-arn $SM_ARN --query "[n
 wsc2026-student-score-workflow	STANDARD
 ```
 
-#### 1-5-A. Workflow Result (Normal)
+#### 1-5. Workflow Result (Normal)
 
 1) 아래 명령어를 입력합니다.
 
@@ -170,7 +168,7 @@ STU1020	96.6	A
 2026-05-31 22:58:16	497 test.csv
 ```
 
-#### 1-5-B. Workflow Result (Error)
+#### 1-6. Workflow Result (Error)
 
 1) 아래 명령어를 입력합니다.
 
@@ -220,7 +218,7 @@ aws ec2 describe-instances --instance-ids $EC2_ID --query "Reservations[0].Insta
 analytics-priv-a
 ```
 
-#### 2-2. ALB Resources
+#### 2-2. ALB Resoureces
 
 1) 아래 명령어를 입력합니다.
 
@@ -235,7 +233,7 @@ aws elbv2 describe-listeners --load-balancer-arn $(aws elbv2 describe-load-balan
 wsc2026-analytics-tg	5000
 ```
 
-#### 2-3-A. Kinesis Stream
+#### 2-3. Kinesis Stream
 
 1) 아래 명령어를 입력합니다.
 
@@ -249,7 +247,7 @@ aws kinesis describe-stream-summary --stream-name wsc2026-order-stream --query "
 wsc2026-order-stream	ACTIVE	ON_DEMAND
 ```
 
-#### 2-3-B. Kinesis Data
+#### 2-4. Kinesis Data
 
 1) 아래 명령어를 입력합니다.
 
@@ -263,13 +261,13 @@ curl -s -X POST http://$ALB_DNS/order | jq .
 {
   "event_time": "<timestamp>",
   "order_id": "<uuid>",
-  "price": "<number>",
+  "price": <number>,
   "product_name": "<product_name>",
-  "quantity": "<number>"
+  "quantity": <number>
 }
 ```
 
-#### 2-4. Flink Application
+#### 2-5. Flink Application
 
 1) 아래 명령어를 입력합니다.
 
@@ -283,7 +281,7 @@ aws kinesisanalyticsv2 describe-application --application-name wsc2026-analytics
 wsc2026-analytics-flink	READY	ZEPPELIN-FLINK-3_0
 ```
 
-#### 2-5. Application Health
+#### 2-6. Application Health
 
 1) 아래 명령어를 입력합니다.
 
@@ -297,7 +295,7 @@ curl -s http://$ALB_DNS/health
 {"status":"healthy"}
 ```
 
-#### 2-6. Systemd Service
+#### 2-7. Systemd Service
 
 1) 아래 명령어를 입력합니다.
 
@@ -314,107 +312,9 @@ enabled
 
 ---
 
-### 3) Cloud Event Handling (eu-west-1)
+### 3) MSK (ap-northeast-1)
 
 #### 3-0. 채점 준비
-
-1) 웹브라우저로 선수의 AWS 계정에 로그인 후 **eu-west-1** Region으로 접속합니다.
-2) CloudShell에 접속해 아래 명령어를 입력하고 사용자의 AWS ID와 일치하는지 확인합니다.
-
-```bash
-aws sts get-caller-identity --query Account --output text
-```
-
-3) 아래 명령어를 실행해 채점환경을 준비합니다. (스크립트 사용 시 스킵)
-
-```bash
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text); INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=wsc2026-event-ec2" "Name=instance-state-name,Values=running,stopped" --query "Reservations[0].Instances[0].InstanceId" --output text); SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=wsc2026-event-sg" --query "SecurityGroups[0].GroupId" --output text)
-```
-
-4) 아래 명령어를 실행해 EC2를 채점 가능한 상태로 수정합니다.
-
-```bash
-aws ec2 stop-instances --instance-ids $INSTANCE_ID &>/dev/null; aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 &>/dev/null
-```
-
-#### 3-1. Lambda Functions
-
-1) 아래 명령어를 입력합니다.
-
-```bash
-aws sns get-topic-attributes --topic-arn arn:aws:sns:eu-west-1:${ACCOUNT_ID}:wsc2026-event-alert --query "Attributes.TopicArn" --output text; for fn in wsc2026-ec2-stop-remediation wsc2026-ec2-terminate-alert wsc2026-sg-remediation wsc2026-tag-alert; do aws lambda get-function --function-name $fn --query "Configuration.[FunctionName,Runtime]" --output text; done
-```
-
-2) 출력값이 아래와 일치하는지 확인합니다.
-
-```
-arn:aws:sns:eu-west-1:(선수 AWS ID):wsc2026-event-alert
-wsc2026-ec2-stop-remediation	python3.12
-wsc2026-ec2-terminate-alert	python3.12
-wsc2026-sg-remediation	python3.12
-wsc2026-tag-alert	python3.12
-```
-
-#### 3-2. EventBridge Targets
-
-1) 아래 명령어를 입력합니다.
-
-```bash
-for rule in wsc2026-ec2-stop-rule wsc2026-ec2-terminate-rule; do echo "$rule -> $(aws events list-targets-by-rule --rule $rule --query "Targets[0].Arn" --output text)"; done
-```
-
-2) 출력값이 아래와 일치하는지 확인합니다.
-
-```
-wsc2026-ec2-stop-rule -> arn:aws:lambda:eu-west-1:(선수 AWS ID):function:wsc2026-ec2-stop-remediation
-wsc2026-ec2-terminate-rule -> arn:aws:lambda:eu-west-1:(선수 AWS ID):function:wsc2026-ec2-terminate-alert
-```
-
-#### 3-3. Config Rules
-
-1) 아래 명령어를 입력합니다.
-
-```bash
-aws configservice describe-config-rules --config-rule-names wsc2026-sg-ssh-rule wsc2026-required-tags-rule --query "ConfigRules[*].[ConfigRuleName,ConfigRuleState]" --output text
-```
-
-2) 출력값이 아래와 일치하는지 확인합니다.
-
-```
-wsc2026-sg-ssh-rule	ACTIVE
-wsc2026-required-tags-rule	ACTIVE
-```
-
-#### 3-4. Remediation Test
-
-1) 아래 명령어를 입력합니다.
-
-```bash
-sleep 60; echo "EC2 State (expect running): $(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[0].Instances[0].State.Name" --output text)"; echo "SG Inbound Count (expect 0): $(aws ec2 describe-security-groups --group-ids $SG_ID --query "SecurityGroups[0].IpPermissions | length(@)" --output text)"
-```
-
-2) 출력값이 아래와 일치하는지 확인합니다.
-
-```
-EC2 State (expect running): running
-SG Inbound Count (expect 0): 0
-```
-
-#### 3-5. Tag Compliance
-
-1) 아래 명령어를 입력합니다.
-
-```bash
-aws configservice get-compliance-details-by-config-rule --config-rule-name wsc2026-required-tags-rule --compliance-types NON_COMPLIANT --query "EvaluationResults[0].EvaluationResultIdentifier.EvaluationResultQualifier.ResourceId" --output text
-```
-
-2) 출력값이 `None`인지 확인합니다.
-
----
-
-### 4) MSK (ap-northeast-1)
-
-#### 4-0. 채점 준비
 
 1) 웹브라우저로 선수의 AWS 계정에 로그인 후 **ap-northeast-1** Region으로 접속합니다.
 2) CloudShell에 접속해 아래 명령어를 입력하고 사용자의 AWS ID와 일치하는지 확인합니다.
@@ -427,10 +327,13 @@ aws sts get-caller-identity --query Account --output text
 
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text); CLUSTER_ARN=$(aws kafka list-clusters --cluster-name-filter wsc2026-msk-cluster --query "ClusterInfoList[0].ClusterArn" --output text)
-BUCKET_NAME="wsc2026-student-score-bucket-(선수 비번호)"
+BUCKET_NAME="wsc2026-student-score-bucket-(선수 등번호)"
 ```
 
-#### 4-1. Resources
+> 원문 오류: `BUCKET_NAME` 이 module-1 버킷명이지만 3-1 기대 출력은 `wsc2026-sensor-alert-bucket-<등번호>` 다.
+> `mark/mark2-3.sh` 는 후자를 쓴다. RC 판에서도 고쳐지지 않았다 (NOTES 정정 로그 참고).
+
+#### 3-1. Resources
 
 1) 아래 명령어를 입력합니다.
 
@@ -444,13 +347,13 @@ aws dynamodb describe-table --table-name wsc2026-sensor-data --query "Table.[Tab
 wsc2026-sensor-data
 sensorId	timestamp
 {
-  "BucketArn": "arn:aws:s3:::wsc2026-sensor-alert-bucket-<비번호>",
+  "BucketArn": "arn:aws:s3:::wsc2026-sensor-alert-bucket-<등번호>",
   "BucketRegion": "ap-northeast-1",
   "AccessPointAlias": false
 }
 ```
 
-#### 4-2. Lambda Functions
+#### 3-2. Lambda Functions
 
 1) 아래 명령어를 입력합니다.
 
@@ -465,21 +368,29 @@ wsc2026-sensor-consumer	python3.14
 wsc2026-sensor-alert-consumer	python3.14
 ```
 
-#### 4-3. MSK Cluster Configuration
+#### 3-3. MSK Cluster Configuration
 
 1) 아래 명령어를 입력합니다.
 
 ```bash
 aws kafka describe-cluster --cluster-arn $CLUSTER_ARN --query "ClusterInfo.[ClusterName,State,CurrentBrokerSoftwareInfo.KafkaVersion,BrokerNodeGroupInfo.InstanceType,ClientAuthentication.Sasl.Iam.Enabled]" --output text
+aws kafka list-topics --output json --cluster-arn $CLUSTER_ARN --query "Topics[].[TopicName,ReplicationFactor,PartitionCount]" | grep -A2 wsc2026
 ```
 
 2) 출력값이 아래와 일치하는지 확인합니다.
 
 ```
 wsc2026-msk-cluster	ACTIVE	3.6.0	kafka.t3.small	True
+
+"wsc2026-sensor-alert",
+2,
+1
+"wsc2026-sensor-raw",
+2,
+3
 ```
 
-#### 4-4. MSK Trigger Mapping
+#### 3-4. MSK Trigger Mapping
 
 1) 아래 명령어를 입력합니다.
 
@@ -494,7 +405,7 @@ Enabled
 Enabled
 ```
 
-#### 4-5-A. Data Processing Result
+#### 3-5. Data Processing Result
 
 1) 아래 명령어를 입력합니다.
 
@@ -512,7 +423,9 @@ aws dynamodb scan --table-name wsc2026-sensor-data --max-items 1 --query "Items[
 }
 ```
 
-#### 4-5-B. Producer Running
+Value 값은 다를 수 있으나 표기되는 Key는 모두 같아야 합니다.
+
+#### 3-6. Producer Running
 
 1) 아래 명령어를 입력합니다.
 
@@ -528,3 +441,5 @@ aws dynamodb scan --table-name wsc2026-sensor-data --max-items 3 --query "Items[
   "timestamp": "2026-06-01T18:28:24+09:00"
 }
 ```
+
+Value 값은 다를 수 있으나 표기되는 Key는 모두 같아야 합니다. 단, `timestamp`의 경우 시간 자체는 다를 수 있으나, `YYYY-MM-DDTHH:mm:ss±HH:mm` 형식과 `+09:00` 형식으로 표기가 되어야 합니다.

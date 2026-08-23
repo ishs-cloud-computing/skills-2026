@@ -143,11 +143,11 @@ jq -r '.definitions.ManagedNodeGroup.properties | keys[]' schema.json
 | 리소스·주제 | 문서 | 구현 | 고칠 때 막히는 곳 |
 | --- | --- | --- | --- |
 | `aws_lambda_function`·`aws_lambda_permission` | [lambda_function](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | `set-07/task-1/terraform/lambda.tf` + `lambda/` | ALB 가 호출하면 `principal = "elasticloadbalancing.amazonaws.com"` |
-| `aws_lambda_event_source_mapping` | [lambda_event_source_mapping](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_event_source_mapping) | `set-07/task-2/module-1-nosql/terraform/lambda.tf`, `set-02/task-2/module-4-msk/terraform/lambda.tf` | 소스(Stream·SQS·MSK)별로 필요한 IAM 액션이 다르다 |
+| `aws_lambda_event_source_mapping` | [lambda_event_source_mapping](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_event_source_mapping) | `set-07/task-2/module-1-nosql/terraform/lambda.tf`, `set-02/task-2/module-3-msk/terraform/lambda.tf` | 소스(Stream·SQS·MSK)별로 필요한 IAM 액션이 다르다 |
 | API Gateway (REST) | [api_gateway_rest_api](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_rest_api) · [안내서](https://docs.aws.amazon.com/apigateway/latest/developerguide/) | `set-05/task-2/module-4-rest-api/terraform/apigw.tf` | `aws_api_gateway_deployment` 에 `triggers` 가 없으면 변경이 배포에 안 실린다 |
 | `aws_sfn_state_machine` | [sfn_state_machine](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sfn_state_machine) · [Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/) | `set-02/task-2/module-1-workflow/terraform/stepfunctions.tf` | ASL 정의는 `jsonencode`. 상태별 IAM 액션을 role 에 다 넣는다 |
-| `aws_cloudwatch_event_rule`·`_target` | [cloudwatch_event_rule](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | `set-08/task-2/module-3-event-handling/terraform/`, `set-02/task-2/module-3-event/terraform/` | `event_pattern` 은 문자열 JSON. 대상 호출 권한은 별도 |
-| `aws_cloudtrail`·`aws_config_config_rule` | [cloudtrail](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudtrail) · [Config](https://docs.aws.amazon.com/config/latest/developerguide/) | `set-02/task-2/module-3-event/terraform/` | Config 는 recorder + delivery channel + status 3종이 한 세트 |
+| `aws_cloudwatch_event_rule`·`_target` | [cloudwatch_event_rule](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | `set-08/task-2/module-3-event-handling/terraform/`, `shared/addons/eventbridge-security-rules/` | `event_pattern` 은 문자열 JSON. 대상 호출 권한은 별도 |
+| `aws_cloudtrail`·`aws_config_config_rule` | [cloudtrail](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudtrail) · [Config](https://docs.aws.amazon.com/config/latest/developerguide/) | `shared/addons/cloudtrail-hardening/`, `shared/addons/eventbridge-security-rules/` | Config 는 recorder + delivery channel + status 3종이 한 세트 (set-02 구 module-3-event 은 RC 판에서 삭제 — git 이력) |
 | `aws_sqs_queue`·`aws_sns_topic` | [sqs_queue](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sqs_queue) | `set-08/task-2/module-4-*/terraform/` | 큐 정책 없이는 SNS→SQS 가 안 붙는다 |
 
 ### 스트리밍·분석
@@ -156,7 +156,7 @@ jq -r '.definitions.ManagedNodeGroup.properties | keys[]' schema.json
 | --- | --- | --- |
 | `aws_kinesis_stream` | [kinesis_stream](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kinesis_stream) | `set-02/task-2/module-2-analytics/terraform/kinesis.tf` |
 | Managed Service for Apache Flink | [Flink 안내서](https://docs.aws.amazon.com/managed-flink/latest/java/) | `set-02/task-2/module-2-analytics/terraform/flink.tf` (CFN 래핑) |
-| `aws_msk_cluster` | [msk_cluster](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/msk_cluster) · [MSK 안내서](https://docs.aws.amazon.com/msk/latest/developerguide/) | `set-02/task-2/module-4-msk/terraform/msk.tf` |
+| `aws_msk_cluster` | [msk_cluster](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/msk_cluster) · [MSK 안내서](https://docs.aws.amazon.com/msk/latest/developerguide/) | `set-02/task-2/module-3-msk/terraform/msk.tf` |
 
 ### 관측성
 

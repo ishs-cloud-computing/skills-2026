@@ -1,10 +1,10 @@
 # ---------------------------------------------------------------------------
 # S3 (과제지 1. S3, mark 1-1)
-# - wsc2026-student-score-bucket-<비번호>, input/ processed/ error/ 3개 prefix
-# - 폴더 마커는 input/ 하나만 생성:
-#   채점 시 processed/(test.csv)·error/(json 4개)에는 실제 객체가 있어 PRE 가 뜨고,
-#   마커를 만들면 mark 1-5-A/B 목록에 잉여 0바이트 라인이 출력되어 오답 처리된다.
-#   input/ 은 워크플로우가 파일을 옮겨가 비므로 마커가 있어야 PRE input/ 이 유지된다.
+# - wsc2026-student-score-bucket-<등번호>, input/ processed/ error/ 3개 prefix
+# - 폴더 마커 객체를 만들지 않는다: 과제지가 "채점 시작시 버킷의 데이터가 삭제되어
+#   있는지 확인" 을 요구해 0바이트 마커도 잔존 데이터로 잡힐 수 있다. 세 PRE 는
+#   채점자가 올린 input/test.csv 와 워크플로우 산출물(processed/·error/)로 채워진다
+#   — 워크플로우가 input 객체를 지우지 않는 이유다(statemachine/workflow.asl.json).
 # ---------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "score" {
@@ -21,12 +21,6 @@ resource "aws_s3_bucket_public_access_block" "score" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-}
-
-resource "aws_s3_object" "input_marker" {
-  bucket  = aws_s3_bucket.score.id
-  key     = "input/"
-  content = ""
 }
 
 # input/*.csv 생성 시 트리거 Lambda 호출 (lambda.md B. 트리거 함수)

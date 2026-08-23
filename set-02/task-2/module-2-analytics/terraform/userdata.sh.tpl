@@ -15,7 +15,7 @@ REQEOF
 python3.12 -m venv /opt/app/venv
 /opt/app/venv/bin/pip install --no-cache-dir -r /opt/app/requirements.txt
 
-# ===== systemd 유닛 (mark 2-6: 유닛 이름 정확히 'app', active + enabled) =====
+# ===== systemd 유닛 (mark 2-7: 유닛 이름 정확히 'app', active + enabled) =====
 # 환경변수는 [Service] 레벨로 지정 — app.py 가 import 시점에 env 없으면 raise 한다
 cat > /etc/systemd/system/app.service <<UNITEOF
 [Unit]

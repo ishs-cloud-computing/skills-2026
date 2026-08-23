@@ -376,7 +376,7 @@ aws logs tail (terraform output -raw lambda_log_group) --since 10m
 
 - set-07 task-1 `terraform/lambda.tf` — 선생성 로그 그룹(CMK) · `kms_key_arn` · `logging_config`
 - set-03 task-1 `terraform/lambda.tf` — `source_kms_key_arn` · Function URL(AWS_IAM) · CloudFront 권한 · `aws_kms_ciphertext`
-- set-02 task-2 module-4-msk `terraform/lambda.tf` — MSK ESM (`starting_position`·`topics`)
+- set-02 task-2 module-3-msk `terraform/lambda.tf` — MSK ESM (`starting_position`·`topics`)
 
 ---
 
