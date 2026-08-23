@@ -30,3 +30,11 @@ __pycache__/
 set-03/task-1/app/book
 set-03/task-1/app/index.html
 set-03/task-1/app/main.jpeg
+# set-02/task-2: 배포 소스·바이너리·데이터는 당일 수정 대비로 저장소에서 제거 (f395d62, 2988555).
+# 배부물을 같은 경로에 로컬 배치해 쓰고 커밋하지 않는다.
+set-02/task-2/provided/module1/lambda-function.py
+set-02/task-2/provided/module1/test.csv
+set-02/task-2/provided/module2/app.py
+set-02/task-2/provided/module2/requirements.txt
+set-02/task-2/provided/module3/lambda-function.py
+set-02/task-2/provided/module4/app

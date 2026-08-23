@@ -12,7 +12,8 @@ module-1-workflow/
     ├── statemachine/workflow.asl.json
     └── lambda/index.py (처리, provided 복사+TODO 완성) · trigger.py (트리거)
 
-# 제공 원본: task-2/provided/module1/ (수정 금지) — test.csv 는 최종 실행에서 사용
+# 제공 원본: task-2/provided/module1/ (수정 금지) — test.csv 는 최종 실행에서 사용.
+#   저장소엔 문서만 있다. 배부물 test.csv·lambda-function.py 를 이 경로에 먼저 놓는다 (task-2/README.md)
 # 채점: task-2/mark/mark2-1.sh (CloudShell, ap-southeast-1)
 ```
 
@@ -62,7 +63,7 @@ foreach ($i in $items) {
   aws dynamodb delete-item --table-name wsc2026-student-score --key $key
 }
 
-# 3-3) test.csv 업로드 → 워크플로우 자동 실행 (본 PC 에는 provided 원본이 있다)
+# 3-3) test.csv 업로드 → 워크플로우 자동 실행 (배부물을 provided/module1/ 에 놓아둔 상태여야 한다)
 aws s3 cp ..\..\provided\module1\test.csv s3://$B/input/test.csv
 
 # 3-4) 실행 완료 확인 (SUCCEEDED 1건)

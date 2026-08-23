@@ -49,7 +49,16 @@ terraform output -json > outputs.json
 # 이후 모듈별 README 의 "배포 순서" 를 따른다.
 ```
 
-공식 채점 스크립트는 `mark/`(mark2-1~4.sh)에, 제공 배포파일은 `provided/`에 있다. `provided/` 는 수정하지 않으며 각 모듈 terraform 이 직접 참조하거나 복사본을 둔다.
+공식 채점 스크립트는 `mark/`(mark2-1~4.sh)에 있다. 제공 배포파일 중 문서(`*.md`)만 `provided/`에 있고 **소스·데이터·바이너리는 저장소에 없다** — 시작 전에 배부물을 같은 이름으로 `provided/module<N>/` 에 놓는다(`.gitignore` 처리라 커밋되지 않는다):
+
+```
+provided/module1/  lambda-function.py  test.csv
+provided/module2/  app.py  requirements.txt
+provided/module3/  lambda-function.py
+provided/module4/  app
+```
+
+`provided/` 는 수정하지 않으며 각 모듈 terraform 이 직접 참조하거나 복사본을 둔다.
 
 ```bash
 # 채점 시 기본 리전 설정 (채점지 사전 작업)

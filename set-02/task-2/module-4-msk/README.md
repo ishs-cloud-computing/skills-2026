@@ -40,6 +40,8 @@ DynamoDB 가 0 으로 나온다(리소스는 멀쩡한데 안 보이는 것).
 "실행할 수 없습니다" 로 막힌다. `-Scope Process` 라 이 셸에만 적용되고 새 터미널을 열면 다시
 잡아야 한다 — 위 리전 설정과 생명주기가 같다.
 
+배부물 바이너리를 `..\provided\module4\app` 에 먼저 놓는다(저장소엔 문서만 있다) — 없으면 `select-auth-mode` 가 "제공 바이너리 없음"(exit 2)으로 멈춘다. iam 판정에 대비해 자체 바이너리 `app\producer` 가 LFS 포인터(133B)가 아니라 실물(약 10MB)인지도 확인한다 — 포인터면 `git lfs pull`.
+
 ```powershell
 # cwd: module-4-msk
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process

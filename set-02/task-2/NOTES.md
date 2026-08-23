@@ -10,7 +10,7 @@
 | 모듈 | 이름 | 리전 | 미해결 |
 |------|------|------|--------|
 | 1 | workflow | ap-southeast-1 | 없음 |
-| 2 | analytics | ap-northeast-2 | EC2 Role 이름이 전사본(`analytics`) ↔ 구현(`alaytics`) 로 어긋남. 2026-08-21 신판이 원문 오타를 고쳤으나 `.tf` 리네임 미반영 — 이슈 #133 |
+| 2 | analytics | ap-northeast-2 | 없음 (EC2 Role 리네임은 이슈 #133 으로 종결 — 정정 로그 참고) |
 | 3 | event | eu-west-1 | 없음 |
 | 4 | msk | ap-northeast-1 | iam(기본) 실배포 검증 2026-08-16. tls(`-var` 지정) 실배포 미검증. 당일 모드는 `select-auth-mode` 판정을 따른다 |
 
@@ -82,6 +82,23 @@
 ---
 ## 결정 로그
 <!-- append만. 절대 수정하지 않는다. 최신이 위로. 모듈 태그를 앞에 붙인다. -->
+
+### 2026-08-23 [공통] 배포파일 저장소 제거의 후속 — 배부물 로컬 배치를 런북·.gitignore 로 명문화
+- 맥락: 커밋 f395d62·2988555 가 배포 소스·바이너리·데이터(test.csv, app.py, requirements.txt,
+  lambda-function.py×2, module4 app)를 당일 수정 대비로 저장소에서 뺐다. 그 뒤 module-2 는
+  `ec2.tf` 의 `file()` 참조로 validate/plan 자체가 실패했고, module-4 는 tls 경로와 런북 0단계
+  (`select-auth-mode`)가, module-1 은 test.csv 업로드 단계가 실행 불가였는데 런북 어디에도
+  "배부물을 먼저 놓는다" 선행 단계가 없었다
+- 채택: 배부물을 `provided/module<N>/` 원래 경로에 로컬 배치해 쓰는 운용을 task-2 README 와
+  각 모듈 런북(1단계 또는 0단계 앞)에 명문화하고, 해당 6개 경로를 루트 `.gitignore` 에 추가해
+  배치본이 커밋되지 않게 했다. `select-auth-mode.sh`·`teardown-eni.sh` 실행 비트도 이때 복구
+- 실측(2026-08-23 배부 zip 기준): 텍스트 5개는 제거 전 git 이력과, module4 `app` 은 구 LFS
+  포인터 sha256(e22e22b3…)과 완전 동일 — 즉 8/17 리버싱 분석(BINARY-ANALYSIS)이 그대로 유효.
+  test.csv 를 처리 Lambda 로직에 통과시켜 mark 1-5-A/B 기대값 재현(processed 5건, STU1020
+  96.6 A, error 정확히 STU2001·STU2002·STU2004·unknown 4건). `select-auth-mode` 실물 판정은
+  tls(IAM 마커 0/5). 배치 후 module-2·module-4 `terraform validate` 통과
+- 주의: 저장소 자체 바이너리 `module-4-msk/app/producer` 는 LFS 오브젝트라 LFS 미수신 클론에선
+  133B 포인터다 — iam 경로로 apply 하면 포인터가 S3 에 올라간다. 런북 0단계에 확인 문구를 넣었다
 
 ### 2026-08-17 [module-4] 두 경로 설명을 README 한 절로 통합 + "당일 제출은 tls" 확정 서술 철회
 - 맥락: 같은 날 앞선 결정으로 두 경로 설명이 6곳(README 최상단 표 + A/B 절, app/README, BINARY-ANALYSIS, terraform.tfvars 주석, variables.tf 주석)에 중복 서술됐다. 값 하나가 바뀔 때 고칠 자리가 6곳이라 대회 중 정정이 서로 어긋날 위험이 크다. 게다가 그 서술들이 **"대회 당일 제출은 tls 다"를 확정 사실로** 적고 있었다
