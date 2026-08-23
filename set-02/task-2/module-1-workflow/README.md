@@ -61,6 +61,11 @@ aws stepfunctions list-executions --state-machine-arn $SM_ARN --query "execution
 aws dynamodb get-item --table-name wsc2026-student-score --key '{"studentId":{"S":"STU1020"},"examDate":{"S":"2026-05-30"}}' --query "Item.[studentId.S,average.N,grade.S]" --output text   # STU1020 96.6 A
 aws s3 ls s3://$B/processed/   # test.csv 만
 aws s3 ls s3://$B/error/       # error_*_STU2001/STU2002/STU2004/unknown.json 4개만
+
+# 위 결과가 기대와 다르면 처리 Lambda 로그부터 본다. 헤더/행수/처리결과가 한 줄씩 찍힌다
+aws logs tail /aws/lambda/wsc2026-student-score-function --since 10m --format short
+#   [processor] key=input/test.csv fieldnames=['examDate', ...] rows=9
+#   [processor] processed=5 errors=4
 ```
 
 test.csv 를 두 번 올리면 `error/` 에 timestamp 가 다른 JSON 이 8개가 되어 1-6 오답이다. 리허설을
@@ -127,5 +132,8 @@ terraform destroy
 - **평균은 Decimal 나눗셈** (`Decimal("483")/Decimal("5")` = 정확히 96.6). float는 96.60000000000001이 되고 boto3가 float 저장을 거부한다.
 - **PowerShell 7.3+ 에서 JSON 인자는 작은따옴표로만 감싼다** — 따옴표가 그대로 전달된다. PS 5.1 식 `\"` 이스케이프를 하면 백슬래시가 그대로 들어가 aws cli 파싱 오류가 난다.
 - 트리거 suffix가 `.csv`라 Lambda가 error/에 쓰는 `.json`으로는 재귀 트리거되지 않는다.
+- **CSV 는 `utf-8-sig` → `cp949` 순으로 디코딩하고 헤더의 BOM·공백·따옴표를 털어낸다.** BOM 이 붙은 CSV 를 `utf-8` 로 읽으면 첫 헤더가 `﻿examDate` 가 되어 전 행이 `MISSING_FIELD` 로 떨어진다 — DynamoDB 는 0건인데 `statusCode` 는 200 이라 파일은 `processed/` 로 넘어가고, 채점 1-5 만 `None` 으로 조용히 틀린다.
+- **행은 읽혔는데 저장이 0건이면 `statusCode 500` 을 돌려준다.** 200 으로 위장하면 워크플로우가 SUCCEEDED 로 끝나 실패를 채점 직후에야 발견한다. 500 이면 `MoveToError` → `Fail` 로 가서 리허설에서 바로 드러난다. 헤더에 `REQUIRED_FIELDS` 가 없으면 그 전에 400.
+- **`error/` 키의 timestamp 는 입력 객체의 `LastModified`** 에서 뽑는다. `ProcessStudentData` 는 `States.ALL` 로 3회 재시도하는데 벽시계 시각을 쓰면 재시도마다 timestamp 가 다른 JSON 이 쌓여 1-6(정확히 4개)이 깨진다. 지금은 키가 같아 덮어써진다.
 - 처리 Lambda는 State Machine에서 ARN 직접 호출 — 출력이 `$.result`에 그대로 실려 `.Payload` 언랩 불필요.
 - 두 Lambda는 `wsc2026-lambda-student-role` 공용 (과제가 Lambda 역할을 하나만 명명).
