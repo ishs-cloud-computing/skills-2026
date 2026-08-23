@@ -39,7 +39,8 @@ aws dynamodb scan --table-name wsc2026-student-score \
     aws dynamodb delete-item --table-name wsc2026-student-score --key "$k"
   done
 
-# 3-3) test.csv 업로드 (CloudShell 이면 Actions > Upload file 로 먼저 올린다)
+# 3-3) test.csv 업로드 — 배부물을 provided/module1/ 에 놓아둔 상태여야 한다
+#      (CloudShell 이면 Actions > Upload file 로 먼저 올린다)
 aws s3 cp ../../provided/module1/test.csv s3://$B/input/test.csv
 
 # 3-4) 실행 완료 확인

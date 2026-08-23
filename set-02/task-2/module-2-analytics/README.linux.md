@@ -4,6 +4,8 @@
 
 ### 1) [본 PC] 배포
 
+배부물 `app.py`·`requirements.txt` 를 `../../provided/module2/` 에 먼저 놓는다 — `ec2.tf` 가 `file()` 로 직접 읽으므로 없으면 plan 단계에서 실패한다.
+
 ```bash
 cd terraform
 terraform init

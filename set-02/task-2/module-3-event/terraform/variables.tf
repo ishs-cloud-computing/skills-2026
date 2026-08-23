@@ -133,7 +133,7 @@ variable "function_names" {
 # ----- EventBridge (과제지 4. EventBridge, mark 3-2) -----
 
 # task.md 의 4개 + mark2-3.sh 가 타깃을 채점하는 wsc2026-ec2-stop-rule,
-# tag_alert 트리거용 tag_compliance(이름 비채점)의 합집합.
+# tag_alert 트리거용 tag_compliance 와 SG 복구 보강용 sg_sweep(둘 다 이름 비채점)의 합집합.
 variable "rule_names" {
   description = "EventBridge Rule 이름 (mark 3-2 는 ec2-stop/ec2-terminate 룰의 타깃을 채점)"
   type        = map(string)
@@ -144,6 +144,7 @@ variable "rule_names" {
     ec2_type_change = "wsc2026-ec2-type-change-rule"
     ec2_stop        = "wsc2026-ec2-stop-rule"
     tag_compliance  = "wsc2026-tag-compliance-rule"
+    sg_sweep        = "wsc2026-sg-sweep-schedule"
   }
 }
 

@@ -1,6 +1,6 @@
 # 제공 producer 바이너리 분석 — MSK IAM 인증 불가
 
-과제지는 "MSK 클러스터는 IAM 인증을 통해서만 접근 가능해야 한다"(task.md 3번 MSK)고 요구하고, Producer 는 대회가 제공한 바이너리(`../provided/module4/app`, 수정 금지)를 그대로 실행하게 되어 있다(task.md 4번 EC2, Application.md). 이 바이너리가 실제로 IAM 인증을 할 수 있는지 리버싱으로 검증한 기록이다. 아래 명령으로 누구나 재현할 수 있다.
+과제지는 "MSK 클러스터는 IAM 인증을 통해서만 접근 가능해야 한다"(task.md "4) MSK" 개요)고 요구하고, Producer 는 대회가 제공한 바이너리(`../provided/module4/app`, 수정 금지)를 그대로 실행하게 되어 있다(task.md 4번 EC2, Application.md). 이 바이너리가 실제로 IAM 인증을 할 수 있는지 리버싱으로 검증한 기록이다. 아래 명령으로 누구나 재현할 수 있다.
 
 - 대상: `../provided/module4/app` — ELF 64-bit x86-64, Go 정적 빌드(`sensor-producer`, CGO_ENABLED=0), 스트립됨
 - 도구: radare2 6.1.9, Go pclntab 파싱

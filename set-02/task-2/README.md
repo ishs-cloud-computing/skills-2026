@@ -7,7 +7,7 @@
 | [module-1-workflow](module-1-workflow/) | 성적 처리 서버리스 워크플로우 | ap-southeast-1 | S3 + Lambda + Step Functions + DynamoDB | CloudShell |
 | [module-2-analytics](module-2-analytics/) | 실시간 주문 로그 분석 | ap-northeast-2 | VPC + EC2 + ALB + Kinesis + Managed Flink Studio | CloudShell + Zeppelin 수동 시연 |
 | [module-3-event](module-3-event/) | 정책 위반 자동 복구·알림 | eu-west-1 | EventBridge + Lambda + CloudTrail + Config + SNS | CloudShell |
-| [module-4-msk](module-4-msk/) | MSK 센서 스트리밍 | ap-northeast-1 | VPC + MSK + EC2 + Lambda + DynamoDB + S3 | bastion 또는 CloudShell |
+| [module-4-msk](module-4-msk/) | MSK 센서 스트리밍 | ap-northeast-1 | VPC + MSK + EC2 + Lambda + DynamoDB + S3 | CloudShell |
 
 > **대회 당일에는 [DAY-OF.md](../../DAY-OF.md) 를 먼저 연다.** 과제지는 종이로 배부되어 파일 대조가 안 되므로,
 > DAY-OF 8절 값 대조표로 종이 과제지를 훑고 다른 값에 형광펜을 친 뒤 이 런북으로 들어온다.
@@ -49,7 +49,16 @@ terraform output -json > outputs.json
 # 이후 모듈별 README 의 "배포 순서" 를 따른다.
 ```
 
-공식 채점 스크립트는 `mark/`(mark2-1~4.sh)에, 제공 배포파일은 `provided/`에 있다. `provided/` 는 수정하지 않으며 각 모듈 terraform 이 직접 참조하거나 복사본을 둔다.
+공식 채점 스크립트는 `mark/`(mark2-1~4.sh)에 있다. 제공 배포파일 중 문서(`*.md`)만 `provided/`에 있고 **소스·데이터·바이너리는 저장소에 없다** — 시작 전에 배부물을 같은 이름으로 `provided/module<N>/` 에 놓는다(`.gitignore` 처리라 커밋되지 않는다):
+
+```
+provided/module1/  lambda-function.py  test.csv
+provided/module2/  app.py  requirements.txt
+provided/module3/  lambda-function.py
+provided/module4/  app
+```
+
+`provided/` 는 수정하지 않으며 각 모듈 terraform 이 직접 참조하거나 복사본을 둔다.
 
 ```bash
 # 채점 시 기본 리전 설정 (채점지 사전 작업)
@@ -59,7 +68,7 @@ aws configure set default.region eu-west-1        # module-3
 aws configure set default.region ap-northeast-1   # module-4
 ```
 
-Windows 에서 올린 스크립트는 CRLF 가 섞여 bash 가 깨지므로 실행 전 `sed -i 's/\r$//' <파일>` 로 정리한다.
+채점 스크립트는 CloudShell 우상단 **Actions > Upload file** 로 `mark/mark2-N.sh` 를 올린 뒤 실행한다. Windows 에서 올린 스크립트는 CRLF 가 섞여 bash 가 깨지므로 실행 전 `sed -i 's/\r$//' <파일>` 로 정리한다.
 
 ## 공통 규칙
 
