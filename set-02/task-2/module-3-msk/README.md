@@ -48,7 +48,7 @@ DynamoDB 가 0 으로 나온다(리소스는 멀쩡한데 안 보이는 것).
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 $env:AWS_DEFAULT_REGION = "ap-northeast-1"
 
-..\select-auth-mode.ps1     # 제공 바이너리를 검사해 쓸 모드와 apply 명령을 출력
+.\select-auth-mode.ps1     # 제공 바이너리를 검사해 쓸 모드와 apply 명령을 출력
 ```
 
 출력된 apply 명령을 1단계에서 그대로 쓴다. IAM 불가 판정이면 `-var "producer_auth_mode=tls"` 가 붙는다.
