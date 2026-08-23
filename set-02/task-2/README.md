@@ -56,7 +56,7 @@ terraform output -json > outputs.json
 ```
 provided/module1/  lambda-function.py  test.csv
 provided/module2/  app.py  requirements.txt
-provided/module4/  app          # 과제 번호는 3 이지만 배부 zip 의 디렉터리 이름은 module4 다
+provided/module3/  app          # RC 배부본 디렉터리 이름 (구판 zip 은 module4)
                                 # (재번호되면 module-3-msk/terraform/terraform.tfvars 의 provided_dir 만 바꾼다)
 ```
 

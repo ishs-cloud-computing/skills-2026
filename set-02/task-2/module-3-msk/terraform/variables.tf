@@ -133,14 +133,14 @@ variable "topic_alert" {
   }
 }
 
-# ----- EC2 Producer (과제지 4. EC2, provided/module4/Application.md) -----
+# ----- EC2 Producer (과제지 4. EC2, provided/module3/Application.md) -----
 
-# 배부 zip 의 디렉터리 이름. RC 에서 과제 번호는 4 → 3 으로 내려갔지만 배부물 경로는
-# 그날 zip 이 정하므로 재번호되면 이 변수 한 줄만 바꾼다 (terraform.tfvars).
+# 배부물 디렉터리 이름. RC 배부본은 module3 이다. 그날 zip 이 정하므로
+# 재번호되면 이 변수 한 줄만 바꾼다 (terraform.tfvars).
 variable "provided_dir" {
   description = "제공 배포파일 디렉터리 (terraform/ 기준 상대경로)"
   type        = string
-  default     = "../../provided/module4"
+  default     = "../../provided/module3"
 }
 
 variable "producer_name" {
@@ -194,7 +194,7 @@ variable "iam_producer_binary_path" {
   default     = "../app/producer"
 }
 
-# ----- Lambda Consumer (과제지 5. Lambda, provided/module4/lambda.md — mark 3-2/3-4) -----
+# ----- Lambda Consumer (과제지 5. Lambda, provided/module3/lambda.md — mark 3-2/3-4) -----
 
 variable "lambda_role_name" {
   description = "Lambda 공용 실행 역할 이름 (과제지 5. Lambda, 최소권한)"
