@@ -274,6 +274,8 @@ curl -s -o /dev/null -w "%{http_code} PUT product image\n" -X PUT "$CF/v1/produc
   -F "requestid=999999999999" -F "uuid=7c5a3c6a-758f-4bc5-9bdf-3e573a0ad729" \
   -F "id=dbdump500001" -F "image=@smoke.jpg"                                 # 200
 c "$CF/images/dbdump500001.jpg"                                              # 200
+c "$CF/images/no-such-object.jpg"                                            # 404 (403 아님)
+c "$CF/images/"                                                              # 404 (버킷 목록 200 아님)
 
 curl -s -o /dev/null -w "%{http_code} POST stress\n" -X POST "$CF/v1/stress?$Q" \
   -H 'Content-Type: application/json' \

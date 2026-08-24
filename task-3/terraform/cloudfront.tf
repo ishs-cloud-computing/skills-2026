@@ -21,6 +21,15 @@ resource "aws_cloudfront_function" "strip_images" {
   code    = <<-EOT
     function handler(event) {
       var request = event.request;
+      // "/images/" 까지만 오면 uri 가 "/" 가 되어 버킷 루트 ListObjects 로 나간다.
+      // s3.tf 가 CloudFront 에 s3:ListBucket 을 줬으므로 그대로 두면 목록이 200 으로 새어 나온다.
+      if (request.uri.length <= 8) {
+        return {
+          statusCode: 404,
+          statusDescription: 'Not Found',
+          body: { encoding: 'text', data: '{"error":"Not Found"}' }
+        };
+      }
       request.uri = request.uri.substring(7); // "/images/a.jpg" -> "/a.jpg"
       return request;
     }
