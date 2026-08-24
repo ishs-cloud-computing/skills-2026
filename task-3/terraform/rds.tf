@@ -17,8 +17,10 @@ resource "aws_db_instance" "this" {
   instance_class = local.db_instance_class
   multi_az       = local.db_multi_az
 
-  storage_type      = "gp3"
-  allocated_storage = local.db_allocated_storage
+  storage_type       = local.db_storage_type
+  allocated_storage  = local.db_allocated_storage
+  iops               = local.db_iops
+  storage_throughput = local.db_storage_throughput
 
   db_name = local.db_name
   port    = local.db_port

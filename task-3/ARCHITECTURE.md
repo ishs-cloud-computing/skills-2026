@@ -250,8 +250,12 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 
 ## RDS
 
-- gp3 200GiB(`locals.tf` `db_allocated_storage`): user 50만행 ≈ 수십 MB라 용량이 아니라 baseline
-  3000 IOPS/125MB·s를 사는 셈이다. 데이터는 InnoDB 버퍼풀(~375MB)에 전부 상주하고 디스크는 쓰기 flush뿐.
+- gp3 400GiB(`locals.tf` `db_allocated_storage`): user 50만행 ≈ 수십 MB라 용량이 아니라 볼륨
+  스트라이핑 임계값을 사는 것이다. 400GiB를 넘으면 1볼륨 → 4볼륨으로 갈리며 baseline이
+  12,000 IOPS/500MB·s로 오르고, baseline 구간이라 IOPS·처리량 추가 과금이 없다.
+- 그 위로 올리지 않는 이유는 db.t3.micro의 EBS 상한(버스트 2,085 Mbps ≈ 260MB·s)이 먼저
+  걸리기 때문이다. gp3 자체는 64,000 IOPS/4,000MB·s까지 가지만 이 인스턴스가 소화하지 못한다.
+  데이터는 InnoDB 버퍼풀(~375MB)에 전부 상주하고 디스크는 쓰기 flush뿐이다.
 - db.t3.micro(1GB)의 병목은 **max_connections(~85)와 CPU**. 커넥션은 RDS Proxy 멀티플렉싱으로
   해결(파드가 늘어도 백엔드 커넥션 고정). 파라미터 그룹 튜닝은 1GB 메모리에서 얻을 게 없다.
 - **`ALTER TABLE user ADD INDEX idx_email (email)`은 필수** — `GET /v1/user?email=`이 유일한 조회
