@@ -41,12 +41,15 @@ locals {
 
   apps = toset(var.apps)
 
-  db_instance_class    = "db.t3.micro"
-  db_engine            = "mysql"
-  db_engine_version    = "8.0"
-  db_name              = "dev"
-  db_username          = "admin"
-  db_port              = 3306
-  db_multi_az          = true
-  db_allocated_storage = 200
+  db_instance_class     = "db.t3.micro"
+  db_engine             = "mysql"
+  db_engine_version     = "8.0"
+  db_name               = "dev"
+  db_username           = "admin"
+  db_port               = 3306
+  db_multi_az           = true
+  db_storage_type       = "gp3"
+  db_allocated_storage  = 400
+  db_iops               = 12000
+  db_storage_throughput = 500
 }
