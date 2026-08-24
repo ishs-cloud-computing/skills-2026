@@ -114,8 +114,11 @@ spec:
           periodSeconds: 15
       selectPolicy: Max
     scaleDown:
+      # 스파이크 종료 후 한 스텝에 minReplicas 까지 내린다 — 50%씩 깎으면 10→1 에 4스텝
+      # (~160초)이 걸리고 그동안 Karpenter 노드가 살아 있어 비용 ratio 평균을 끌어올린다.
+      # stabilization 40s 는 유지한다 — 부하가 되돌아올 때 flapping 을 막는 유일한 가드다.
       stabilizationWindowSeconds: 40
       policies:
         - type: Percent
-          value: 50
+          value: 100
           periodSeconds: 40
