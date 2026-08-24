@@ -96,6 +96,7 @@ terraform apply는 언제나 한 번에 하나만 도므로 state 락 충돌도 
 | `/images/<key>` 이미지 제공 | `/images/*` behavior + strip Function + OAC (`cloudfront.tf`, `s3.tf`) |
 | 비정상 요청 403 | WAF SQLi·KnownBadInputs block. 단 `waf_api_path_regexes` 경로에서만 판정 (`waf.tf`) |
 | API 외 경로 404 | WAF scope-down 통과 → Ingress `actions.response-404` fixed-response (`k8s/20-ingress.yaml`) |
+| `/images/<없는 키>` 404 | 버킷 정책의 `s3:ListBucket` 이 S3 응답을 403→404 로 바꾼다. `/images/` 는 strip Function 이 직접 404 (`s3.tf`, `cloudfront.tf`) |
 | EKS + EC2 t3.medium만 | MNG `instanceType` + NodePool instance-type 고정 |
 | 최소 리소스(비용 ratio) | 유휴 1대 (아래 전용 절) |
 | DB 최소 운영 | db.t3.micro Multi-AZ 인스턴스 1대 + RDS Proxy (`rds.tf`, `rds-proxy.tf`) |
@@ -309,6 +310,8 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 **남긴 것과 이유**:
 - **WAF** — "비정상 요청 403"이 채점 항목(1-5~1-8) 자체다. 보안이 아니라 기능이다.
 - **S3 버킷 정책(OAC)** — 퍼블릭 버킷 없이 `/images/*`를 제공하기 위한 OAC 동작 조건이다.
+  `s3:ListBucket`이 같이 들어간 것도 권한 완화가 아니라 기능이다 — 이게 없으면 S3가 없는 키에
+  404 대신 403을 낸다. 그래서 열리는 버킷 루트 목록은 strip Function의 `/images/` 가드가 막는다.
 - **RDS/Proxy SG, Secrets Manager** — RDS Proxy의 하드 요구사항이다.
 
 ## WAF 운용 기준

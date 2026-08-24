@@ -95,6 +95,35 @@ Count 매칭 중 오탐/실탐 판정:
 
 ## 결정 로그
 
+### 2026-08-24 — `/images/<없는 키>` 가 404 대신 403 으로 나가던 문제 → 버킷 정책에 `s3:ListBucket`
+
+- **문제**: 과제지 7절은 "제공하는 API 외의 요청은 404" 를 요구한다. `/v1/*` 는 WAF scope-down →
+  ALB 기본액션으로 404 가 나가는데(아래 08-16 항목) `/images/*` 계층은 빠져 있었다.
+  `/images/no-such-object.jpg` 는 403 이었다.
+- **원인**: OAC 버킷 정책이 `s3:GetObject` 만 준다. **S3 는 요청 주체에 `s3:ListBucket` 이 없으면
+  키 존재 여부를 감추려고 없는 키에도 404 대신 403 AccessDenied 를 낸다.** CloudFront 는 오리진
+  상태코드를 그대로 전달하므로 그게 그대로 사용자에게 간다.
+  https://docs.aws.amazon.com/AmazonS3/latest/userguide/troubleshoot-403-errors.html
+- **조치(1)**: `s3.tf` 의 `cdn_read` 정책 문서에 `s3:ListBucket` 스테이트먼트 추가. 리소스는 오브젝트가
+  아니라 **버킷 ARN**(`/*` 없이)이고 principal·`AWS:SourceArn` 조건은 기존 스테이트먼트와 같다.
+  외부 주체에게는 아무것도 열리지 않는다.
+- **조치(2)**: `s3:ListBucket` 을 주면 **버킷 루트가 열린다**. `/images/` 는 CloudFront path pattern
+  `/images/*` 에 매치되고 `strip_images` Function 이 uri 를 `"/"` 로 만드는데, virtual-hosted 오리진의
+  `GET /` 는 ListObjectsV2 다 — 정책 추가만 하면 버킷 목록 XML 이 200 으로 새어 나간다.
+  Function 앞에 `request.uri.length <= 8` 가드를 넣어 404 를 직접 반환한다. 본문은 Ingress
+  `actions.response-404` 와 같은 `{"error":"Not Found"}` 로 맞췄다.
+- **`/images` (슬래시 없음)는 손대지 않았다**: `/images/*` behavior 에 매치되지 않아 default behavior →
+  ALB 기본액션 404 로 이미 맞다. WAF 화이트리스트 `^/images/.+$` 에도 안 걸려 403 이 될 여지가 없다.
+- **기각**: CloudFront `custom_error_response` 로 403 → 404 매핑 — distribution 전역이라
+  `/v1/user` 비정상 요청의 WAF 403(채점 1-5~1-8)까지 404 로 뭉갠다. behavior 별 설정이 불가능하다.
+- **기각**: `/images/*` behavior 에 viewer-response Function 을 붙여 403 을 404 로 덮어쓰기 —
+  `^/images/.+$` 가 WAF 화이트리스트에 들어 있어 **이미지 경로의 비정상 요청은 403 이 정답**인데
+  그것까지 404 가 된다. 위 08-16 항목의 "403/404 계층이 어긋나면 안 된다" 와 같은 실패다.
+- **기각**: `s3:ListBucket` 에 `s3:prefix` 조건을 걸어 루트 목록만 막는 안 — `GetObject` 요청 컨텍스트에는
+  `s3:prefix` 키가 아예 없어 조건이 매치되지 않는다. 404 판정까지 같이 죽는다.
+- **캐싱**: 404 는 CloudFront 기본 error caching min TTL(10초)로 캐시된다. 앱이 이미지를 올리면 10초 뒤
+  200 으로 바뀌므로 기존 403 캐싱과 동작 차이가 없다. `custom_error_response` 를 안 쓰니 설정도 없다.
+
 ### 2026-08-16 — base64 로 감싼 SQLi 가 관리형 룰을 그대로 통과 → `base64-sqli` 룰 추가
 
 - **발단**: "managed SQLi 의 `uri_path` scope-down 이 쿼리스트링까지 적용되는 게 맞느냐" 검토.
