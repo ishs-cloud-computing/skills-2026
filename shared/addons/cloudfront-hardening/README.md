@@ -66,6 +66,55 @@ terraform plan        # 배포가 update in-place 인지 확인 (재생성이면
 terraform apply       # 배포 갱신은 3~5분
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+CloudFront 는 다른 KIT 과 다르다. **속성 하나만 바꾸는 API 가 없고** `update-distribution` 이 config 를 통째로 교체한다.
+그래서 절차가 세 줄이다 — 현재 config 를 받아서, 그 자리만 고치고, ETag 와 함께 되돌려준다.
+그래도 배포를 replace 할 위험이 없고 terraform apply 보다 빠르다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+# 채점도 Comment 로 배포를 찾는다. 이름 대신 Comment 로 잡는 게 정석이다.
+$ID = aws cloudfront list-distributions `
+  --query "DistributionList.Items[?Comment=='<Comment>'].Id | [0]" --output text
+
+# 1) 현재 config + ETag
+$resp = aws cloudfront get-distribution-config --id $ID | ConvertFrom-Json
+$etag = $resp.ETag
+$resp.DistributionConfig | ConvertTo-Json -Depth 100 | Set-Content -Encoding utf8 cf-config.json
+
+# 2) cf-config.json 을 편집한다 (아래 표의 자리)
+
+# 3) 되돌려준다 — --if-match 를 빼면 PreconditionFailed
+aws cloudfront update-distribution --id $ID --if-match $etag --distribution-config file://cf-config.json
+
+# 4) 반영까지 수 분. 먼저 던져놓고 다른 것을 한다.
+aws cloudfront wait distribution-deployed --id $ID
+```
+
+`cf-config.json` 안에서 고치는 자리:
+
+| 문항 | 키 | 값 |
+| --- | --- | --- |
+| 지역 제한 | `Restrictions.GeoRestriction` | `{"RestrictionType":"whitelist","Quantity":1,"Items":["KR"]}` (차단이면 `blacklist`) |
+| 표준 로그 | `Logging` | `{"Enabled":true,"IncludeCookies":false,"Bucket":"<버킷>.s3.amazonaws.com","Prefix":"<프리픽스>/"}` |
+| 에러 페이지 | `CustomErrorResponses` | `{"Quantity":1,"Items":[{"ErrorCode":403,"ResponsePagePath":"/index.html","ResponseCode":"200","ErrorCachingMinTTL":10}]}` |
+| WAF 연결 | `WebACLId` | **us-east-1** Web ACL 의 ARN |
+| 기본 루트 오브젝트 | `DefaultRootObject` | `index.html` |
+
+**오리진이나 동작을 바꿨으면 무효화가 따로 필요하다.** 안 하면 채점이 캐시된 옛 응답을 본다 — 배포는 `Deployed` 인데 내용은 예전 것이다.
+
+```powershell
+aws cloudfront create-invalidation --distribution-id $ID --paths "/*"
+```
+
+- `get-distribution-config` 응답을 통째로 보내면 `MalformedInput` 이다. **`DistributionConfig` 만** 떼어 보낸다.
+- `Logging.Bucket` 은 버킷 이름이 아니라 **`<버킷>.s3.amazonaws.com`** 형식이다. 이름만 넣으면 `InvalidArgument`. 그리고 표준 로그는 ACL 로 쓰기 때문에 버킷 `ObjectOwnership` 이 `BucketOwnerEnforced` 면 거부된다 → `BucketOwnerPreferred`.
+- `WebACLId` 는 CLOUDFRONT scope 라 us-east-1 Web ACL 의 ARN 이다. REGIONAL ARN 을 넣으면 거부된다.
+- **지역 제한을 CloudFront 와 WAF 양쪽에 걸지 않는다.** 채점이 어느 쪽을 읽는지 먼저 확인한다 ([waf-extra-rules](../waf-extra-rules/README.md) 의 `geo_match`).
+
 ## 1. 표준 로그 (S3)
 
 ```hcl
@@ -361,4 +410,16 @@ curl.exe -sI "https://$(terraform output -raw cloudfront_domain)/" | Select-Obje
 
 ---
 
-절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).
+## 막히면 여는 순서
+
+인자 이름이나 조합에서 막히면 ① 위 **실전 구현**(이미 apply 가 통과한 코드) → ② 로컬 스키마 명령 → ③ 공식 문서 순으로 연다. 대회장 인터넷은 공식 문서까지 열려 있다. 그래도 ①②를 먼저 여는 건 브라우저보다 빠르고, 블로그에서 인자 이름을 베껴 프로바이더·차트 버전이 어긋나는 일이 없어서다.
+
+```powershell
+terraform providers schema -json | jq '.provider_schemas[].resource_schemas["<리소스타입>"].block.attributes | keys'
+aws <서비스> <명령> help
+kubectl explain <리소스>.spec --recursive
+```
+
+리소스별 공식 문서 주소·이 저장소의 구현 위치·흔히 막히는 인자는 [DOC-LINKS 4절 리소스별 색인](../../../DOC-LINKS.md#4-리소스별-색인)에 한 줄씩 있다. 리소스 타입(`aws_s3_bucket` 등)으로 Ctrl+F 한다.
+
+절차 원본은 [KIT-INDEX 30분 루틴](../../../KIT-INDEX.md#30분-루틴), 세트별 리소스 주소는 [대조표](../../../KIT-INDEX.md#세트별-리소스-주소-대조표-task-1)(표에 없는 세트는 [주소 찾는 명령](../../../KIT-INDEX.md#표에-없는-세트는-직접-찾는다)), KIT을 두 개 이상 얹을 때는 [여러 KIT을 한꺼번에 얹을 때](../../../KIT-INDEX.md#여러-kit을-한꺼번에-얹을-때), 치환 자리 표기는 [코드 블록에서 바꿔야 하는 자리](../../../KIT-INDEX.md#코드-블록에서-바꿔야-하는-자리)를 본다. 여기 TROUBLESHOOT에 없는 실패는 [공통 트러블슈팅](../../TROUBLESHOOTING-COMMON.md).

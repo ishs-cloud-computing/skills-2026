@@ -57,9 +57,15 @@ KIT README의 `CHANGE` → 코드 블록(**블록 머리에 붙일 `*.tf` 파일
 
 세트별 리소스 주소는 [KIT-INDEX 대조표](KIT-INDEX.md#세트별-리소스-주소-대조표-task-1).
 
-**KIT README에 `## FAST` 절이 있으면 거기부터 본다.** 속성 하나 켜는 문항은 CLI 한 줄이라 복사·`init`·`plan`·`apply` 가 전부 사라진다 (대가: terraform state 와 어긋난다 — 그 세트를 더 apply 하지 않는다). 13개 KIT: `dynamodb`·`s3`·`ecr`·`lambda`·`alb`·`sqs`-hardening · `cw-alarms`·`cw-dashboard`·`cw-logs-insights` · `vpc-flow-log`·`vpc-endpoints`·`cloudtrail-hardening`·`secrets-manager`.
+**KIT README에 `## FAST` 절이 있으면 거기부터 본다.** 속성 하나 켜는 문항은 CLI 한두 줄이라 복사·`init`·`plan`·`apply` 가 전부 사라진다 (대가: terraform state 와 어긋난다 — 그 세트를 더 apply 하지 않는다). 14개 KIT: `dynamodb`·`s3`·`ecr`·`lambda`·`alb`·`sqs`-hardening · `cw-alarms`·`cw-dashboard`·`cw-logs-insights` · `vpc-flow-log`·`vpc-endpoints`·`cloudtrail-hardening`·`secrets-manager`·`cloudfront-hardening`.
+
+CloudFront 만 세 줄이다 — `get-distribution-config` → 수정 → `update-distribution --if-match <ETag>`. 오리진·동작을 바꿨으면 `create-invalidation` 까지 쳐야 채점이 새 응답을 본다.
 
 FAST 명령이 요구하는 실제 ID(`<vpc-id>`·`<sg-id>`·`<ALB ARN>`)는 `shared\scripts\discover.ps1 -Region <리전>` 이 `addon.<리전>.env` 로 한 번에 뽑아준다.
+
+`<기존>` 자리에 넣을 Terraform 주소는 [대조표](KIT-INDEX.md#세트별-리소스-주소-대조표-task-1)에 set-02/03/07 만 있다. **set-05·08·09 와 당일 세트는 `rg '^resource "aws_s3_bucket"' set-XX/task-1/terraform/`** 로 직접 찾는다.
+
+인자 이름·조합에서 막히면 각 KIT README 맨 아래 **막히면 여는 순서**(실전 구현 → 로컬 스키마 명령 → [DOC-LINKS](DOC-LINKS.md#4-리소스별-색인)).
 
 VERIFY는 손으로 치지 말고 일괄 실행한다 — 부착한 terraform 디렉터리에서 `..\..\..\shared\scripts\verify-kit.ps1 <kit> <kit>`.
 제출 전에는 `shared\scripts\foul-check.ps1` (금지 조항·타 리전 잔재·불필요 EC2·EKS 채점 접근).

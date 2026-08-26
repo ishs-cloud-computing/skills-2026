@@ -6,18 +6,20 @@
 
 ## 30분 루틴
 
-| # | 하는 일 | 끝 조건 |
+**① 바뀐 문장에서 명사 하나를 뽑는다** (`WAF`·`TTL`·`액세스 로그`·`CMK`) → 아래 표에서 KIT 1개.
+**② 그 KIT README를 열고 갈림길을 정한다** — `## FAST` 절이 있으면 A, 없으면 B.
+
+| | **A · FAST** ([14개 KIT](#fast-경로--terraform-없이-붙일-수-있는-kit)) | **B · Terraform** (나머지) |
 | --- | --- | --- |
-| 1 | 바뀐 문장에서 **명사 하나**를 뽑는다 (`WAF`, `TTL`, `액세스 로그`, `CMK`) | 아래 표에서 KIT 1개 결정 |
-| 2 | 그 KIT README를 연다 | `CHANGE` 표의 필수 변수 확인 |
-| 3 | 코드 블록을 **블록 머리에 적힌 `*.tf` 파일**에 붙인다 | 세트 리소스 주소로 `<기존>` 치환 |
-| 4 | 블록 밑 `<details>`에서 내 세트 항목을 편다 | `outputs.tf` 보강 + `terraform output` 값 확보 |
-| 5 | `fmt` → `init` → `validate` → `plan` | **기존 리소스에 replace/delete 0건** |
-| 6 | `apply` → KIT README `VERIFY` | 그 다음에만 세트 `mark.sh` |
+| 무엇 | `aws` 명령 한두 줄로 속성을 켠다 | KIT 파일을 세트로 복사해 apply |
+| 절차 | `CHANGE` 값 채우기 → FAST 명령 → `VERIFY` | `CHANGE` → 코드 블록을 **블록 머리에 적힌 `*.tf`** 에 붙이고 `<기존>` 치환 → 블록 밑 `<details>`에서 세트 항목 확인(`outputs.tf` 보강) → `fmt`·`init`·`validate`·`plan` → `apply` → `VERIFY` |
+| 대략 | 1~2분 | 5~15분 + 리소스 생성 대기 |
+| 대가 | terraform state 와 실물이 어긋난다 — 그 세트를 더 apply 하지 않는다 | 없음 |
+| 못 쓰는 때 | 이름이 채점 대상인 IAM Role·Policy, 생성 시에만 지정되는 속성 | — |
 
-`plan`에 기존 리소스 replace/delete가 뜨면 apply하지 않고 멈춘다. 이름이 충돌하면 기존 것을 지우지 말고 **KIT 쪽 변수를 리네임**한다.
+**③ VERIFY 통과 뒤에만** 세트 `mark.sh` 를 돌린다. VERIFY 는 손으로 치지 말고 `..\..\..\shared\scripts\verify-kit.ps1 <kit> ...` 로 일괄 실행한다.
 
-3번에서 고른 KIT에 `## FAST` 절이 있으면 그쪽을 먼저 본다 — 속성 하나만 켜는 문항은 CLI 한 줄로 끝나고 4·5·6단계가 통째로 사라진다. 목록은 [FAST 경로](#fast-경로--terraform-없이-붙일-수-있는-kit).
+B 에서 `plan`에 기존 리소스 replace/delete가 뜨면 apply하지 않고 멈춘다. 이름이 충돌하면 기존 것을 지우지 말고 **KIT 쪽 변수를 리네임**한다.
 
 ### 코드 블록에서 바꿔야 하는 자리
 
@@ -25,8 +27,8 @@
 
 | 표기 | 넣을 값 | 어디서 얻나 |
 | --- | --- | --- |
-| `set-XX` | 자기 세트 디렉터리 (`set-02`·`set-03`·`set-07`) | — |
-| `<기존>` | 기존 리소스의 Terraform 주소 이름 (`aws_s3_bucket.<기존>` → `aws_s3_bucket.web`) | 아래 [세트별 리소스 주소 대조표](#세트별-리소스-주소-대조표-task-1) |
+| `set-XX` | 자기 세트 디렉터리 (`set-02`·`set-03`·`set-05`·`set-07`·`set-08`·`set-09`) | — |
+| `<기존>` | 기존 리소스의 Terraform 주소 이름 (`aws_s3_bucket.<기존>` → `aws_s3_bucket.web`) | 아래 [대조표](#세트별-리소스-주소-대조표-task-1). 표에 없는 세트는 [직접 찾는다](#표에-없는-세트는-직접-찾는다) |
 | `<클러스터>` | EKS 클러스터 이름 | 같은 대조표 첫 행 |
 | `<이름>` · `<룰이름>` · `<버킷>` | 과제지가 지정한 이름 | 과제지 원문 그대로 |
 | `<region>` | 세트 리전 (task-1은 전부 `ap-northeast-2`) | `terraform.tfvars` |
@@ -127,6 +129,25 @@ KIT 코드 블록의 `aws_xxx.<기존>` 자리에 넣을 값이다. **자기 세
 | ALB↔Pod 연결 | TargetGroupBinding | k8s Ingress | TargetGroupBinding |
 
 리전은 세 세트 모두 `ap-northeast-2`. CLOUDFRONT scope WAF 리소스만 us-east-1(`provider = aws.use1`).
+
+### 표에 없는 세트는 직접 찾는다
+
+위 표는 task-1 이 있는 세트 중 셋만 채워져 있다. **set-05·set-08·set-09 는 표에 없고, 대회 당일 세트도 없다.**
+표를 찾지 말고 자기 세트의 `.tf` 에서 바로 뽑는다 — 표보다 빠르고 어느 세트에서든 맞는다.
+
+```powershell
+# <기존> 자리에 넣을 Terraform 주소 이름
+rg '^resource "aws_s3_bucket"' set-XX/task-1/terraform/      # -> resource "aws_s3_bucket" "web"  ->  web
+
+# 이 세트가 가진 리소스 타입을 통째로 보고 싶을 때
+rg -o '^resource "[a-z0-9_]+" "[a-z0-9_]+"' set-XX/task-1/terraform/ --no-filename | sort
+
+# 이미 apply 했다면 state 가 가장 정확하다
+terraform state list
+```
+
+`<클러스터>`(EKS 이름)·`<region>` 은 `terraform.tfvars` 와 `eksctl/cluster.yaml` 에 있고,
+실제 리소스 **ID**(`vpc-`·`sg-`·ARN)는 [`discover.ps1`](#자가검사-스크립트) 이 리전별로 한 번에 뽑는다.
 
 ## 1과제 옵션 5개 — 세트별 사전 판정
 
@@ -265,20 +286,24 @@ Terraform 자체는 의존성을 그래프로 풀지만, **선행을 빼먹으�
 
 채점은 **관찰 가능한 상태**만 본다 (`describe`·`jsonpath`·`curl`). terraform 코드나 만든 방식은 보지 않는다.
 그래서 in-place 속성 변경으로 끝나는 문항은 파일 복사·`init`·`plan`·`apply` 없이 CLI 한두 줄이면 된다.
-아래 13개 KIT README에는 `## FAST` 절이 있다.
+아래 14개 KIT README에는 `## FAST` 절이 있다.
 
 | 왜 FAST 인가 | KIT |
 | --- | --- |
 | 테이블·버킷·리포지토리·함수 속성이 전부 in-place | [dynamodb-hardening](shared/addons/dynamodb-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [s3-hardening](shared/addons/s3-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [ecr-hardening](shared/addons/ecr-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [lambda-hardening](shared/addons/lambda-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [alb-hardening](shared/addons/alb-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [sqs-hardening](shared/addons/sqs-hardening/README.md#fast--terraform-없이-cli-로-붙이기) |
 | 신규 리소스라 기존 것을 안 건드린다 | [vpc-flow-log](shared/addons/vpc-flow-log/README.md#fast--terraform-없이-cli-로-붙이기) · [vpc-endpoints](shared/addons/vpc-endpoints/README.md#fast--terraform-없이-cli-로-붙이기) · [cloudtrail-hardening](shared/addons/cloudtrail-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [secrets-manager](shared/addons/secrets-manager/README.md#fast--terraform-없이-cli-로-붙이기) |
 | 개수만 많고 값만 다르다 | [cw-alarms](shared/addons/cw-alarms/README.md#fast--terraform-없이-cli-로-붙이기) · [cw-dashboard](shared/addons/cw-dashboard/README.md#fast--terraform-없이-cli-로-붙이기) · [cw-logs-insights](shared/addons/cw-logs-insights/README.md#fast--terraform-없이-cli-로-붙이기) |
+| config 전체 교체지만 배포 replace 보다 싸다 (get → 수정 → `--if-match`) | [cloudfront-hardening](shared/addons/cloudfront-hardening/README.md#fast--terraform-없이-cli-로-붙이기) |
 
 **대가는 하나다.** terraform state 와 실물이 어긋난다. CLI 로 붙인 세트에 이후 `apply` 를 걸면 되돌아간다.
 그래서 규칙은 둘 중 하나다 — 그 세트를 더 apply 하지 않거나, 나중에 같은 값을 `.tf` 에도 넣는다.
 
 FAST 명령이 요구하는 `<vpc-id>`·`<sg-id>`·`<ALB ARN>` 은 [`discover.ps1`](#자가검사-스크립트) 로 한 번에 뽑는다.
 
-**FAST 로 가지 않는 것**: 이름이 채점 대상인 IAM Role·Policy(terraform 이 안전), CloudFront 배포 속성(전체 config 교체),
+CloudFront 는 속성 하나만 바꾸는 API 가 없어 `get-distribution-config` → 수정 → `update-distribution --if-match` 세 줄이다.
+**오리진·동작을 바꿨으면 `create-invalidation` 을 따로 친다** — 안 하면 배포는 `Deployed` 인데 채점은 캐시된 옛 응답을 본다.
+
+**FAST 로 가지 않는 것**: 이름이 채점 대상인 IAM Role·Policy(terraform 이 안전),
 WAF 룰(lock token + 전체 룰 배열 교체), KMS·EKS Secret 암호화·ECR CMK·Object Lock(생성 시에만 지정 가능 — CLI 로도 안 된다).
 
 ## 실행 전 공통 규칙

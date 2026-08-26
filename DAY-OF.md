@@ -7,7 +7,11 @@
 코드블록을 고치다 인자·필드에서 막히면 [DOC-LINKS](DOC-LINKS.md) 를 연다 —
 리소스별 공식문서 주소, 저장소 안 구현 위치, 인터넷 없이 스키마를 뽑는 명령을 한 장에 모은 색인이다.
 
-추가 문항의 KIT은 먼저 [QUICK-REFERENCE.md](QUICK-REFERENCE.md)에서 찾고, 없으면 [KIT-INDEX.md](KIT-INDEX.md)를 따른다. KIT README는 전부 같은 순서다 — **USE WHEN → CHANGE(고칠 값) → KEEP → CHECK(계정·리전) → RUN → VERIFY/SCORE → TROUBLESHOOT**. `CHANGE` 표의 **필수** 변수만 채우면 apply 가 된다. 각 KIT의 기능 확인(VERIFY) 뒤에는 해당 세트의 공식 `mark.md`·`mark*.sh`로 SCORE를 확인한다.
+추가 문항의 KIT은 먼저 [QUICK-REFERENCE.md](QUICK-REFERENCE.md)에서 찾고, 없으면 [KIT-INDEX.md](KIT-INDEX.md)를 따른다. KIT README는 전부 같은 순서다 — **USE WHEN → CHANGE(고칠 값) → CHECK(계정·리전) → RUN → [FAST] → 코드 블록 → VERIFY → TROUBLESHOOT → 실전 구현 → 막히면 여는 순서**. `CHANGE` 표의 **필수** 변수만 채우면 apply 가 된다.
+
+**`## FAST` 절이 있으면 거기서 끝낸다** — 14개 KIT은 `aws` 한두 줄로 붙고 복사·`init`·`plan`·`apply` 가 사라진다. 대가는 terraform state 와 실물이 어긋나는 것뿐이라, 그 세트를 더 apply 하지 않으면 된다. 인자 이름에서 막히면 README 맨 아래 **막히면 여는 순서**(실전 구현 → 로컬 스키마 명령 → [DOC-LINKS](DOC-LINKS.md#4-리소스별-색인)).
+
+각 KIT의 기능 확인(VERIFY)은 `..\..\..\shared\scripts\verify-kit.ps1 <kit> ...` 로 일괄 실행하고, 그 뒤에 해당 세트의 공식 `mark.md`·`mark*.sh`로 SCORE를 확인한다.
 
 런북 코드블록은 붙여넣기 전에 **한 줄씩 칠지 블록째 칠지 먼저 판단**한다 — 앞 명령의 출력·성공 여부에 뒤가 걸리는 블록(로그인·apply·삭제·롤아웃)은 한 줄씩, 단순 설치·조회는 블록째. PowerShell 은 앞 줄이 실패해도 뒤 줄을 계속 실행한다.
 
