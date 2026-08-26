@@ -52,6 +52,29 @@ terraform fmt; terraform init; terraform validate
 terraform plan; terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+대시보드는 본문이 통째로 JSON 한 덩어리다. terraform 을 거칠 이유가 거의 없다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+# 콘솔에서 위젯을 눈으로 맞춘 뒤 그 JSON 을 그대로 가져오는 게 제일 빠르다
+aws cloudwatch get-dashboard --dashboard-name <이름> --query DashboardBody --output text `
+  | Set-Content -Encoding utf8 dashboard.json
+
+# 수정 후 다시 올린다 (put-dashboard 는 전체 교체다)
+aws cloudwatch put-dashboard --dashboard-name <이름> --dashboard-body file://dashboard.json
+
+# 확인 — 유효하지 않은 위젯은 여기서 걸린다
+aws cloudwatch list-dashboards --query 'DashboardEntries[].DashboardName'
+```
+
+- `put-dashboard` 는 **전체 교체**다. 위젯 하나를 더할 때도 기존 JSON 을 받아서 `widgets` 배열에 추가한 뒤 통째로 올린다.
+- 위젯 JSON 이 잘못돼도 `put-dashboard` 는 성공하고 **응답의 `DashboardValidationMessages`** 에만 적힌다. 응답을 눈으로 본다.
+- dimension 값은 추측하지 말고 먼저 조회한다: `aws cloudwatch list-metrics --namespace <ns> --metric-name <지표> --query 'Metrics[].Dimensions'`
+
 ## 1. 대시보드 리소스
 
 ```hcl

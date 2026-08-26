@@ -25,6 +25,14 @@
 5. `terraform fmt` → `validate` → `plan` 으로 기존 리소스에 diff 가 없는지 확인 후 apply.
 6. eksctl 스니펫(irsa/)은 기존 클러스터에 `eksctl create ...` 한 줄로 부착한다. 클러스터 재생성 금지.
 
+
+**CLI 로 끝나는 문항이면 위 절차를 건너뛴다.** 13개 KIT README에 `## FAST` 절이 있다 — 속성 하나를 켜는 in-place 변경은
+파일 복사·`init`·`plan`·`apply` 없이 `aws` 한두 줄이면 된다. 채점은 관찰 가능한 상태만 보기 때문이다.
+대가는 terraform state 와 실물이 어긋난다는 것 하나다 (그 세트를 더 apply 하지 않거나, 나중에 같은 값을 `.tf` 에도 넣는다).
+목록과 예외는 [KIT-INDEX FAST 경로](../../KIT-INDEX.md#fast-경로--terraform-없이-붙일-수-있는-kit).
+
+부착 뒤 검증은 `shared/scripts/verify-kit.ps1 <kit> ...` 로 KIT README의 `## VERIFY` 블록을 일괄 실행한다.
+
 ## 금지선 (출제지침)
 
 - 1과제에 인프라 스케일링 문제는 출제되지 않는다.

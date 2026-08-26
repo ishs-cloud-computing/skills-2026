@@ -97,6 +97,7 @@ git clone https://github.com/ishs-cloud-computing/skills-2026.git; cd skills-202
 
 - 세트 번호를 확인한다. 종이 과제지 표지·모듈 구성으로 판별한다 — [세트 식별표](#세트-식별표).
 - `.env.ps1`(본 PC)·`.env`(CloudShell) 를 재생성한다. 재부팅·CloudShell 세션 초기화 때마다 다시 만든다.
+- 배포를 시작한 뒤(또는 기존 스택 위에 얹는 문항이면 그 전에) `shared\scripts\discover.ps1 -Region <리전>` 을 리전마다 돌려 `addon.<리전>.env` 를 만든다. CLI 로 리소스를 붙일 때 필요한 실제 ID 가 전부 여기 들어간다. 파일 머리에 bash·PowerShell 로드 명령이 있으니 CloudShell 에도 같이 올린다.
 - CloudShell 접속을 **가장 먼저** 확인한다. 여기가 막히면 채점 경로 전체가 막힌다.
 
 ### ④ 브라우저 작업공간 — 모듈별 CloudShell 탭 그룹
@@ -414,6 +415,12 @@ docker push "${ECR}:v2"
 - 로컬에서 한 번 실행해 확인한 뒤 배포한다.
 
 ## 9. 채점 직전
+
+```powershell
+shared\scripts\foul-check.ps1 -Regions <이 과제 리전들> -GraderPrincipal <채점 IAM User 이름>
+```
+
+명령으로 확인되는 것은 위 한 줄로 먼저 훑고, 아래는 눈으로 본다.
 
 - [ ] EKS: **일반 CloudShell** 에서 `aws eks update-kubeconfig --name <클러스터> --region <리전>` **한 줄 뒤** `kubectl get nodes` 가 된다. 채점 중 허용되는 명령은 그 한 줄뿐이다.
 - [ ] 채점 스크립트는 CloudShell 업로드 후 CRLF 를 제거했다: `sed -i 's/\r$//' <파일>`

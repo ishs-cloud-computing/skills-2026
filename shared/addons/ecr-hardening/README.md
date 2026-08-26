@@ -64,6 +64,32 @@ terraform plan        # 기존 리포지토리에 must be replaced 가 뜨는지
 terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+채점은 **관찰 가능한 상태**만 본다. 스캔·태그 불변·lifecycle 은 전부 in-place 다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$R = '<리포>'
+
+aws ecr put-image-scanning-configuration --repository-name $R `
+  --image-scanning-configuration scanOnPush=true
+
+aws ecr put-image-tag-mutability --repository-name $R --image-tag-mutability IMMUTABLE
+
+@'
+{"rules":[{"rulePriority":1,"description":"keep last 10",
+  "selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},
+  "action":{"type":"expire"}}]}
+'@ | Set-Content -Encoding utf8 ecr-lifecycle.json
+aws ecr put-lifecycle-policy --repository-name $R --lifecycle-policy-text file://ecr-lifecycle.json
+```
+
+- **CMK 암호화는 생성 시에만** 지정된다. 이미 만든 리포지토리는 CLI 로도 못 바꾼다 → [3. CMK 암호화](#3-cmk-암호화-재생성) 의 재생성 비용을 먼저 계산한다.
+- 태그 불변으로 바꾸면 **같은 태그 재push 가 거부된다.** 앱 배포에 `:latest` 를 쓰고 있으면 먼저 태그 전략부터 바꾼다.
+
 ## 1. push 시 취약점 스캔
 
 ```hcl

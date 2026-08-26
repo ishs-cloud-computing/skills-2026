@@ -49,6 +49,34 @@ terraform fmt; terraform init; terraform validate
 terraform plan; terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+Flow Log 는 기존 VPC 에 **붙이는** 리소스라 기존 것을 건드리지 않는다. S3 목적지는 IAM Role 도 필요 없다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$VPC = aws ec2 describe-vpcs --filters Name=tag:Name,Values=<VPC 이름> `
+  --query 'Vpcs[0].VpcId' --output text
+
+# S3 목적지 — Role 이 필요 없어 제일 빠르다
+aws ec2 create-flow-logs --resource-type VPC --resource-ids $VPC --traffic-type ALL `
+  --log-destination-type s3 --log-destination arn:aws:s3:::<버킷>/<프리픽스>/ `
+  --max-aggregation-interval 60 `
+  --tag-specifications 'ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=<이름>}]'
+
+# CloudWatch Logs 목적지 — 전달 Role 이 있어야 한다
+aws logs create-log-group --log-group-name <로그그룹>
+aws ec2 create-flow-logs --resource-type VPC --resource-ids $VPC --traffic-type ALL `
+  --log-destination-type cloud-watch-logs --log-group-name <로그그룹> `
+  --deliver-logs-permission-arn <flow-log Role ARN> --max-aggregation-interval 60
+```
+
+- 응답의 **`Unsuccessful` 배열을 반드시 본다.** 권한이나 목적지가 틀려도 명령 자체는 exit 0 이고 `FlowLogIds` 가 빈 채로 돌아온다.
+- 첫 로그가 뜨기까지 **`--max-aggregation-interval 60` 이어도 몇 분** 걸린다. 채점 항목당 대기가 3분이면 먼저 만들어 두고 다른 것을 한다.
+- CloudWatch 경로의 전달 Role 은 `vpc-flow-logs.amazonaws.com` 을 신뢰해야 한다. 이 Role 은 이름이 채점 대상일 수 있으니 아래 terraform 블록으로 만드는 편이 안전하다.
+
 ## 1. CloudWatch Logs 목적지
 
 ```hcl

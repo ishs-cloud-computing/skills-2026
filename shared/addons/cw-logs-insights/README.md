@@ -43,6 +43,42 @@ terraform fmt; terraform init; terraform validate
 terraform plan; terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+저장된 쿼리는 CLI 한 줄이다. 채점이 "저장된 쿼리가 존재하는가" 를 보는 항목이면 이걸로 끝난다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+@'
+fields @timestamp, @message
+| filter status = 404
+| stats count() by path
+| sort count() desc
+| limit 20
+'@ | Set-Content -Encoding utf8 query.txt
+
+aws logs put-query-definition --name '<쿼리이름>' `
+  --log-group-names <로그그룹> --query-string file://query.txt
+
+aws logs describe-query-definitions --query 'queryDefinitions[].[name,queryDefinitionId]'
+```
+
+즉석 실행 (결과가 나오는지부터 확인할 때):
+
+```powershell
+$id = aws logs start-query --log-group-name <로그그룹> `
+  --start-time ([DateTimeOffset]::UtcNow.AddHours(-1).ToUnixTimeSeconds()) `
+  --end-time ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) `
+  --query-string 'fields @message | limit 5' --query queryId --output text
+aws logs get-query-results --query-id $id
+```
+
+- **필드 이름을 추측하지 마라.** `fields @message | limit 5` 로 원문부터 보고 파서(`parse`)와 필드명을 맞춘다. 없는 필드로 `filter` 하면 결과가 0건인데 에러는 안 난다.
+- `get-query-results` 는 바로 `Running` 이다. `status` 가 `Complete` 가 될 때까지 다시 친다.
+- WAF CLOUDFRONT 로그 그룹(`aws-waf-logs-*`)은 **us-east-1** 에 있다.
+
 ## 0. 대상 로그 그룹 지정
 
 ```hcl

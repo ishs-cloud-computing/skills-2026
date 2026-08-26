@@ -48,6 +48,32 @@ terraform fmt; terraform init; terraform validate
 terraform plan; terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+시크릿은 신규 리소스다. 값을 `.tf` 나 tfvars 에 남기지 않는다는 점에서 오히려 CLI 가 낫다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+@'
+{"username":"<사용자>","password":"<비밀번호>"}
+'@ | Set-Content -Encoding utf8 secret.json
+
+aws secretsmanager create-secret --name <이름> `
+  --description "<설명>" --kms-key-id alias/<별칭> --secret-string file://secret.json
+
+# 값만 바꿀 때
+aws secretsmanager put-secret-value --secret-id <이름> --secret-string file://secret.json
+
+Remove-Item secret.json
+aws secretsmanager describe-secret --secret-id <이름> --query '[Name,KmsKeyId,RotationEnabled]'
+```
+
+- **같은 이름을 지웠다 바로 다시 못 만든다.** 삭제는 기본 30일 유예이고 그동안 이름이 점유된다. 급하면 `delete-secret --force-delete-without-recovery`, 아니면 이름을 바꾼다.
+- `--secret-string` 에 인라인 JSON 을 넣으면 PowerShell 에서 따옴표가 깨진다. `file://` 로 넣고 **끝나면 파일을 지운다** (평문 시크릿을 작업 디렉터리에 남기지 않는다).
+- 자동 회전은 회전용 Lambda 가 필요하다 → 아래 [4. 자동 회전](#4-자동-회전-선택) 참조. 채점이 `RotationEnabled` 만 본다면 그때만 만든다.
+
 ## 1. 시크릿 본체
 
 ```hcl

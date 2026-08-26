@@ -50,6 +50,35 @@ terraform fmt; terraform init; terraform validate
 terraform plan; terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+엔드포인트는 기존 VPC 에 **추가**되는 리소스다. 기존 서브넷·라우트 테이블은 바뀌지 않는다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$R   = aws configure get region
+$VPC = aws ec2 describe-vpcs --filters Name=tag:Name,Values=<VPC 이름> --query 'Vpcs[0].VpcId' --output text
+$RTB = (aws ec2 describe-route-tables --filters Name=vpc-id,Values=$VPC Name=tag:Name,Values=*priv* `
+        --query 'RouteTables[].RouteTableId' --output text) -split "\s+"
+
+# Gateway — S3 / DynamoDB. 라우트 테이블에 걸린다. 비용 0.
+aws ec2 create-vpc-endpoint --vpc-id $VPC --vpc-endpoint-type Gateway `
+  --service-name "com.amazonaws.$R.s3" --route-table-ids $RTB `
+  --tag-specifications 'ResourceType=vpc-endpoint,Tags=[{Key=Name,Value=<이름>}]'
+
+# Interface — PrivateLink. 서브넷·SG 가 필요하고 AZ 당 ENI 가 생긴다.
+aws ec2 create-vpc-endpoint --vpc-id $VPC --vpc-endpoint-type Interface `
+  --service-name "com.amazonaws.$R.ecr.dkr" `
+  --subnet-ids <서브넷...> --security-group-ids <sg-id> --private-dns-enabled `
+  --tag-specifications 'ResourceType=vpc-endpoint,Tags=[{Key=Name,Value=<이름>}]'
+```
+
+- **Interface 엔드포인트의 SG 가 443 인바운드를 허용해야 한다.** 안 열면 DNS 는 사설 IP 로 풀리는데 연결만 타임아웃한다 — 엔드포인트를 만들고 오히려 통신이 죽는다.
+- ECR 은 `ecr.api` + `ecr.dkr` **둘 다** 필요하고, 이미지 레이어는 S3 로 내려받으므로 **S3 Gateway 엔드포인트도** 있어야 한다. 셋 중 하나만 만들면 pull 이 실패한다.
+- 서비스 이름이 맞는지 먼저 확인: `aws ec2 describe-vpc-endpoint-services --query "ServiceNames[?contains(@,'ecr')]"`
+
 ## 1. Gateway 엔드포인트 (S3 · DynamoDB)
 
 ```hcl

@@ -37,3 +37,5 @@ set-02/task-2/provided/module1/test.csv
 set-02/task-2/provided/module2/app.py
 set-02/task-2/provided/module2/requirements.txt
 set-02/task-2/provided/module3/app
+# discover.ps1 산출물 (계정·리소스 ID 스냅샷, 리전별)
+addon.*.env

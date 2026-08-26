@@ -81,6 +81,50 @@ terraform plan        # 기존 aws_s3_bucket 에 diff 가 없어야 한다
 terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+채점은 **관찰 가능한 상태**만 본다. 버킷 속성은 전부 in-place 라 파일 복사·`apply` 없이 끝난다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$B = '<버킷>'
+
+aws s3api put-bucket-versioning --bucket $B --versioning-configuration Status=Enabled
+
+aws s3api put-public-access-block --bucket $B `
+  --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+# EventBridge 알림
+aws s3api put-bucket-notification-configuration --bucket $B `
+  --notification-configuration file://notif.json
+```
+
+JSON 을 받는 인자는 **shorthand 로 못 넣는다.** 파일로 만들어 `file://` 로 넘긴다 —
+PowerShell 에서 인라인 JSON 은 따옴표가 깨진다.
+
+```powershell
+@'
+{"Rules":[{"ID":"expire","Status":"Enabled","Filter":{"Prefix":""},
+  "Expiration":{"Days":30},
+  "NoncurrentVersionExpiration":{"NoncurrentDays":7}}]}
+'@ | Set-Content -Encoding utf8 lifecycle.json
+aws s3api put-bucket-lifecycle-configuration --bucket $B --lifecycle-configuration file://lifecycle.json
+
+@'
+{"LoggingEnabled":{"TargetBucket":"<로그버킷>","TargetPrefix":"<프리픽스>/"}}
+'@ | Set-Content -Encoding utf8 logging.json
+aws s3api put-bucket-logging --bucket $B --bucket-logging-status file://logging.json
+
+@'
+{"EventBridgeConfiguration":{}}
+'@ | Set-Content -Encoding utf8 notif.json
+```
+
+- **버킷 정책**(OAC 한정 등)은 버킷당 하나뿐이다. `get-bucket-policy` 로 기존 것을 먼저 받아 statement 를 **추가**한다. 덮어쓰면 CloudFront 가 403 이 된다.
+- **Object Lock 은 생성 시에만** 켤 수 있다. CLI 로도 안 된다 → 아래 [7. Object Lock](#7-object-lock-생성-시에만) 참조.
+
 ## 1. 버전 관리
 
 ```hcl

@@ -72,6 +72,44 @@ terraform plan        # 기존 테이블이 update in-place 만 떠야 한다 (r
 terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+채점은 **관찰 가능한 상태**만 본다. 아래는 전부 기존 테이블에 즉시 반영되는 in-place 변경이라
+파일 복사·`init`·`plan`·`apply` 없이 끝난다. 시간이 없거나 기존 state 를 건드리기 싫으면 여기서 끝내고 [VERIFY](#verify) 로 간다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$T = '<테이블>'
+
+# TTL — 속성 이름은 과제지 지정값 그대로
+aws dynamodb update-time-to-live --table-name $T `
+  --time-to-live-specification "Enabled=true,AttributeName=<ttl속성>"
+
+# PITR
+aws dynamodb update-continuous-backups --table-name $T `
+  --point-in-time-recovery-specification PointInTimeRecoveryEnabled=true
+
+# 삭제 방지
+aws dynamodb update-table --table-name $T --deletion-protection-enabled
+
+# Streams
+aws dynamodb update-table --table-name $T `
+  --stream-specification "StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES"
+
+# CMK 암호화 (AWS 관리형 -> CMK 는 in-place 로 된다)
+aws dynamodb update-table --table-name $T `
+  --sse-specification "Enabled=true,SSEType=KMS,KMSMasterKeyId=alias/<별칭>"
+
+# 온디맨드 백업
+aws dynamodb create-backup --table-name $T --backup-name <백업이름>
+```
+
+- `update-table` 은 **한 번에 한 종류**만 받는다. TTL·PITR 은 각각 전용 API 다.
+- GSI 추가는 `--attribute-definitions` 와 `--global-secondary-index-updates` 를 같이 넣어야 해서 CLI 가 더 길다 → 아래 [6. GSI 추가](#6-gsi-추가) 의 terraform 블록을 쓴다.
+- 조회할 때 `--query 'GlobalSecondaryIndexes[]'` 는 조용히 `null` 이다. **`Table.` 접두사**가 필요하다.
+
 ## 1. TTL
 
 ```hcl

@@ -48,6 +48,47 @@ terraform fmt; terraform init; terraform validate
 terraform plan; terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+채점은 **관찰 가능한 상태**만 본다. 알람·토픽·메트릭 필터는 전부 CLI 한 줄이고 기존 리소스를 건드리지 않는다.
+KIT 중에서 CLI 가 가장 확실하게 이득인 축이다 — 알람은 개수가 많고 값만 다르다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+# 0. SNS 토픽 + 구독
+$TOPIC = aws sns create-topic --name <토픽> --query TopicArn --output text
+aws sns subscribe --topic-arn $TOPIC --protocol email --notification-endpoint <메일>
+
+# 1. 서비스 메트릭 알람
+aws cloudwatch put-metric-alarm --alarm-name <알람이름> `
+  --namespace AWS/ApplicationELB --metric-name HTTPCode_Target_5XX_Count `
+  --dimensions Name=LoadBalancer,Value=app/<이름>/<id> `
+  --statistic Sum --period 60 --evaluation-periods 1 --threshold 1 `
+  --comparison-operator GreaterThanOrEqualToThreshold `
+  --treat-missing-data notBreaching --alarm-actions $TOPIC
+
+# 2. 로그 메트릭 필터 + 그 지표에 대한 알람
+aws logs put-metric-filter --log-group-name <로그그룹> --filter-name <필터이름> `
+  --filter-pattern '<패턴>' `
+  --metric-transformations metricName=<지표>,metricNamespace=<네임스페이스>,metricValue=1,defaultValue=0
+
+aws cloudwatch put-metric-alarm --alarm-name <알람이름> `
+  --namespace <네임스페이스> --metric-name <지표> `
+  --statistic Sum --period 60 --evaluation-periods 1 --threshold 1 `
+  --comparison-operator GreaterThanOrEqualToThreshold `
+  --treat-missing-data notBreaching --alarm-actions $TOPIC
+
+# 3. 기존 알람에 통지만 붙이기 — put-metric-alarm 은 upsert 다.
+#    같은 이름으로 다시 칠 때 나머지 인자를 빼면 그 값들이 지워진다. describe 로 현재 값을 먼저 받아라.
+aws cloudwatch describe-alarms --alarm-names <알람이름> --query 'MetricAlarms[0]'
+```
+
+- **`--dimensions` 값이 틀리면 알람은 만들어지고 영원히 `INSUFFICIENT_DATA` 다.** ALB 는 `app/<이름>/<id>` 형태, 즉 ARN 의 `loadbalancer/` 뒤 전체다: `aws elbv2 describe-load-balancers --query 'LoadBalancers[].LoadBalancerArn'` 에서 잘라 쓴다.
+- WAF CLOUDFRONT 지표는 **us-east-1** 에 있다. `--region us-east-1` 을 빼면 지표를 못 찾는다.
+- `--treat-missing-data notBreaching` 를 빼면 트래픽이 없는 동안 `INSUFFICIENT_DATA` 로 남아 채점이 "알람 미동작" 으로 읽을 수 있다.
+
 ## 0. SNS 토픽
 
 ```hcl

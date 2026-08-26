@@ -50,6 +50,28 @@ terraform fmt; terraform init; terraform validate
 terraform plan; terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+Trail 은 신규 리소스라 기존 것을 건드리지 않는다. 버킷 정책만 먼저 준비하면 CLI 두 줄이다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+aws cloudtrail create-trail --name <이름> --s3-bucket-name <버킷> `
+  --is-multi-region-trail --enable-log-file-validation --kms-key-id alias/<별칭>
+
+# create-trail 만으로는 기록이 시작되지 않는다
+aws cloudtrail start-logging --name <이름>
+
+aws cloudtrail get-trail-status --name <이름> --query '[IsLogging,LatestDeliveryTime]'
+```
+
+- **`start-logging` 을 빼먹으면 Trail 은 존재하는데 로그가 0 이다.** 채점이 `IsLogging` 을 읽으면 그대로 0점이다.
+- 버킷 정책에 `cloudtrail.amazonaws.com` 의 `s3:GetBucketAcl` + `s3:PutObject` (`aws:SourceArn` 조건 포함)가 없으면 **`create-trail` 자체가 거부**된다. 정책을 먼저 넣는다.
+- 첫 로그 파일은 **최대 15분** 뒤에 뜬다. 만들어 놓고 다른 것을 한다.
+- 세 세트 모두 CloudTrail 이 없다 → `eventbridge-security-rules` 의 `AWS API Call via CloudTrail` 패턴 룰을 쓰려면 이게 선행이다.
+
 ## 1. Trail 본체
 
 ```hcl

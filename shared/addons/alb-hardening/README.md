@@ -56,6 +56,29 @@ terraform plan        # aws_lb 가 update in-place 인지 확인
 terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+채점은 **관찰 가능한 상태**만 본다. ALB 속성은 전부 in-place 다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$ARN = aws elbv2 describe-load-balancers --names <ALB 이름> `
+  --query 'LoadBalancers[0].LoadBalancerArn' --output text
+
+aws elbv2 modify-load-balancer-attributes --load-balancer-arn $ARN --attributes `
+  Key=access_logs.s3.enabled,Value=true `
+  Key=access_logs.s3.bucket,Value=<로그버킷> `
+  Key=access_logs.s3.prefix,Value=<프리픽스> `
+  Key=deletion_protection.enabled,Value=true `
+  Key=routing.http.drop_invalid_header_fields.enabled,Value=true
+```
+
+- **액세스 로그를 켜기 전에 버킷 정책부터.** ELB 로그 전달 주체(리전별 ELB 계정 또는 `logdelivery.elasticloadbalancing.amazonaws.com`)에 `s3:PutObject` 가 없으면 위 명령이 `Access Denied for bucket` 으로 **거부**된다. 켜졌는데 로그가 안 쌓이는 게 아니라 아예 안 켜진다.
+- 리스너 규칙(기본 403 · HTTP→HTTPS)은 `create-rule`/`modify-listener` 로도 되지만 조건·액션 JSON 이 길다. 아래 terraform 블록이 더 짧다.
+- **set-03 에는 Terraform ALB 가 없다** (LBC 가 Ingress 로 만든다). 이 세트는 CLI 로 붙여도 다음 `kubectl apply` 에 되돌아가므로 [4. Ingress 어노테이션](#4-set-03--ingress-어노테이션으로-같은-것을-한다) 경로를 쓴다.
+
 ## 1. 액세스 로그 · 삭제 보호 · 잘못된 헤더 드롭
 
 ```hcl

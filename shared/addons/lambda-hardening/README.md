@@ -87,6 +87,41 @@ terraform plan        # 함수가 update in-place 뿐인지 확인
 terraform apply
 ```
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+채점은 **관찰 가능한 상태**만 본다. 함수 설정은 전부 in-place 라 재배포가 필요 없다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$F = '<함수>'
+
+# 예약 동시성
+aws lambda put-function-concurrency --function-name $F --reserved-concurrent-executions 5
+
+# X-Ray
+aws lambda update-function-configuration --function-name $F --tracing-config Mode=Active
+
+# DLQ (비동기 호출 실패분) — 큐/토픽을 먼저 만들고 함수 role 에 sqs:SendMessage 를 준다
+aws lambda update-function-configuration --function-name $F `
+  --dead-letter-config TargetArn=<SQS 또는 SNS ARN>
+
+# 환경변수 CMK
+aws lambda update-function-configuration --function-name $F --kms-key-arn <키 ARN>
+
+# 로그 형식·레벨
+aws lambda update-function-configuration --function-name $F `
+  --logging-config LogFormat=JSON,ApplicationLogLevel=INFO,SystemLogLevel=WARN
+
+# 로그 그룹 보존
+aws logs put-retention-policy --log-group-name /aws/lambda/$F --retention-in-days 30
+```
+
+- **예약 동시성은 `get-function-configuration` 에 안 나온다.** `aws lambda get-function-concurrency --function-name $F` 로 확인한다. 없다고 착각해서 두 번 거는 일이 잦다.
+- `update-function-configuration` 은 연달아 호출하면 `ResourceConflictException` 이 난다. 한 줄씩, 이전 호출이 `Successful` 이 된 뒤에 다음을 친다 (`aws lambda wait function-updated-v2 --function-name $F`).
+- **세 세트 모두 호출 경로가 동기**(ALB 타깃그룹 · Function URL)라 DLQ 는 발화하지 않는다. DLQ 가 채점 항목이면 비동기 경로부터 만든다.
+
 ## 1. X-Ray 추적
 
 ```hcl

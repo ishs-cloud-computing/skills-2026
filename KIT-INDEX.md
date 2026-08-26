@@ -17,6 +17,8 @@
 
 `plan`에 기존 리소스 replace/delete가 뜨면 apply하지 않고 멈춘다. 이름이 충돌하면 기존 것을 지우지 말고 **KIT 쪽 변수를 리네임**한다.
 
+3번에서 고른 KIT에 `## FAST` 절이 있으면 그쪽을 먼저 본다 — 속성 하나만 켜는 문항은 CLI 한 줄로 끝나고 4·5·6단계가 통째로 사라진다. 목록은 [FAST 경로](#fast-경로--terraform-없이-붙일-수-있는-kit).
+
 ### 코드 블록에서 바꿔야 하는 자리
 
 꺾쇠 표기는 전부 치환 대상이다. 하나라도 남으면 `validate`에서 걸린다.
@@ -259,11 +261,65 @@ Terraform 자체는 의존성을 그래프로 풀지만, **선행을 빼먹으�
 | **지리적 제한** | CloudFront `restrictions` → [cloudfront-hardening](shared/addons/cloudfront-hardening/README.md) · WAF `geo_match` → [waf-extra-rules](shared/addons/waf-extra-rules/README.md). **둘 다 걸지 않는다** — 채점이 어느 쪽을 읽는지 확인 |
 | **암호화** | 신규 리소스 생성 시 → [kms](shared/addons/kms/README.md) 부착 블록 · 기존 RDS·EBS·ECR·EKS → **변경 불가**, 재생성 비용 대비 배점 판단 먼저 |
 
+## FAST 경로 — terraform 없이 붙일 수 있는 KIT
+
+채점은 **관찰 가능한 상태**만 본다 (`describe`·`jsonpath`·`curl`). terraform 코드나 만든 방식은 보지 않는다.
+그래서 in-place 속성 변경으로 끝나는 문항은 파일 복사·`init`·`plan`·`apply` 없이 CLI 한두 줄이면 된다.
+아래 13개 KIT README에는 `## FAST` 절이 있다.
+
+| 왜 FAST 인가 | KIT |
+| --- | --- |
+| 테이블·버킷·리포지토리·함수 속성이 전부 in-place | [dynamodb-hardening](shared/addons/dynamodb-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [s3-hardening](shared/addons/s3-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [ecr-hardening](shared/addons/ecr-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [lambda-hardening](shared/addons/lambda-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [alb-hardening](shared/addons/alb-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [sqs-hardening](shared/addons/sqs-hardening/README.md#fast--terraform-없이-cli-로-붙이기) |
+| 신규 리소스라 기존 것을 안 건드린다 | [vpc-flow-log](shared/addons/vpc-flow-log/README.md#fast--terraform-없이-cli-로-붙이기) · [vpc-endpoints](shared/addons/vpc-endpoints/README.md#fast--terraform-없이-cli-로-붙이기) · [cloudtrail-hardening](shared/addons/cloudtrail-hardening/README.md#fast--terraform-없이-cli-로-붙이기) · [secrets-manager](shared/addons/secrets-manager/README.md#fast--terraform-없이-cli-로-붙이기) |
+| 개수만 많고 값만 다르다 | [cw-alarms](shared/addons/cw-alarms/README.md#fast--terraform-없이-cli-로-붙이기) · [cw-dashboard](shared/addons/cw-dashboard/README.md#fast--terraform-없이-cli-로-붙이기) · [cw-logs-insights](shared/addons/cw-logs-insights/README.md#fast--terraform-없이-cli-로-붙이기) |
+
+**대가는 하나다.** terraform state 와 실물이 어긋난다. CLI 로 붙인 세트에 이후 `apply` 를 걸면 되돌아간다.
+그래서 규칙은 둘 중 하나다 — 그 세트를 더 apply 하지 않거나, 나중에 같은 값을 `.tf` 에도 넣는다.
+
+FAST 명령이 요구하는 `<vpc-id>`·`<sg-id>`·`<ALB ARN>` 은 [`discover.ps1`](#자가검사-스크립트) 로 한 번에 뽑는다.
+
+**FAST 로 가지 않는 것**: 이름이 채점 대상인 IAM Role·Policy(terraform 이 안전), CloudFront 배포 속성(전체 config 교체),
+WAF 룰(lock token + 전체 룰 배열 교체), KMS·EKS Secret 암호화·ECR CMK·Object Lock(생성 시에만 지정 가능 — CLI 로도 안 된다).
+
 ## 실행 전 공통 규칙
 
 1. 해당 세트의 `task.md`·`mark.md`·`mark*.sh`·`NOTES.md`를 먼저 읽는다. 공식 지급물(`provided/`, `task.md`, `mark.md`, `mark*.sh`)은 수정하지 않는다.
 2. KIT README의 `CHECK` 절로 계정·리전을 확인한 뒤 apply한다 — `aws sts get-caller-identity`, `aws configure get region`.
 3. `terraform init` → `validate` → `plan`. `terraform init -upgrade`는 쓰지 않는다.
 4. **VERIFY**(KIT README의 기능 확인)와 **SCORE**(세트 공식 `mark.md`·`mark*.sh`)를 서로 대신하지 않는다. 기본 RUN에 `destroy`를 넣지 않는다.
+
+## 자가검사 스크립트
+
+문서로만 있던 두 축을 명령으로 만든 것이다. 둘 다 `shared/scripts/` 에 있고 PowerShell 7 에서 그대로 돈다.
+
+```powershell
+# 계정에 실제로 있는 리소스 ID 를 리전별로 긁어 .env 로 떨군다 (읽기 전용).
+shared\scripts\discover.ps1                       # 현재 리전 -> addon.<리전>.env
+shared\scripts\discover.ps1 -Region ap-southeast-1
+shared\scripts\discover.ps1 -SelfTest             # AWS 호출 없이 파싱 로직만 검사
+
+# 붙인 KIT 의 VERIFY 블록을 일괄 실행한다. KIT 을 부착한 terraform 디렉터리에서 친다.
+cd set-XX/task-1/terraform
+..\..\..\shared\scripts\verify-kit.ps1 waf kms cw-alarms
+..\..\..\shared\scripts\verify-kit.ps1                 # 인자 없이 = 실행 가능한 KIT 목록
+..\..\..\shared\scripts\verify-kit.ps1 s3-hardening -DryRun   # 실행 대신 명령만 출력
+
+# 제출 전 금지 조항·잔재 검사
+shared\scripts\foul-check.ps1
+shared\scripts\foul-check.ps1 -Regions ap-northeast-2,ap-southeast-1 -GraderPrincipal <채점 IAM User 이름>
+```
+
+`discover.ps1` 은 VPC·서브넷·라우트 테이블·SG·EKS(엔드포인트·OIDC·authenticationMode)·ALB(ARN·DNS·알람 dimension)·
+타깃그룹·CloudFront(Comment 키)·DynamoDB·S3·Lambda·ECR·KMS alias·SNS·SQS·로그 그룹·running EC2 를 `KEY=value` 로 떨군다.
+FAST 절의 `<vpc-id>`·`<sg-id>`·`<ALB ARN>` 자리에 그대로 넣는 값이다 — 대조표는 Terraform 주소라 CLI 로는 못 쓰고,
+`terraform output` 은 `outputs.tf` 에 선언한 것만 나온다. 파일 머리에 bash·PowerShell 양쪽 로드 명령이 적혀 있으니
+bastion·CloudShell 에 같이 올린다 (작업 규칙 6). 산출물은 `.gitignore` 대상이다.
+
+`foul-check.ps1` 이 보는 것 — running EC2 개수와 목록(3과제는 적을수록 고득점, 작업용 bastion 잔재는 감점) ·
+타 리전 EC2/EKS 잔재 · 고객 관리형 IAM 정책의 `"Action": "*"` / `"Principal": "*"` ·
+`0.0.0.0/0` 인바운드 보안그룹 · EKS `authenticationMode` 와 access entry principal.
+
+출력은 판단 재료다. 0 이 아니라고 전부 감점은 아니고, **과제지가 금지한 항목이 0 이 아니면 그 항목이 통째로 0점**이다.
+명령으로 못 보는 것(이름 정확 일치·부하 테스트 중지·종이 과제지 금지 조항)은 [DAY-OF 9절](DAY-OF.md#9-채점-직전)에서 눈으로 확인한다.
 
 여기서 못 찾으면 `rg -i "<검색어>" KIT-INDEX.md shared/addons`로 내려간다. 공통 실패 대응은 [shared/TROUBLESHOOTING-COMMON.md](shared/TROUBLESHOOTING-COMMON.md).

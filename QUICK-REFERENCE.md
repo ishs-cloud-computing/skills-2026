@@ -57,6 +57,13 @@ KIT README의 `CHANGE` → 코드 블록(**블록 머리에 붙일 `*.tf` 파일
 
 세트별 리소스 주소는 [KIT-INDEX 대조표](KIT-INDEX.md#세트별-리소스-주소-대조표-task-1).
 
+**KIT README에 `## FAST` 절이 있으면 거기부터 본다.** 속성 하나 켜는 문항은 CLI 한 줄이라 복사·`init`·`plan`·`apply` 가 전부 사라진다 (대가: terraform state 와 어긋난다 — 그 세트를 더 apply 하지 않는다). 13개 KIT: `dynamodb`·`s3`·`ecr`·`lambda`·`alb`·`sqs`-hardening · `cw-alarms`·`cw-dashboard`·`cw-logs-insights` · `vpc-flow-log`·`vpc-endpoints`·`cloudtrail-hardening`·`secrets-manager`.
+
+FAST 명령이 요구하는 실제 ID(`<vpc-id>`·`<sg-id>`·`<ALB ARN>`)는 `shared\scripts\discover.ps1 -Region <리전>` 이 `addon.<리전>.env` 로 한 번에 뽑아준다.
+
+VERIFY는 손으로 치지 말고 일괄 실행한다 — 부착한 terraform 디렉터리에서 `..\..\..\shared\scripts\verify-kit.ps1 <kit> <kit>`.
+제출 전에는 `shared\scripts\foul-check.ps1` (금지 조항·타 리전 잔재·불필요 EC2·EKS 채점 접근).
+
 ## KIT이 2개 이상이면
 
 하나씩 apply하지 않는다. 전부 붙이고 `plan` 한 번, 기존 리소스 replace/delete 0건 확인 후 apply한다.

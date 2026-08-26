@@ -47,6 +47,37 @@ terraform apply
 
 복사할 파일과 순서는 아래 본문을 따른다.
 
+## FAST — terraform 없이 CLI 로 붙이기
+
+큐 속성은 전부 in-place 다.
+
+**대가**: terraform state 와 실물이 어긋난다. 이 세트에 이후 `apply` 를 걸면 되돌아가므로,
+CLI 로 붙였으면 그 세트는 더 apply 하지 않거나 나중에 같은 값을 `.tf` 에도 넣는다.
+
+```powershell
+$Q   = aws sqs get-queue-url --queue-name <큐> --query QueueUrl --output text
+$DLQ = aws sqs get-queue-url --queue-name <DLQ> --query QueueUrl --output text
+$DLQARN = aws sqs get-queue-attributes --queue-url $DLQ --attribute-names QueueArn `
+  --query 'Attributes.QueueArn' --output text
+
+# 값 안에 JSON 이 들어가는 속성(RedrivePolicy·Policy)은 shorthand 로 못 넣는다 -> file://
+@"
+{
+  "VisibilityTimeout": "60",
+  "MessageRetentionPeriod": "345600",
+  "KmsMasterKeyId": "alias/<별칭>",
+  "RedrivePolicy": "{\"deadLetterTargetArn\":\"$DLQARN\",\"maxReceiveCount\":\"3\"}"
+}
+"@ | Set-Content -Encoding utf8 sqs-attrs.json
+
+aws sqs set-queue-attributes --queue-url $Q --attributes file://sqs-attrs.json
+aws sqs get-queue-attributes --queue-url $Q --attribute-names All
+```
+
+- **`RedrivePolicy` 의 값은 JSON 문자열이다** — 객체가 아니라 이스케이프된 문자열이어야 한다. 위 형태 그대로 쓴다.
+- `--attributes Key=Value` shorthand 는 JSON 값을 못 받는다. 에러 메시지가 원인을 안 알려주니 처음부터 `file://` 로 간다.
+- DLQ 는 **원본 큐와 타입이 같아야 한다** (FIFO 원본에는 FIFO DLQ).
+
 ## VERIFY / SCORE
 
 - **VERIFY** = 이 README 본문의 기능 확인. **SCORE** = 해당 세트의 공식 `mark.md`·`mark*.sh`. 서로 대신하지 않는다.
