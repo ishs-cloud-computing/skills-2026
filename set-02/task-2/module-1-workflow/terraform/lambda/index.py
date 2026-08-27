@@ -1,6 +1,3 @@
-# 대회 제공 스켈레톤 provided/module1/lambda-function.py 의 TODO 를 완성한 파일이라
-# SPDX 헤더를 붙이지 않는다 (파일 대부분이 출제자 코드).
-
 import csv
 import io
 import json
