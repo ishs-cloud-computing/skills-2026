@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Origin 검증 헤더 값 — 20자 이상 요구, listener rule과 동일 참조로 불일치 원천 차단
 resource "random_password" "origin_verify" {
   length  = 32

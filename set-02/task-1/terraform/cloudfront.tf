@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudFront (요구사항 11)
 # - wskorea26-concert-cf (mark 는 Comment 로 배포를 식별한다)

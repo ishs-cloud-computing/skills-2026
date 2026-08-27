@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 """wskorea26-book-lambda — 콘서트 예매 정보 조회 (Reference03).
 
 ALB(Lambda TargetGroup) 로 호출되며 GET ?concert_name=<이름> 을 처리한다.

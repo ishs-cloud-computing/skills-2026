@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # ConfigMap (요구사항 9.5)
 # 환경변수를 Pod 에 직접 하드코딩하지 않고 ConfigMap 으로 중앙 관리.

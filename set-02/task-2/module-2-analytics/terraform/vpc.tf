@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC (과제지 1. VPC — 고가용성 2AZ)
 # - 서브넷 Name 태그는 mark 2-1 이 그대로 출력하므로 과제지 표와 정확 일치

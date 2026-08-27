@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
 set -euxo pipefail
 
 # ===== 앱 배포 (Application.md: /opt/app, Python 3.12, Flask+Gunicorn) =====

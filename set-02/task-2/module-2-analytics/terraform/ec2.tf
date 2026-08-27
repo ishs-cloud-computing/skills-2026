@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # EC2 (과제지 2. EC2, Application.md, mark 2-1/2-6/2-7)
 # - analytics-priv-a 배치 (mark 2-1 이 서브넷 Name 태그를 채점)

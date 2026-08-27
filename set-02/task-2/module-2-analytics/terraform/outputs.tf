@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 output "alb_dns" {
   description = "ALB DNS (mark 2-4/2-6 curl 대상)"
   value       = aws_lb.analytics.dns_name

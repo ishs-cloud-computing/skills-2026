@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Producer EC2 (과제지 4. EC2, Application.md — mark 3-6)
 # - user_data 가 bootstrap_brokers_sasl_iam 을 참조 → MSK ACTIVE(~30분) 이후

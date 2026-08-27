@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Lambda (요구사항 9)
 # - wskorea26-book-lambda : ALB GET 요청으로 예매 데이터 조회, Python 3.14 (mark 6-1)

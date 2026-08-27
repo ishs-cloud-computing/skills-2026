@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Security Groups
 # - MSK SG 인바운드는 표준 규칙 리소스로 분리: 클라이언트 SG(producer/lambda)를

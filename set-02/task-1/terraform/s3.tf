@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # S3 (요구사항 4)
 # - wskorea26-concert-bucket-<비번호> : 정적 웹(index.html, main.jpeg) 서빙

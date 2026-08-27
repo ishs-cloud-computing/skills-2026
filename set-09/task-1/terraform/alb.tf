@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 80 포트 0.0.0.0/0 개방은 과제지 8장 보안그룹 표의 요구값.
 # ALB 직접 접근 통제는 origin-verify 헤더 검증 listener rule이 담당.
 resource "aws_security_group" "alb" {

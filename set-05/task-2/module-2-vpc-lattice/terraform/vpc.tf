@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Hub / Spoke VPC (과제지 4. VPC Lattice - VPC 구성)
 # - Hub   : 10.0.0.0/16, public(IGW) — Bastion 배치

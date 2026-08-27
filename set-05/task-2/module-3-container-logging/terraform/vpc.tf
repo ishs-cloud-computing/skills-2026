@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC (과제지 5. Container Logging - VPC 구성)
 # - wsc-logging-vpc 10.3.0.0/16

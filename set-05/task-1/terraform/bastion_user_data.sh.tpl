@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
 set -uxo pipefail
 
 # SSH Password 인증 활성화 + 패스워드 설정 (curl 실패와 무관하게 보장)

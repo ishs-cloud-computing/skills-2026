@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # mark.sh가 resourcegroupstaggingapi 태그 검색으로 식별 — Cluster/Service 모두 Name 태그 필수
 resource "aws_ecs_cluster" "this" {
   name = local.cluster_name

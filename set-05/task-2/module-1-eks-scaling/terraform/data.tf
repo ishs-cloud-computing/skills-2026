@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 data "aws_caller_identity" "current" {}
 
 # Bastion 용 Amazon Linux 2023 AMI (x86_64)

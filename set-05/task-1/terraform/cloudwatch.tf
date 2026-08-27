@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudWatch Logs (요구사항 11)
 # Fluent Bit 가 사용할 로그 그룹을 KMS 암호화하여 미리 생성한다.

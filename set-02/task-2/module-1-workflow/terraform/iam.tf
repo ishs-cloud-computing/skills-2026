@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # IAM (과제지 6. IAM — 최소권한)
 # - wsc2026-lambda-student-role: 과제가 Lambda 역할을 하나만 명명하므로

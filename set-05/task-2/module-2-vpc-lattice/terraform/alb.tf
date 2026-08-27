@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Internal ALB + Target Group (과제지 4. VPC Lattice - Load Balancer 구성)
 # - wsc-spoke-app-alb : internal, Spoke Private Subnet

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # DynamoDB (요구사항 7)
 # - wskorea26-data-table : PK client_id(S), 삭제방지, wskorea26-dynamodb-key 암호화 (mark 4-1)

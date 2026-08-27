@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 output "bucket_name" {
   description = "성적 데이터 버킷 이름 (mark2-1.sh 등번호 입력값 확인용)"
   value       = aws_s3_bucket.score.id

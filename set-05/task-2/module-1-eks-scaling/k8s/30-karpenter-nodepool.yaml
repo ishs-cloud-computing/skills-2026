@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Karpenter EC2NodeClass / NodePool (과제지 Scaling 구성)
 # - Pod 증가로 NodeGroup 자원이 부족하면 Karpenter 가 노드를 자동 확장

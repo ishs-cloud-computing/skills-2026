@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # S3 (과제지 7. S3 — mark 3-1 head-bucket): "오류 데이터 저장" 버킷.
 # AccessPointAlias 는 별도 설정하지 않는다(과제지) — 일반 버킷이라 head-bucket 이 false 를 낸다.
 # producer 바이너리는 EC2 부팅 다운로드용으로 bin/ 에 잠깐 올려두고, 채점 전에 제거한다

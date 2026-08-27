@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 variable "bibunho" {
   description = "선수 비번호 (S3 버킷명 suffix, terraform.tfvars로 주입)"
   type        = string

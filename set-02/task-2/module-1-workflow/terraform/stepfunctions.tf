@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Step Functions (과제지 4. Step Functions, workflow.md, mark 1-4)
 # - wsc2026-student-score-workflow / STANDARD 정확 일치 채점

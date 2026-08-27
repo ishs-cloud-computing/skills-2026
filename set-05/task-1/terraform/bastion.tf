@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Bastion (요구사항 5)
 # - Public Subnet 배치, EIP 로 재시작 시에도 IP 고정

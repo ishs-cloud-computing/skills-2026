@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudFront (요구사항 14)
 # - wsc-cdn : Origin = S3(OAC) + 내부 ALB(VPC Origin)

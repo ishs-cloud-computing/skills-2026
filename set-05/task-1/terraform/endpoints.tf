@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC Interface Endpoints (PrivateLink)
 # Workload Subnet 의 라우팅 테이블에는 어떠한 규칙도 둘 수 없으므로 (요구사항 4),

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Lambda Consumer 2개 + MSK 트리거 (과제지 5. Lambda — mark 3-2/3-4)
 # - sensor-consumer 는 alert 토픽에 produce 하므로 VPC 내 배치 (9098 접근).

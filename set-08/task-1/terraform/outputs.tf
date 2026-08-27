@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 output "cloudfront_domain_name" {
   description = "최종 사용자 엔드포인트"
   value       = aws_cloudfront_distribution.this.domain_name

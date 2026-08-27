@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 채점 2-2가 BlockPublicAcls=True를 검사 — 퍼블릭 접근 전체 차단, CloudFront OAC로만 접근
 resource "aws_s3_bucket" "static" {
   bucket        = local.bucket_name

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # IAM — 애플리케이션 EC2 역할 (과제지 6. IAM, 최소권한)
 # - SSM 접근 필수 (과제지 2. EC2 "채점시 SSM 사용", mark 2-7 send-command)

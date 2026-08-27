@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Lambda (과제지 3. Lambda, lambda.md, mark 1-3)
 # - 처리 함수: 이름 wsc2026-student-score-function (mark 1-3 채점 대상),

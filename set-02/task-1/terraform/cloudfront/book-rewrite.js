@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The ISHS Cloud Computing Authors
+
 // wskorea26-book-rewrite (viewer-request, /book* behavior 전용)
 //
 // mark 9-1: POST https://<CF>/book 이 book 앱(POST /v1/book 만 서빙)에 도달해야 한다.

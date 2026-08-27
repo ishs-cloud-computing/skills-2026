@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 variable "player_number" {
   description = "선수 비번호 — 모든 리소스명의 prefix (terraform.tfvars로 주입)"
   type        = string

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Application 서버 (과제지 4. VPC Lattice - Application 구성)
 # - wsc-spoke-app-v1 / wsc-spoke-app-v2 : Spoke VPC Private Subnet AZ A 배치

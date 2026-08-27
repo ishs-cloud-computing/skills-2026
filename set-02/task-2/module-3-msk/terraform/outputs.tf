@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 output "cluster_arn" {
   description = "MSK 클러스터 ARN (mark 3-3/3-4)"
   value       = aws_msk_cluster.this.arn

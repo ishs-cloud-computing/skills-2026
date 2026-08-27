@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
 # PostToolUse(Edit|Write): .tf 편집 시 해당 파일 fmt + 디렉토리 validate.
 # settings.json은 git으로 공유되지만 이 스크립트는 Unix 전용 — Windows에서는 조용히 no-op.
 

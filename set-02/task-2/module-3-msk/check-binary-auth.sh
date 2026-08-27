@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
 # 대회 제공 producer 바이너리가 MSK IAM 인증(SASL/IAM)을 할 수 있는지, 아니면 비인증 TLS
 # 전용인지 판별한다. 방법: 문자열 마커 검색 (근거·재현: BINARY-ANALYSIS.md).
 # 판정은 MSK IAM 전용 마커(결정적)만 근거로 한다 — SigV4 계열 문자열(보조)은 S3·SSM 등

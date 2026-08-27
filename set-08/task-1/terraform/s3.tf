@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 채점 2-2가 get-bucket-tagging으로 Name 태그를 출력하므로 버킷에도 Name 태그 부여
 resource "aws_s3_bucket" "static" {
   bucket        = local.bucket_name

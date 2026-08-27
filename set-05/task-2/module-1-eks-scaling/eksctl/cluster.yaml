@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ===========================================================================
 # eksctl Cluster Manifest — EKS Scaling (과제지 3)
 #
