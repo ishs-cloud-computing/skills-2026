@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # API Gateway REST API (과제지 6. API Gateway 구성)
 # - wsc-rest-api / stage prod

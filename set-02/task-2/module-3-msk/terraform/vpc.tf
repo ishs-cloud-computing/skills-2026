@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC (과제지 1. VPC — 퍼블릭/프라이빗 2AZ, 단일 NAT)
 # - 서브넷/RTB/IGW/NAT Name 태그는 과제지 표와 정확 일치

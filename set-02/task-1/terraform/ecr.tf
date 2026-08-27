@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # ECR (요구사항 6)
 # - wskorea26-book-repo : Private 레지스트리, push 시 스캔, KMS 암호화 (mark 3-1)

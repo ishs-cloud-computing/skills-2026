@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # StorageClass (요구사항 9.6): EBS CSI + CMK 암호화, WaitForFirstConsumer(Pod AZ 맞춤).
 # <EKS_KMS_KEY_ARN> 은 terraform 의 eks KMS key arn 으로 치환.
 apiVersion: storage.k8s.io/v1

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # S3 (과제지 1. S3, mark 1-1)
 # - wsc2026-student-score-bucket-<등번호>, input/ processed/ error/ 3개 prefix

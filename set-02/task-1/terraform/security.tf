@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Security Groups
 # - wskorea26-book-alb-sg      : 0.0.0.0/0 -> wskorea26-book-alb(80)

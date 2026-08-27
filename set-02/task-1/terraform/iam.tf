@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # IAM Managed Policies (IRSA 용)
 # 역할과 ServiceAccount 는 eksctl(iam.withOIDC + iam.serviceAccounts)이 생성하고,

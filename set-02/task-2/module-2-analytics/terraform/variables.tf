@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 variable "region" {
   description = "모듈 2 리전 (과제지: ap-northeast-2)"
   type        = string

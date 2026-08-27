@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Bastion (과제지 4. VPC Lattice - Bastion 구성)
 # - Hub VPC Public Subnet AZ A 배치, EIP 로 재시작 시에도 IP 고정

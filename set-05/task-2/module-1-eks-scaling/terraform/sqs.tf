@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # SQS (과제지 3. EKS Scaling - SQS 구성)
 # - KEDA 가 메시지 수를 기준으로 Pod 를 스케일링하는 트리거 큐.

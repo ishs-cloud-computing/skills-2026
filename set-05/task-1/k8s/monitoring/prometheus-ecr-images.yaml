@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ECR Pull-Through Cache 이미지 오버라이드 (private cluster: 노드는 인터넷 불가).
 #   quay.io→quay/*, registry.k8s.io→registry-k8s-io/* 로 우회.
 # tag 는 차트 29.13.0 기본 버전으로 고정한다(latest 금지).

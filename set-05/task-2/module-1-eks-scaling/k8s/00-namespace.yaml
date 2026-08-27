@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 모든 Scaling 구성은 wsc-scaling Namespace 에 논리적으로 구분한다 (과제지 EKS Object 구성).
 # keda / karpenter Namespace 는 helm 및 eksctl IRSA SA 생성 시 함께 만들어진다.
 apiVersion: v1

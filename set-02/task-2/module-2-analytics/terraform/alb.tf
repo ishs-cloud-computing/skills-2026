@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # ALB (과제지 3. Load Balancer, mark 2-2/2-4/2-6)
 # - 리스너 HTTP 80, TG 포트 5000 (앱 포트) — mark 2-2 정확 일치

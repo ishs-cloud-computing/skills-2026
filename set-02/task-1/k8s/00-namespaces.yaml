@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 논리적 분리를 위한 Namespace (요구사항 8 / 12, mark 5-4)
 # wskorea26 는 eksctl iamserviceaccount 가 먼저 만들 수 있으므로 apply 는 멱등하게 동작한다.
 apiVersion: v1

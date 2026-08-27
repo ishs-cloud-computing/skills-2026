@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # DynamoDB (과제지 2. DynamoDB, mark 1-2)
 # - PK studentId (HASH) + SK examDate (RANGE), KeySchema 정확 일치 채점

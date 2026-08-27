@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # KMS Customer Managed Keys
 # - wskorea26-s3-key       : S3 객체 암호화 (요구사항 4, mark 2-2)

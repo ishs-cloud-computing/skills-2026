@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # IAM (과제지 3. EKS Scaling - Scaling 구성)
 # - wsc-scaling-keda-policy        : KEDA 가 SQS 큐 길이를 조회 (IRSA, eksctl 가 SA 에 attach)

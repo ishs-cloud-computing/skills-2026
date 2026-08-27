@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Helm values: grafana-community/loki (과제지 5. Loki 구성)
 # - Deploy Mode: SingleBinary, Storage: filesystem (PVC 10Gi), Port 3100

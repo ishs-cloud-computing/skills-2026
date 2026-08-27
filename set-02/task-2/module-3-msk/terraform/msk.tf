@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # MSK (과제지 2. MSK — mark 3-3: 이름/ACTIVE/3.6.0/kafka.t3.small/IAM=True)
 # - 프라이빗 서브넷 2AZ. IAM 인증은 항상 켠다(mark 3-3: Sasl.Iam.Enabled=True).

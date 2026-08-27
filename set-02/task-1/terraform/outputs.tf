@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # eksctl cluster.yaml / k8s manifest 의 ${VAR} 렌더링에 사용하는 값들.
 # README 런북 §1 의 env 블록이 이 출력을 읽어 .env(.ps1) 로 영구화한다.
 

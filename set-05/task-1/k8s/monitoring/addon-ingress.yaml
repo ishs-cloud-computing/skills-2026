@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Addon Load Balancer (요구사항 12.2): wsc-addon-lb, L7 internet-facing.
 # 80 /grafana -> grafana, 80 /prometheus -> prometheus-server. ALB Controller 가 생성.
 apiVersion: networking.k8s.io/v1

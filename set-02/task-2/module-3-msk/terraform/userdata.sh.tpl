@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
 # set -e 는 일부러 뺀다: 토픽 생성 재시도 루프의 실패가 cloud-final 을 죽이면 안 된다
 set -uxo pipefail
 

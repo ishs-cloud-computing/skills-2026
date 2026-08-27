@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Public Subnet 전용 토폴로지 — 과제지 3장이 Private Subnet/NAT를 요구하지 않으며
 # ECS Task는 Public Subnet + Public IP로 배치 (task.md 7.4). 채점 8-2가 불필요
 # 리소스를 감점하므로 NAT/Endpoint는 생성하지 않는다.

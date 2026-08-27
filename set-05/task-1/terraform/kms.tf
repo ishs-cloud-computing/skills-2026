@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # KMS Customer Managed Keys
 # 요구사항 전반에서 S3 / ECR / DynamoDB / EKS Secret / EBS / CloudWatch Logs

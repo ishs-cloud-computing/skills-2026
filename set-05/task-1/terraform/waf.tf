@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # WAF (요구사항 13)
 # - wsc-waf : CloudFront 에 연결 (scope=CLOUDFRONT 이므로 us-east-1 provider 사용)

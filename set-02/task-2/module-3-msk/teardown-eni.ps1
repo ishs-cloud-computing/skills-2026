@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # destroy 가 private 서브넷·VPC 삭제에서 DependencyViolation 으로 멈출 때 쓴다.
 # VPC 배치 Lambda(sensor_consumer)·MSK ESM 이 만든 Hyperplane ENI 가 terraform state 밖에
 # 남아 서브넷을 잡고 있는 게 원인 — 함수·ESM 이 지워져도 ENI 회수가 수 분~수십 분 늦다.

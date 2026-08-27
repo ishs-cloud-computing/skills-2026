@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC Lattice (과제지 4. VPC Lattice - VPC Lattice 구성)
 # - Service Network: wsc-app-service-network (hub + spoke VPC 모두 연결)

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 채점 3-3이 CloudShell에서 ALB DNS로 직접 curl(403/200)을 확인하므로
 # 80 포트는 0.0.0.0/0 개방이 의도된 설계다. 접근 통제는 헤더 검증 listener rule이 담당.
 resource "aws_security_group" "alb" {

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # DynamoDB (과제지 6. DynamoDB 구성)
 # - Table: wsc-rest-table, Partition Key: name (String)

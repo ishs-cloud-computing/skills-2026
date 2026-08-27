@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
 # 대회 당일 producer_auth_mode 를 판별한다.
 # 판별 기준은 하나다 — 그날 지급된 제공 바이너리가 IAM 인증을 할 수 있는가.
 #   할 수 있으면  iam : 제공 바이너리로 과제지 요구(IAM 전용 9098)를 그대로 만족한다.

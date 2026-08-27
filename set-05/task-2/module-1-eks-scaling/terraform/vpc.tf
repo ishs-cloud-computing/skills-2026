@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # VPC (과제지 3. EKS Scaling - VPC 구성)
 # - wsc-scaling-vpc 10.11.0.0/16

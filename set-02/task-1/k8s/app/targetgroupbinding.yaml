@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # TargetGroupBinding (AWS LB Controller CRD): wskorea26-book-tg(IP TG)에 Pod IP 등록.
 # CloudFront(/book*) -> wskorea26-book-alb -> wskorea26-book-tg -> Book App Pod:8080
 # ${APP_TG} 는 terraform output app_target_group_arn ($env:APP_TG) 로 치환 (README §5 렌더).

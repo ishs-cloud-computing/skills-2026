@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Loki LoadBalancer(NLB) Service (과제지 5. Loki 구성)
 # - EC2 Fluent Bit 이 Public -> NLB 경유로 로그를 Push 하도록 3100 을 외부 노출.

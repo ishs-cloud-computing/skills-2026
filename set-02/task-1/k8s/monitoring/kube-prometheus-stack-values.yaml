@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Helm values: prometheus-community/kube-prometheus-stack (요구사항 12)
 # release name: wskorea26-monitoring / namespace: monitoring

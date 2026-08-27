@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # App EC2 (과제지 5. Container Logging - EC2 Fluent Bit 및 애플리케이션 구성)
 # - Name=wsc-log-app-bastion : Public Subnet AZ A, t3.small, AL2023

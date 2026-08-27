@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # CoreDNS Corefile 패치 (요구사항 9.2): kubernetes 플러그인 존을 cluster.local →
 # wsc.local 로 변경. FQDN(svc.wsc.local) 접근이라 kubelet clusterDomain 오버라이드 불필요.
 # 적용 후: kubectl -n kube-system rollout restart deploy/coredns

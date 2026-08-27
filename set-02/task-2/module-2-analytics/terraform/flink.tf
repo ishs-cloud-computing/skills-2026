@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Managed Apache Flink Studio Notebook (과제지 5, mark 2-5)
 # - mark 2-5 기대값: [wsc2026-analytics-flink, READY, ZEPPELIN-FLINK-3_0]

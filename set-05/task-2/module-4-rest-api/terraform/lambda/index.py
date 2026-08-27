@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 """REST API Lambda (과제지 6. REST API Implement).
 
 - POST /v1/user : 사용자 생성. DynamoDB Conditional Write 로 중복 저장 방지.

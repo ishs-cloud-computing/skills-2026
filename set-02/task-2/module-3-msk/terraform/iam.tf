@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # IAM (과제지 4. EC2 / 5. Lambda — 최소권한)
 # - EC2: 토픽 생성(CreateTopic) + raw 토픽 produce + S3 바이너리 다운로드 + SSM

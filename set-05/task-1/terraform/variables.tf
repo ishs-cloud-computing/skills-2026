@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 variable "region" {
   description = "모든 리소스를 생성할 리전"
   type        = string

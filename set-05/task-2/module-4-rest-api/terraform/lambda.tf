@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Lambda (과제지 6. Lambda 구성)
 # - Name: wsc-rest-function, Runtime: Python 3.14

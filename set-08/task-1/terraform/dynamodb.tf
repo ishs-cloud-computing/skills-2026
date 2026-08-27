@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # 키 정책은 기본(계정 root 위임) — 채점 IAM Role의 describe/scan이 막히지 않게 함
 resource "aws_kms_key" "ddb" {
   description             = "CMK for DynamoDB table ${var.table_name}"

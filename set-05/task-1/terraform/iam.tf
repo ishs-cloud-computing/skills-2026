@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # IRSA(IAM Roles for Service Accounts) 용 Customer Managed Policy
 # 실제 ServiceAccount <-> Role 매핑은 eksctl(cluster.yaml) 의

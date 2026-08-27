@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # Task Definition이 이 리소스를 참조하므로 첫 태스크 기동 전에 항상 존재
 resource "aws_cloudwatch_log_group" "app" {
   name              = local.log_group_name

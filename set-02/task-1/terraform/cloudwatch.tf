@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # CloudWatch Log Groups (요구사항 12)
 # - /wskorea26/eks/pod-logs : Fluent Bit 가 Pod 로그 전송 (auto_create_group=false)

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # attribute 정의는 키 스키마인 client_id 하나만 — booking_id 등 나머지 5개는 아이템 속성 (과제 9장)
 resource "aws_dynamodb_table" "booking" {
   name         = local.table_name

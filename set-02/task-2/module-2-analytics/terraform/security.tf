@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # Security Group
 # - EC2 는 "Load Balancer 를 통해서만 외부 접근" (과제지 2. EC2)

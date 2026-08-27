@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # S3 (요구사항 6)
 # - Bucket Name: wsc-static-<ACCOUNT_ID>

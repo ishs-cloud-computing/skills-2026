@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
 # ---------------------------------------------------------------------------
 # App Load Balancer (요구사항 12.1)
 # - wsc-app-lb : L7 / Internal (Private Subnet), 외부 직접 접근 불가
