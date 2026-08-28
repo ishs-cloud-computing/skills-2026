@@ -314,7 +314,7 @@ kubectl get nodeclaims -w
 kubectl logs -f deploy/user
 ```
 
-### stress CPU 실측 · limit 보정 (부하 구간)
+### stress 부하 특성 실측 (부하 구간)
 
 부하가 도는 동안 잰다. 유휴에는 아무것도 안 나온다.
 
@@ -326,18 +326,8 @@ kubectl logs deploy/stress --since=60s | grep '\[GIN\]' | tail -20    # 요청�
 ```
 
 요청당 millicore = CPU ÷ rps. 재구성 바이너리 기준값은 **1.2 millicore/req, 서버 처리시간
-100~250µs** (`NOTES.md` 2026-08-24). 당일 값이 다르면 그 비율만큼 limit 을 조정한다.
-
-| 관측 | 조치 |
-|---|---|
-| 요청당 서버 처리시간 >= 10ms | limit 상향 (요청당 millicore 비율만큼) |
-| stress 응답시간 >= 500ms 이고 CPU 가 limit 에 pinned | limit 상향 |
-| HPA 가 maxReplicas 10 인데 응답시간 상승 | limit 해지 또는 maxReplicas 상향 |
-| 노드 CPU < 50% 인데 stress 만 limit 에 pinned | limit 해지 |
-| stress performance < 90% | 위 표를 처음부터 재확인 |
-
-limit 을 쓰려면 `task-3/stress-cpu-limit` 브랜치를 체크아웃한다. 근거와 해지선은
-[ARCHITECTURE.md](ARCHITECTURE.md) "stress CPU limit".
+100~250µs** (`NOTES.md` 2026-08-24). 당일 값이 크게 다르면 HPA 목표치·`maxReplicas` 를
+그 비율만큼 재검토한다 — CPU limit 은 쓰지 않는다(기각 근거는 NOTES.md).
 
 - CloudWatch(us-east-1) → Logs Insights → `aws-waf-logs-skills-waf`
 - WAF 콘솔(us-east-1) → sampled requests
