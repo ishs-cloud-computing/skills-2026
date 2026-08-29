@@ -1,0 +1,160 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# NOTES.md §3.5 — 배포 전 envsubst 로 ${...} 치환 (README 런북 5단계)
+# 필요한 환경 변수: VPC_ID, SUBNET_A_ID, SUBNET_B_ID, EKS_KMS_ARN, NODE_SHARED_SG_ID, ECR, ACCOUNT_ID,
+#   SET_HOSTNAME_ADDON_B64, SET_HOSTNAME_APP_B64,
+#   BOOK_APP_POLICY_ARN, GRAFANA_POLICY_ARN, FLUENTBIT_POLICY_ARN, LBC_POLICY_ARN, NODE_PTC_POLICY_ARN
+# 노드명(채점 4-3)은 정규 managed NG 의 bootstrap container(hostname-override)가 담당한다.
+# 단 자동 생성되는 EC2_LINUX access entry 의 username(system:node:{{EC2PrivateDNSName}})이
+# 커스텀 노드명과 불일치해 join 이 거부되므로(실측 §3.5.2), NG 를 desired 0 으로 만든 뒤
+# access entry 삭제 → aws-auth {{SessionName}} 매핑 적용 → scale-up 순서를 지켜야 한다(README 5단계).
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: gj2026-eks-cluster
+  region: ap-northeast-2
+  version: "1.35"
+
+# aws-auth 폴백이 성립해야 한다(4-3 노드 인증 경로) — API 전용 모드 금지
+# root 를 명시 등록하는 이유(실측 §3.5.2): eksctl 은 클러스터 생성에 쓴 IAM 신원에만
+# bootstrapClusterCreatorAdminPermissions 로 admin access entry 를 자동 부여한다.
+# 로컬(apply)과 CloudShell(채점)의 IAM 신원이 다르면 — 특히 CloudShell 이 계정 root 로
+# 로그인되는 경우 — kubectl 이 "You must be logged in to the server (Unauthorized)" 로
+# 전멸한다(4-3/4-4/4-5). 대회 계정에서 실제 로그인 신원이 root 가 아니면 principalARN 교체.
+accessConfig:
+  authenticationMode: API_AND_CONFIG_MAP
+  accessEntries:
+    - principalARN: "arn:aws:iam::${ACCOUNT_ID}:root"
+      accessPolicies:
+        - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+          accessScope:
+            type: cluster
+
+vpc:
+  id: "${VPC_ID}"
+  subnets:
+    private:
+      ap-northeast-2a: { id: "${SUBNET_A_ID}" }
+      ap-northeast-2b: { id: "${SUBNET_B_ID}" }
+  # 채점 4-1: public/private 둘 다 True. CloudShell kubectl 동작에도 public 필수
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+# 채점 4-1 두 번째 줄: secret 봉투 암호화 CMK
+secretsEncryption:
+  keyARN: "${EKS_KMS_ARN}"
+
+# 노드 join 실패 디버깅용 — 인스턴스가 rollback 으로 사라져도 서버쪽 인증 시도 기록은 CloudWatch에 남는다
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["authenticator", "api"]
+
+# IRSA — 역할 이름을 명시 생성, 정책은 Terraform 산출물(attachPolicyARNs)
+# (OIDC provider 가 클러스터 생성 후에야 존재하므로 역할 생성을 eksctl 에 위임)
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: book-sa
+        namespace: skills
+      roleName: gj2026-book-app-role   # DynamoDB Deny 정책의 예외 principal 과 정확히 일치해야 함
+      attachPolicyARNs: ["${BOOK_APP_POLICY_ARN}"]
+    - metadata:
+        name: grafana
+        namespace: monitoring
+      roleName: gj2026-grafana-role
+      attachPolicyARNs: ["${GRAFANA_POLICY_ARN}"]
+    - metadata:
+        name: aws-for-fluent-bit
+        namespace: logging
+      roleName: gj2026-fluentbit-role
+      attachPolicyARNs: ["${FLUENTBIT_POLICY_ARN}"]
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      roleName: gj2026-lbc-role
+      attachPolicyARNs: ["${LBC_POLICY_ARN}"]
+
+addons:
+  - name: vpc-cni
+  - name: kube-proxy
+  - name: coredns
+    # Deployment 형 애드온은 addon 노드로 유도 (스키마는 버전별 상이 — README 런북 참고)
+    configurationValues: |-
+      nodeSelector:
+        role: addon
+  - name: metrics-server
+    configurationValues: |-
+      nodeSelector:
+        role: addon
+
+# desired/min 0 으로 생성 — 인증 전환(access entry 삭제 + aws-auth 매핑) 전에 노드가 뜨면
+# username 불일치로 join 실패 → MNG 가 NodeCreationFailure 로 롤백된다(실측 §3.5.2).
+# 전환 후 eksctl scale nodegroup 으로 2대씩 올린다(README 5단계 — 4-2 는 scale 후 desired 2 로 충족).
+managedNodeGroups:
+  # ---------- addon: t3.medium x2, taint 없음(광역 컴포넌트 수용) ----------
+  - name: gj2026-eks-addon-nodegroup
+    amiFamily: Bottlerocket        # ami: 지정 금지 — amiType 이 CUSTOM 이 되어 4-2 실패
+    instanceType: t3.medium
+    desiredCapacity: 0
+    minSize: 0
+    maxSize: 2
+    privateNetworking: true
+    labels: { role: addon }
+    instanceName: gj2026-eks-addon-node   # EC2 Name 태그 (채점 4-2)
+    securityGroups:
+      attachIDs: ["${NODE_SHARED_SG_ID}"]
+    # 노드명 gj2026.<instance-id>.addon.node (채점 4-3) — kubelet 이전에 실행되는
+    # bootstrap container 가 IMDS 에서 instance-id 를 읽어 hostname-override + provider-id 설정
+    bottlerocket:
+      settings:
+        bootstrap-containers:
+          set-hostname:
+            source: "${ECR}/gj2026/br-bootstrap:1.0.0"
+            mode: once
+            essential: true   # 실패 시 부팅 중단 → 잘못된 이름의 노드가 조인하지 않음
+            user-data: "${SET_HOSTNAME_ADDON_B64}"
+    iam:
+      attachPolicyARNs:
+        # eksctl 기본 정책 + PTC import (attachPolicyARNs 지정 시 기본값이 사라지므로 전부 명시)
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - "${NODE_PTC_POLICY_ARN}"
+
+  # ---------- app: m5.large x2, 전용 taint(book 외 배치 금지, 요구 7) ----------
+  # m5.large 는 trunk ENI 지원 → SecurityGroupPolicy 적용 가능 (t 패밀리는 미지원)
+  - name: gj2026-eks-app-nodegroup
+    amiFamily: Bottlerocket
+    instanceType: m5.large
+    desiredCapacity: 0
+    minSize: 0
+    maxSize: 2
+    privateNetworking: true
+    labels: { role: app }
+    taints:
+      - key: dedicated
+        value: app
+        effect: NoSchedule
+    instanceName: gj2026-eks-app-node
+    securityGroups:
+      attachIDs: ["${NODE_SHARED_SG_ID}"]
+    bottlerocket:
+      settings:
+        bootstrap-containers:
+          set-hostname:
+            source: "${ECR}/gj2026/br-bootstrap:1.0.0"
+            mode: once
+            essential: true
+            user-data: "${SET_HOSTNAME_APP_B64}"
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - "${NODE_PTC_POLICY_ARN}"

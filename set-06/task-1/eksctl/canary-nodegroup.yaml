@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# NodeCreationFailure 원인 분리용 카나리 노드그룹 (README 문제해결 절차 참고)
+# bootstrap-containers(hostname-override) 블록만 뺀 최소 구성 —
+#   join 성공 → hostname-override 가 원인으로 확정 (네트워킹은 정상)
+#   join 실패 → VPC/엔드포인트 등 네트워킹 문제 (SSM 으로 kubelet 로그 확인)
+# 플레이스홀더 없음 → 렌더링 불필요, 그대로 사용. 확인 후 즉시 삭제할 것.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: gj2026-eks-cluster
+  region: ap-northeast-2
+
+managedNodeGroups:
+  - name: gj2026-eks-canary-nodegroup
+    amiFamily: Bottlerocket
+    instanceType: t3.medium
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    privateNetworking: true

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: book-svc
+  namespace: skills
+spec:
+  type: ClusterIP
+  selector:
+    app: book
+  ports:
+    - port: 8080
+      targetPort: 8080

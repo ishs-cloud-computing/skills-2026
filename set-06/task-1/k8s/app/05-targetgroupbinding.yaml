@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# TG 는 Terraform 이 생성(이름 gj2026-book-tg 강제), k8s 는 바인딩만 (NOTES.md §3.6)
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: book-tgb
+  namespace: skills
+spec:
+  serviceRef:
+    name: book-svc
+    port: 8080
+  targetGroupARN: ${BOOK_TG_ARN}
+  targetType: ip

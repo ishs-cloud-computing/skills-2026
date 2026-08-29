@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# NOTES.md §3.6.1 — book Pod branch ENI 에 Pod SG 부착 (채점 4-5)
+# ingress 가 ALB SG 참조뿐이라 같은 노드의 nginx-test(노드 primary ENI 소스)는 타임아웃
+# 사전 조건: aws-node ENABLE_POD_ENI=true + m5.large(trunk ENI 지원) 노드
+apiVersion: vpcresources.k8s.aws/v1beta1
+kind: SecurityGroupPolicy
+metadata:
+  name: book-sgp
+  namespace: skills
+spec:
+  podSelector:
+    matchLabels:
+      app: book
+  securityGroups:
+    groupIds:
+      - ${BOOK_POD_SG_ID}

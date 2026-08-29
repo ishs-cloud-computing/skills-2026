@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: book-config
+  namespace: skills
+data:
+  AWS_REGION: ap-northeast-2
+  TABLE_NAME: books

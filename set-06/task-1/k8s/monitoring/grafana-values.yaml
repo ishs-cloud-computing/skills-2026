@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# NOTES.md §3.11 — grafana-community/grafana 차트 values (envsubst 후 helm -f)
+# 노드에 인터넷이 없으므로 Docker Hub 이미지는 전부 private ECR 미러 사용
+image:
+  registry: ${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com
+  repository: mirror/grafana
+  tag: "13.1.0"
+
+# Docker Hub 의존 보조 컨테이너 비활성 (busybox/bats)
+testFramework:
+  enabled: false
+initChownData:
+  enabled: false
+
+adminUser: admin
+adminPassword: "Skills53#"
+
+# TGB serviceRef 가 3000 을 참조 — 차트 기본 Service 포트는 80 이라 그대로 두면
+# BackendNotFound 로 타깃 미등록 (실측 10-2 503 원인)
+service:
+  port: 3000
+
+# eksctl IRSA 가 만든 SA 재사용 (annotation 포함) — 차트가 만들면 role 연결이 빠진다
+serviceAccount:
+  create: false
+  name: grafana
+
+nodeSelector:
+  role: addon
+
+# IRSA 함정: securityContext 472 를 바꾸면 SDK 가 web identity 토큰을 못 읽고
+# 조용히 노드 role 로 폴백한다 — 기본값 유지, 명시 오버라이드 금지 (NOTES.md §3.11)
+
+grafana.ini:
+  server:
+    # 템플릿 표현식(%(protocol)s 등) 금지 — Pod 내부값으로 치환되어 정적 자원 경로가 깨진다
+    root_url: https://${CF_DOMAIN}/grafana/
+    serve_from_sub_path: true
+
+# CloudWatch 데이터소스 — IRSA(gj2026-grafana-role) 기본 자격 증명 체인
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: CloudWatch
+        type: cloudwatch
+        access: proxy
+        isDefault: true
+        jsonData:
+          authType: default
+          defaultRegion: ap-northeast-2
+
+# ConfigMap(label grafana_dashboard=1) 사이드카로 대시보드 코드 프로비저닝
+# 기본 이미지가 quay.io 직접 참조라 private 노드에서 pull 불가 — ECR 미러 필수 (실측)
+sidecar:
+  image:
+    registry: ${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com
+    repository: mirror/k8s-sidecar
+    tag: "2.8.1"
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"

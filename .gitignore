@@ -39,3 +39,6 @@ set-02/task-2/provided/module2/requirements.txt
 set-02/task-2/provided/module3/app
 # discover.ps1 산출물 (계정·리소스 ID 스냅샷, 리전별)
 addon.*.env
+# set-06/task-1: 배부물(book 바이너리·정적 파일)은 로컬에 놓고 커밋하지 않는다 (런북 「디렉토리 구조」)
+shared/provided/set-06-task-1/*
+!shared/provided/set-06-task-1/.gitkeep
