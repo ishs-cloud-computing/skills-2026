@@ -17,12 +17,15 @@ $ARGUMENTS 를 해석한다:
 2. 이 과제의 `task.md`(또는 task.pdf)와 채점 스크립트를 읽는다.
    - task-1 → `mark.sh`
    - task-2 → `mark/mark1.sh` ~ `markN.sh` (기본 4개, 당일 최대 6개)
-3. set-03/task-1 의 NOTES.md·README·docs 문서를 표준 형식으로 삼는다.
+3. set-03/task-1 의 NOTES.md·README 를 표준 형식으로 삼는다.
 
 ## 설계 순서
 채점 항목 ↔ 리소스를 먼저 매핑한 뒤 의존성 순서로 쌓는다:
 네트워크 → IAM → 데이터/스토리지 → 컴퓨트 → 앱/k8s → 관측성.
 채점 스크립트가 검사하는 정확한 형태 기준. 이름은 과제지와 정확히 일치.
+
+배경·30% 변동 대비·증설 여지: `.claude/context/design.md`
+디렉토리·파일 배치·문서 삼분할: `.claude/context/layout.md`
 
 ## 문서 삼분할 (반드시)
 같은 정보를 두 곳에 쓰지 않는다. 종류를 섞지 않는다.
@@ -30,31 +33,19 @@ $ARGUMENTS 를 해석한다:
 - **README.md** → 실행·배포·teardown 절차만. 명령형. "왜"를 쓰지 마라.
 - **NOTES.md** → 함정·기각 대안·삽질·실측 소요시간. 발행 안 하는 개발자용.
   결정 로그는 `맥락 / 채택 / 기각 / 대가`. 기각 대안이 실재하는 것만.
-- **docs/src/content/docs/setlist/<set-NN>/<task-N>/** → 설계 이유·트레이드오프.
-  Explanation. `docs/CONTRIBUTING.md`(Diátaxis) 준수. 사이트 발행됨.
-
-## 30% 변동 대비
-당일 변동은 기존 문제 교체가 아니라 **문항 추가**다(1과제: 모니터링 도구 설치류,
-2과제: 하위 모듈 최대 2개). 추가 시간은 없다. 모듈 5·6이나 관측성 스택을 얹을 때
-기존 리소스를 안 건드리도록 경계를 끊어둔다.
-이름·CIDR·리전·인스턴스 타입·개수는 변수화. `name_prefix` 만으로 안 끝나는
-리터럴이 있으면 NOTES.md 에 치환 범위를 기록.
+- 설계 이유·트레이드오프도 **NOTES.md** 에 남긴다. 이 저장소에는 `docs/` 가 없다 —
+  새로 만들지 않는다 (`.claude/context/layout.md#docs-는-이-저장소에-없다`).
 
 ## 작업 중 준수
-- 버전은 `.mise.toml` 고정. eksctl·helm·EKS Addon 만 최신.
+- 도구 버전 고정은 로컬 `mise` 로 하며 이 저장소에는 `.mise.toml` 이 없다.
+  저장소 안의 정본은 각 모듈 `versions.tf`/`providers.tf` 의 `required_version` 이다.
+  예외(고정 안 함): eksctl·helm·EKS Addon 은 최신 안정 버전. AL2023 등 보안 항목과 과제지 명시 버전.
 - `.tf` 편집 시 fmt·validate 훅이 자동으로 돈다. validate 에러가 뜨면 처리.
 - `provided/` 는 원본, 수정 금지.
 
 ## 완료 기준
-- [ ] 채점 스크립트 전 항목을 NOTES.md 채점 커버리지에 대조
-      (`[x]` 완료 / `[~]` 부분·조건부 / `[ ]` 미완, 각 항목 한 줄 근거)
-- [ ] README 런북 순서가 실제 배포 순서와 일치
-- [ ] 결정 로그의 기각 대안이 실재하는지 확인
-- [ ] `terraform fmt`·`validate`·`plan` 클린
-- [ ] (EKS) 일반 CloudShell 에서 `aws eks update-kubeconfig` 1회로 `kubectl get nodes` 가 된다
-      (채점 중 허용되는 명령은 그 한 줄뿐이다)
-- [ ] (task-2) 모듈마다 markN.sh 대조, NOTES 모듈 현황 표를 모듈 수만큼 채움
-- [ ] (task-2) 모듈 간 리소스 경계가 안 섞였는지 확인
+`.claude/context/design.md#과제-완료-기준` 의 체크리스트를 그대로 쓴다.
+채점 커버리지 대조는 `grading-coverage` 스킬.
 
 ## 실행 방식
 plan mode 로 시작. 채점 항목↔리소스 매핑과 문서 배치 계획을 먼저 보여주고,
