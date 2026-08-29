@@ -37,9 +37,8 @@ $ARGUMENTS 를 해석한다:
   새로 만들지 않는다 (`.claude/context/layout.md#docs-는-이-저장소에-없다`).
 
 ## 작업 중 준수
-- 도구 버전 고정은 로컬 `mise` 로 하며 이 저장소에는 `.mise.toml` 이 없다.
-  저장소 안의 정본은 각 모듈 `versions.tf`/`providers.tf` 의 `required_version` 이다.
-  예외(고정 안 함): eksctl·helm·EKS Addon 은 최신 안정 버전. AL2023 등 보안 항목과 과제지 명시 버전.
+- Terraform 버전 정본은 각 모듈 `versions.tf`/`providers.tf` 의 `required_version`.
+  고정하지 않는 예외: eksctl·helm·EKS Addon 은 최신 안정 버전. AL2023 등 보안 항목과 과제지 명시 버전은 그대로 따른다.
 - `.tf` 편집 시 fmt·validate 훅이 자동으로 돈다. validate 에러가 뜨면 처리.
 - `provided/` 는 원본, 수정 금지.
 
