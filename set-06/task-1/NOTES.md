@@ -6,6 +6,7 @@
 
 - `terraform/` · `eksctl/` · `k8s/` · `app/` 구현 완료. 마지막 실측 배포는 **2026-07-23**(구 `set-06/task-1` 브랜치 시점).
 - 2026-08-29 main 으로 편입하면서 런북을 set-07/task-1 형식으로 재작성하고 `plan.md`·Astro 사이트를 이 문서로 합쳤다.
+  이어서 **컨테이너 이미지 작업을 전부 일반 CloudShell 로 옮겼다**(본 PC Docker Desktop 의존 제거).
   **재작성된 런북은 실제 배포로 재검증되지 않았다** — 아래 「미검증」 참고.
 - set-06 은 `DAY-OF.md`·`KIT-INDEX.md`·`QUICK-REFERENCE.md`·`NAMING-AUDIT.md` 에 **등재돼 있지 않다.**
   네 문서 모두 2026-08-19 런북 동결 대상이라 이 편입에서 건드리지 않았다. 값 대조표는 README 가 자체로 들고 있다.
@@ -62,12 +63,36 @@
 
 - **2026-08-29 재작성한 런북 전체.** set-07 형식으로 옮기면서 `.env.ps1` 을 키 목록 기반 재작성으로,
   k8s apply 를 `rendered/` 일괄 방식으로 바꿨다. 명령 자체는 등가지만 실행으로 확인하지 않았다.
-- **Docker 대체 경로.** 2·4단계는 본 PC Docker Desktop 전제다. 대회 PC 는 Docker·WSL 을 못 쓴다는 게
-  저장소 공통 전제이므로 일반 CloudShell 로 옮겨야 할 수 있는데, 그 경로(제공 바이너리 S3 릴레이 →
-  CloudShell buildx zstd)는 한 번도 돌려보지 않았다. **set-07 은 같은 이유로 빌드를 CloudShell 로 옮겼다.**
+- **일반 CloudShell 이미지 경로(2단계) 전체.** 본 PC Docker Desktop 의존을 없애려고 옮겼지만
+  한 번도 돌려보지 않았다. 특히 확인이 필요한 전제 셋:
+  1. **CloudShell 의 `docker buildx` + zstd 출력 지원.** 채점 2-2(3MB)가 여기에 통째로 걸린다.
+     `docker buildx version` 이 실패하면 zstd 출력이 안 되고 3MB 를 못 맞춘다.
+     그 경우의 대안은 ① 본 PC 에서 Docker 를 쓸 수 있으면 2단계만 본 PC 로 되돌리거나,
+     ② CloudShell 에 buildx 플러그인을 직접 설치하는 것이다. 둘 다 미검증.
+  2. **CloudShell 디스크 여유.** grafana(수백 MB)를 포함해 이미지 5종을 다루므로 pull→tag→push→`rmi`
+     순서로 하나씩 비우도록 써 뒀다. 그래도 모자라면 `docker system prune -af`.
+  3. **Docker Hub 익명 pull 레이트 리밋.** grafana 만 Docker Hub 다 — `toomanyrequests` 가능.
 - 아래 「6.2 문서로 확정 안 된 항목」의 잔여 항목.
 
 ## 결정 로그
+
+### 2026-08-29 컨테이너 이미지 작업을 전부 일반 CloudShell 로 이전
+
+바로 아래 「런북을 set-07/task-1 형식으로 재작성」 항목에서 **기각했던 머신 3분할의 절반을 뒤집는다.**
+
+- **맥락**: 재작성 직후의 런북은 2단계(book 빌드)와 4단계(미러·PTC 워밍업)가 본 PC Docker Desktop
+  전제였다. 저장소 공통 전제는 「대회 PC 는 Docker·WSL 사용 불가」(`.claude/context/contest.md`)이므로
+  그대로 두면 대회장에서 2·4단계가 아예 실행되지 않는다. set-07 은 같은 이유로 빌드를 CloudShell 에 둔다.
+- **채택**: 이미지 관련 명령을 **일반 CloudShell**(VPC environment 아님) 한 단계로 합쳤다.
+  기존 2·4단계 → 새 2단계, 이후 단계는 하나씩 당겨 5~9 → 4~8 로 번호가 바뀌었다.
+  제공 바이너리는 **S3 릴레이**(`_transfer/` 접두어)로 넘기고, 그래서 1단계가 `aws_s3_bucket.static`
+  까지 먼저 만든다. `Dockerfile` 은 텍스트라 붙여넣는다(줄 수 17 대조).
+- **기각**: ① 일반 CloudShell 의 Actions 업로드 UI 로 바이너리 전달 — 되긴 하지만 set-07 과 절차가
+  갈리고 정책으로 막힐 수 있다. ② VPC environment 도입 — set-06 은 클러스터 엔드포인트가 public 이라
+  `kubectl`·`helm` 이 본 PC 에서 되므로 필요 없다. 이 절반은 여전히 기각 상태다.
+- **대가**: ① CloudShell 의 `docker buildx`·zstd 지원이 새 전제가 됐다(「미검증」 1번).
+  ② 릴레이 객체가 채점 대상 버킷에 잠시 얹힌다 — 채점 6-1-A 는 `/` 없는 키만 세므로 영향이 없고,
+  7단계에서 지운다.
 
 ### 2026-08-29 `plan.md` 와 Astro 사이트를 NOTES.md 하나로 합침
 

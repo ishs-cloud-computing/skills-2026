@@ -61,23 +61,25 @@ NOTES.md                      # 설계 근거·결정 로그·함정·채점 커
 
 > 제공된 배포파일(`book-linux-amd64_v1.0.1`, `index.html`, `main.jpeg`)은 **저장소에 없다** — 배부물이라
 > git 에서 제외된다. 런북 시작 전에 `shared/provided/set-06-task-1/` 에 그대로 놓는다.
-> `s3.tf` 정적 업로드와 `app/Dockerfile` 빌드가 그 경로를 직접 읽는다.
+> `index.html`·`main.jpeg` 는 3단계 `s3.tf` 가 그 경로에서 직접 올리고, `book-linux-amd64_v1.0.1` 은
+> 1단계가 S3 릴레이로 CloudShell 에 넘긴다.
 
 ## 배포 순서
 
-> **머신 분할** — ① **본 PC(PowerShell 7)**: `terraform apply`·`eksctl`·`kubectl`·`helm`·시드·정리.
-> ② **채점 CloudShell**: 자가 채점(`mark.sh`)만. 클러스터 엔드포인트가 public 이라 본 PC 에서
-> `kubectl` 이 되고, 그래서 set-07 처럼 VPC environment 를 만들 필요가 없다.
+> **머신 3분할** — ① **본 PC(PowerShell 7)**: `terraform apply`·`eksctl`·`kubectl`·`helm`·시드·정리.
+> ② **일반 CloudShell**(VPC environment 아님): 컨테이너 이미지 작업 전부 — 대회 PC 는 Docker·WSL 을 못 쓴다.
+> ③ **채점 CloudShell**: 자가 채점(`mark.sh`)만(mark.md 유의사항 14).
+> 클러스터 엔드포인트가 public 이라 `kubectl`·`helm` 은 본 PC 에서 되고, set-07 과 달리 VPC environment 는 필요 없다.
 > tfstate·`.terraform/` 은 어디에도 올리지 않는다.
 > 작업용 bastion 은 두지 않는다 — 과제지가 요구하지 않는 EC2 는 불필요 리소스 감점 대상이다.
 
-> **⚠ Docker 전제 확인** — 2·4단계는 **본 PC 의 Docker Desktop** 을 쓴다(zstd buildx, PTC 워밍업).
-> 대회 PC 는 Docker·WSL 을 못 쓴다는 게 저장소 공통 전제이므로, 대회장에서 Docker 를 못 쓰면
-> 2·4단계는 **일반 CloudShell**(VPC environment 아님)로 옮겨야 한다. 그 경우 제공 바이너리는
-> S3 릴레이로 넘긴다. **이 대체 경로는 실측 검증되지 않았다** — NOTES.md 「미검증」 참고.
+> **파일을 CloudShell 로 넘기는 법** — 텍스트(`Dockerfile`·환경변수)는 **붙여넣기**, 붙여넣을 수 없는
+> 제공 바이너리만 **S3 릴레이**(`s3://gj2026-static-<비번호>/_transfer/`)로 넘긴다. 그래서 1단계가
+> S3 버킷까지 먼저 만든다. 릴레이 접두어에는 `/` 가 들어가므로 **채점 6-1-A 출력에 잡히지 않지만**
+> (`Contents[?contains(Key,'/')==false]`), 7단계에서 지운다.
 
-> **병렬 실행** — 1단계가 끝나면 2·3·4단계는 서로 독립이라 터미널 3개에서 동시에 돌릴 수 있다.
-> 5단계(EKS 생성)만 3단계(terraform 출력값)와 4단계(bootstrap 이미지 push)가 **둘 다** 끝나야 시작된다.
+> **병렬 실행** — 1단계가 끝나면 2단계(CloudShell)와 3단계(본 PC)는 서로 독립이라 동시에 돌릴 수 있다.
+> 4단계(EKS 생성)만 2단계(bootstrap 이미지 push)와 3단계(terraform 출력값)가 **둘 다** 끝나야 시작된다.
 
 ### 0) [본 PC·PowerShell] 사전 변수 · 신원 확인
 
@@ -94,37 +96,107 @@ aws sts get-caller-identity --query Arn --output text
 > 본 PC 가 클러스터를 만들므로 `bootstrapClusterCreatorAdminPermissions` 에 따라 **본 PC 신원이 그대로
 > 클러스터 admin** 이 된다. 채점 CloudShell 을 여는 IAM 사용자와 같아야 채점 셸에서 `kubectl` 이 된다.
 > 액세스 키가 없으면 `aws login`(AWS CLI 2.32.0 이상)으로 콘솔 자격증명을 그대로 쓴다.
-> 어긋났으면 9단계 각주의 access entry 로 사후 보정한다.
+> 어긋났으면 8단계 각주의 access entry 로 사후 보정한다.
 
-### 1) [본 PC·PowerShell] ECR 선행 생성 (이미지 push 가 EKS 보다 선행)
+### 1) [본 PC·PowerShell] ECR·S3 선행 생성 + 제공 바이너리 릴레이
+
+ECR 은 이미지 push 보다, S3 버킷은 릴레이보다 먼저 있어야 한다. 나머지는 3단계에서 만든다.
 
 ```powershell
 terraform init
 terraform apply -var "bibunho=$env:NUM" `
   -target="aws_ecr_repository.book" -target="aws_ecr_repository.direct" `
-  -target="aws_ecr_pull_through_cache_rule.public"
+  -target="aws_ecr_pull_through_cache_rule.public" `
+  -target="aws_s3_bucket.static"
 
 $env:ACCOUNT_ID = aws sts get-caller-identity --query Account --output text
-$env:ECR = "$env:ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com"
+$env:ECR    = "$env:ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com"
+$env:BUCKET = "gj2026-static-$env:NUM"
+
+# 붙여넣을 수 없는 것만 릴레이로 넘긴다 (8.4MB 바이너리). 7단계에서 지운다.
+aws s3 cp ..\..\..\shared\provided\set-06-task-1\book-linux-amd64_v1.0.1 `
+  "s3://$env:BUCKET/_transfer/book-linux-amd64_v1.0.1"
+
+"ACCOUNT_ID=$env:ACCOUNT_ID  BUCKET=$env:BUCKET"   # 2단계에 붙여넣을 값
 ```
 
-### 2) [본 PC·PowerShell] book 이미지 빌드·push (채점 2-2 의 3MB 제한)
+> 이 시점의 버킷에는 아직 기본 암호화·버킷 정책이 없다(3단계에서 붙는다). 릴레이 객체는
+> 채점 전에 지우고, 채점 대상인 루트 객체(`index.html`·`main.jpeg`)는 3단계 terraform 이 올린다.
 
-> 제공 바이너리 8.4MB 는 zstd -19/-22 로도 3.07MB 라 초과한다. `app/Dockerfile` 이 **UPX 로 바이너리를
-> 선압축**한 뒤 zstd 로 밀어야 3MB 아래로 떨어진다. 원본 제공 파일은 무수정 — 빌드 단계에서만 압축한다.
+### 2) [일반 CloudShell] 컨테이너 이미지 전부 (book 빌드 · 미러 · PTC 워밍업)
 
-```powershell
-aws ecr get-login-password | docker login --username AWS --password-stdin $env:ECR
+> 콘솔에서 **일반 CloudShell**(VPC environment 아님)을 연다 — Docker 와 인터넷 egress 가 둘 다 필요하다.
+> 대회 PC 는 Docker·WSL 을 못 쓰므로 이미지 작업은 전부 여기서 한다. 끝나면 이 셸은 더 쓰지 않는다.
+> **NAT 가 없어** 노드는 인터넷에 못 나간다 — 노드가 쓸 이미지는 전부 여기서 ECR 로 올려둬야 한다.
 
-# oci-mediatypes / force-compression / 단일 아키텍처 전부 필수 (NOTES.md §3.3)
-docker buildx build --platform linux/amd64 --provenance=false `
-  --output "type=image,name=$env:ECR/book:latest,oci-mediatypes=true,compression=zstd,compression-level=19,force-compression=true,push=true" `
-  -f ..\app\Dockerfile ..\..\..\shared\provided\set-06-task-1
+```bash
+export AWS_DEFAULT_REGION=ap-northeast-2
+export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export ECR="$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com"
+export BUCKET="gj2026-static-<비번호>"          # 1단계 출력값
+
+aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR"
+mkdir -p ~/book-image && cd ~/book-image
+aws s3 cp "s3://$BUCKET/_transfer/book-linux-amd64_v1.0.1" .    # 제공 바이너리 (수정 금지)
+
+# Dockerfile 은 텍스트라 붙여넣는다. 아래 첫 줄까지 실행 → app/Dockerfile 전문 붙여넣기 → DOCKEREOF 입력
+cat > Dockerfile <<'DOCKEREOF'
+# ← 본 PC 의 app/Dockerfile 전문을 그대로 붙여넣는다 (이 주석 줄은 지운다)
+DOCKEREOF
+wc -l Dockerfile      # 17 — 원본과 줄 수가 같아야 한다
+```
+
+**2-1) book 이미지 (채점 2-2 의 3MB 제한).** 제공 바이너리 8.4MB 는 zstd -19/-22 로도 3.07MB 라 초과한다.
+`Dockerfile` 이 **UPX 로 바이너리를 선압축**한 뒤 zstd 로 밀어야 3MB 아래로 떨어진다.
+원본 제공 파일은 무수정 — 빌드 단계에서만 압축한다.
+
+```bash
+# oci-mediatypes / force-compression 전부 필수 (NOTES.md §3.3). CloudShell 이 x86_64 라 --platform 불필요
+docker buildx build --provenance=false \
+  --output "type=image,name=$ECR/book:latest,oci-mediatypes=true,compression=zstd,compression-level=19,force-compression=true,push=true" \
+  -f Dockerfile .
 
 # 3145728(3MB) 이하여야 한다 — 넘으면 채점 2-2 가 0점이다
-aws ecr describe-images --repository-name book `
+aws ecr describe-images --repository-name book \
   --query 'imageDetails[?imageTags[0]==`latest`].imageSizeInBytes' --output text
 ```
+
+> `docker buildx` 가 없으면 `docker buildx version` 이 실패한다. 그 경우 zstd 출력이 안 되므로
+> **3MB 를 못 맞춘다** — NOTES.md 「미검증」의 대체안을 본다.
+
+**2-2) 노드가 쓸 이미지 — 미러 + PTC 워밍업.** CloudShell 디스크가 넉넉하지 않으니
+**pull → tag → push → rmi** 로 하나씩 비우며 진행한다.
+
+```bash
+# bootstrap container — 노드 부팅 경로라 PTC 의존 금지, 직접 push 한 리포지토리를 쓴다
+docker pull public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.3.4
+docker tag  public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.3.4 "$ECR/gj2026/br-bootstrap:1.0.0"
+docker push "$ECR/gj2026/br-bootstrap:1.0.0"
+docker rmi  public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.3.4 "$ECR/gj2026/br-bootstrap:1.0.0"
+
+# Grafana (Docker Hub 전용 → 미러)
+docker pull grafana/grafana:13.1.0
+docker tag  grafana/grafana:13.1.0 "$ECR/mirror/grafana:13.1.0"
+docker push "$ECR/mirror/grafana:13.1.0"
+docker rmi  grafana/grafana:13.1.0 "$ECR/mirror/grafana:13.1.0"
+
+# LBC
+docker pull public.ecr.aws/eks/aws-load-balancer-controller:v2.17.1
+docker tag  public.ecr.aws/eks/aws-load-balancer-controller:v2.17.1 "$ECR/mirror/aws-load-balancer-controller:v2.17.1"
+docker push "$ECR/mirror/aws-load-balancer-controller:v2.17.1"
+docker rmi  public.ecr.aws/eks/aws-load-balancer-controller:v2.17.1 "$ECR/mirror/aws-load-balancer-controller:v2.17.1"
+
+# PTC 캐시 워밍업 (nginx-test 4-5 대비, fluent-bit) — 캐시만 채우면 되므로 바로 지운다
+docker pull "$ECR/ecr-public/nginx/nginx:latest"          && docker rmi "$ECR/ecr-public/nginx/nginx:latest"
+docker pull "$ECR/ecr-public/aws-observability/aws-for-fluent-bit:3.4.8" && docker rmi "$ECR/ecr-public/aws-observability/aws-for-fluent-bit:3.4.8"
+
+# 태그가 실제로 올라갔는지 확인 — 리포지토리만 있고 이미지가 없으면 노드가 조용히 부팅에 실패한다
+aws ecr describe-images --repository-name gj2026/br-bootstrap --query 'imageDetails[].imageTags' --output text
+aws ecr describe-images --repository-name mirror/grafana      --query 'imageDetails[].imageTags' --output text
+```
+
+> Docker Hub 익명 pull 은 레이트 리밋이 있다. `toomanyrequests` 가 나면 몇 분 뒤 재시도한다.
+> 디스크가 모자라면 `docker system prune -af` 로 비우고 남은 것부터 이어서 한다.
 
 ### 3) [본 PC·PowerShell] 나머지 AWS 리소스 (CloudFront 배포 포함 — 최대 15분)
 
@@ -154,7 +226,7 @@ $env:CF_DIST_ID           = $out.cloudfront_distribution_id.value
 다시 쓴다.** 변수를 추가했는데 목록에 안 적어 조용히 빠지는 사고를 막는다. `.gitignore` 등록됨.
 
 ```powershell
-$keep = @('AWS_REGION','AWS_DEFAULT_REGION','NUM','ACCOUNT_ID','ECR','VPC_ID',
+$keep = @('AWS_REGION','AWS_DEFAULT_REGION','NUM','ACCOUNT_ID','ECR','BUCKET','VPC_ID',
           'SUBNET_A_ID','SUBNET_B_ID','EKS_KMS_ARN','NODE_SHARED_SG_ID','BOOK_POD_SG_ID',
           'BOOK_TG_ARN','GRAFANA_TG_ARN','BOOK_APP_POLICY_ARN','GRAFANA_POLICY_ARN',
           'FLUENTBIT_POLICY_ARN','LBC_POLICY_ARN','NODE_PTC_POLICY_ARN','CF_DOMAIN','CF_DIST_ID')
@@ -166,34 +238,7 @@ $keep | ForEach-Object { "`$env:$_ = `"$((Get-Item "env:$_").Value)`"" } | Set-C
 . ..\.env.ps1     # 새 터미널로 이어서 할 땐 task-1 에서 `. .\.env.ps1` 만 다시 실행
 ```
 
-### 4) [본 PC·PowerShell] 보조 이미지 push + PTC 워밍업
-
-> **NAT 가 없어** 노드는 인터넷에 못 나간다. 노드 부팅 경로(bootstrap container)는 PTC 에도 기대면
-> 안 되므로 **직접 push 한 리포지토리**를 쓰고, 나머지는 PTC/미러로 받는다.
-
-```powershell
-# bootstrap container — 노드 부팅 경로라 PTC 의존 금지
-docker pull public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.3.4
-docker tag  public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.3.4 "$env:ECR/gj2026/br-bootstrap:1.0.0"
-docker push "$env:ECR/gj2026/br-bootstrap:1.0.0"
-
-# Grafana (Docker Hub 전용 → 미러), LBC
-docker pull grafana/grafana:13.1.0
-docker tag  grafana/grafana:13.1.0 "$env:ECR/mirror/grafana:13.1.0"
-docker push "$env:ECR/mirror/grafana:13.1.0"
-docker pull public.ecr.aws/eks/aws-load-balancer-controller:v2.17.1
-docker tag  public.ecr.aws/eks/aws-load-balancer-controller:v2.17.1 "$env:ECR/mirror/aws-load-balancer-controller:v2.17.1"
-docker push "$env:ECR/mirror/aws-load-balancer-controller:v2.17.1"
-
-# PTC 캐시 워밍업 (nginx-test 4-5 대비, fluent-bit)
-docker pull "$env:ECR/ecr-public/nginx/nginx:latest"
-docker pull "$env:ECR/ecr-public/aws-observability/aws-for-fluent-bit:3.4.8"
-
-# 태그가 실제로 올라갔는지 확인 — 리포지토리만 있고 이미지가 없으면 노드가 조용히 부팅에 실패한다
-aws ecr describe-images --repository-name gj2026/br-bootstrap --query 'imageDetails[].imageTags' --output text
-```
-
-### 5) [본 PC·PowerShell] EKS 클러스터 + 인증 전환 + scale-up
+### 4) [본 PC·PowerShell] EKS 클러스터 + 인증 전환 + scale-up
 
 노드명(채점 4-3)은 정규 노드그룹의 bootstrap container 가 `gj2026.<instance-id>.(addon|app).node` 로 바꾼다.
 그런데 managed NG 가 자동 생성하는 access entry 의 username(`system:node:{{EC2PrivateDNSName}}`)이 커스텀
@@ -288,7 +333,7 @@ kubectl top nodes   # 1분 내 4개 노드 메트릭이 나오면 정상
 > 로 username 오타 확인 → CloudWatch `authenticator` 로그에서 매핑 결과 확인.
 > SSM 으로 kubelet 로그: `apiclient exec admin sheltie journalctl -u kubelet`.
 
-### 6) [본 PC·PowerShell] Helm 애드온 + Kubernetes 리소스
+### 5) [본 PC·PowerShell] Helm 애드온 + Kubernetes 리소스
 
 ```powershell
 cd ..\k8s
@@ -344,7 +389,7 @@ aws elbv2 wait target-in-service --target-group-arn $env:BOOK_TG_ARN
 > `k8s/app/` 의 번호 prefix(`01-configmap` … `05-targetgroupbinding`)는 `apply -R` 사전순에서 ConfigMap 이
 > Deployment 보다, SGP 가 TGB 보다 먼저 오게 하려는 것이다. 번호를 지우면 순서가 무너진다.
 
-### 7) [본 PC·PowerShell] 데이터/트래픽 시드 (대시보드 데이터 확보)
+### 6) [본 PC·PowerShell] 데이터/트래픽 시드 (대시보드 데이터 확보)
 
 PowerShell 의 `curl` 은 `Invoke-WebRequest` 별칭이므로 **반드시 `curl.exe`** 를 쓴다.
 
@@ -361,11 +406,11 @@ curl.exe -s -w " %{http_code}`n" "$CF/v1/book"                        # 405 Meth
 curl.exe -s -w " %{http_code}`n" "$CF/reservation?client_id=123abc"   # 403 Access Denied
 ```
 
-### 8) [본 PC·PowerShell] 채점 전 정리
+### 7) [본 PC·PowerShell] 채점 전 정리
 
 > **필수**: `books` 테이블은 **비어 있어야** 한다. mark.sh 8-2 가 시드 2건(Alice/C001, Bob/C002)을 직접 넣고
 > 8-3(전체 2건)·8-4(C001 1건)로 검증하므로, 잔여 데이터가 있으면 개수 불일치로 깨진다.
-> 7단계 시드나 10-1 리허설로 POST 를 쐈다면 반드시 여기서 비운다. **(실측 감점 사례)**
+> 6단계 시드나 10-1 리허설로 POST 를 쐈다면 반드시 여기서 비운다. **(실측 감점 사례)**
 
 ```powershell
 cd ..\terraform
@@ -391,12 +436,16 @@ do {
   Start-Sleep 10
 } while ($true)
 
+# S3 릴레이 제거 — 1단계에서 올린 제공 바이너리. 채점 6-1-A 는 '/' 없는 키만 세지만 남길 이유가 없다
+aws s3 rm "s3://$env:BUCKET/_transfer/" --recursive
+aws s3api list-objects-v2 --bucket $env:BUCKET --query 'Contents[].Key' --output text   # index.html main.jpeg 만
+
 # CloudFront 캐시 무효화
 aws cloudfront create-invalidation --distribution-id $env:CF_DIST_ID --paths '/*'
-$env:CF_DIST_ID    # 9단계 CloudShell 에 붙여넣을 값
+$env:CF_DIST_ID    # 8단계 CloudShell 에 붙여넣을 값
 ```
 
-### 9) [채점 CloudShell] 자가 채점
+### 8) [채점 CloudShell] 자가 채점
 
 **모든 채점은 CloudShell 에서 한다**(mark.md 유의사항 14). `mark.sh` 는 CloudShell 최상위 경로에 둔다(유의사항 13).
 
@@ -405,7 +454,7 @@ $env:CF_DIST_ID    # 9단계 CloudShell 에 붙여넣을 값
 rm -rf ~/.aws
 
 # mark.sh 안에서 선수가 직접 채워야 하는 placeholder
-export DistributionID="<8단계에서 출력한 CF_DIST_ID>"
+export DistributionID="<7단계에서 출력한 CF_DIST_ID>"
 export BUCKET="gj2026-static-<비번호>"
 export CF_DOMAIN=$(aws cloudfront get-distribution --id ${DistributionID} --query "Distribution.DomainName" --output text)
 export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -419,7 +468,7 @@ kubectl get nodes    # 4개가 보여야 한다
 aws ecr get-login-password --region ap-northeast-2 | \
   docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com
 
-# CDN 캐시 무효화 (최대 3분) — 8단계에서 이미 했다면 생략 가능
+# CDN 캐시 무효화 (최대 3분) — 7단계에서 이미 했다면 생략 가능
 export InvalidationID=$(aws cloudfront create-invalidation --distribution-id ${DistributionID} --paths "/*" --query "Invalidation.Id" --output text)
 aws cloudfront wait invalidation-completed --distribution-id ${DistributionID} --id ${InvalidationID}
 
@@ -462,7 +511,7 @@ ALB 는 terraform 소유라 T4 에서 정리된다.
 cd set-06\task-1\terraform
 . ..\.env.ps1
 terraform apply -var "bibunho=$env:NUM" -var enable_ddb_write_deny=false
-# 8단계의 scan → delete-item 루프를 그대로 다시 돌린다
+# 7단계의 scan → delete-item 루프를 그대로 다시 돌린다
 ```
 
 ### T2) [본 PC·PowerShell] ECR 이미지 삭제
@@ -517,7 +566,7 @@ aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMP
 | 2-1-A · 2-2-A | ECR 리포지토리 · 이미지 3MB 이하 | `terraform/ecr.tf`, `app/Dockerfile` |
 | 3-1-A · 3-2-A · 3-3-A | DynamoDB 구성 · 암호화 · 쓰기 Deny | `terraform/dynamodb.tf`, `terraform/kms.tf` |
 | 4-1-A · 4-2-A | EKS 1.35 · NodeGroup 2개 desired 2 (Bottlerocket) | `eksctl/cluster.yaml` |
-| 4-3-A | 커스텀 노드명 `gj2026.<instance-id>.(addon\|app).node` | `eksctl/bootstrap/set-hostname-*.sh` + 5단계 인증 전환 |
+| 4-3-A | 커스텀 노드명 `gj2026.<instance-id>.(addon\|app).node` | `eksctl/bootstrap/set-hostname-*.sh` + 4단계 인증 전환 |
 | 4-4-A | Application Pods | `k8s/app/02-deployment.yaml` |
 | 4-5-A | Network Policy (Pod SG) | `k8s/app/04-securitygrouppolicy.yaml`, `terraform/vpc.tf` book pod SG |
 | 5-1-A | ALB `gj2026-alb` + TG 2종 | `terraform/alb.tf`, `k8s/app/05-targetgroupbinding.yaml`, `k8s/monitoring/grafana-tgb.yaml` |
@@ -545,11 +594,12 @@ aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMP
   scale-up. 순서를 바꾸면 노드가 join 하지 못하고, 증상은 "노드가 안 뜬다" 하나로만 보인다.
 - **kubelet-serving CSR 수동 승인을 빠뜨리면** `kubectl logs/exec` 와 metrics-server 가 전멸하고
   채점 4-5 가 깨진다. 노드가 바뀔 때마다 다시 승인한다.
-- **NAT 가 없다.** 노드가 인터넷에 못 나가므로 새 이미지를 쓰려면 4단계처럼 PTC/미러에 먼저 올린다.
+- **NAT 가 없다.** 노드가 인터넷에 못 나가므로 새 이미지를 쓰려면 2단계처럼 PTC/미러에 먼저 올린다.
   부팅 경로(br-bootstrap)는 PTC 에 의존하면 안 된다 — 리포지토리만 있고 태그가 없으면 부팅이 조용히 실패한다.
 - **`books` 테이블은 채점 시작 시점에 반드시 0건**이어야 하고, 쓰기 Deny 는 **전파 확인까지** 끝나야 한다.
-- **Docker 전제**: 2·4단계는 본 PC Docker Desktop 기준이다. 대회 PC 에서 Docker 를 못 쓰면 일반 CloudShell 로
-  옮겨야 하며 **그 경로는 미검증**이다 (NOTES.md 「미검증」).
+- **이미지 작업은 전부 일반 CloudShell 에서 한다**(2단계). 대회 PC 는 Docker·WSL 을 못 쓴다.
+  이 경로 자체는 실측 검증되지 않았다 — 특히 CloudShell 의 `docker buildx` + zstd 출력 지원이 전제다
+  (NOTES.md 「미검증」).
 - **set-06 은 DAY-OF.md·KIT-INDEX.md·QUICK-REFERENCE.md·NAMING-AUDIT.md 에 등재돼 있지 않다.**
   당일 값 대조·KIT 부착·이름 판정에서 이 세트만 빠진다 — 위 「값 대조표」로 대신한다.
 
@@ -557,20 +607,20 @@ aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMP
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| scale-up 후 노드가 안 뜸 / `kubectl get nodes` 0개 (5단계) | 인증 전환 전에 scale-up 했거나, EC2_LINUX access entry 잔존(aws-auth 보다 우선), 또는 iamidentitymapping username 오타 | `list-access-entries` 에서 노드 role 재삭제 → `eksctl get iamidentitymapping` 으로 username 확인 → 노드는 kubelet 이 재시도하므로 별도 조치 불필요, 안 되면 인스턴스 종료(ASG 재생성) |
-| 노드명이 `ip-10-x-x-x...` 그대로 (5단계) | bootstrap container 미렌더(B64 환경 변수 미설정) 또는 이미지 pull 실패 | `cluster.rendered.yaml` 에 `bootstrap-containers` 블록·base64 값 존재 확인, 4단계 br-bootstrap push 여부 확인 |
+| scale-up 후 노드가 안 뜸 / `kubectl get nodes` 0개 (4단계) | 인증 전환 전에 scale-up 했거나, EC2_LINUX access entry 잔존(aws-auth 보다 우선), 또는 iamidentitymapping username 오타 | `list-access-entries` 에서 노드 role 재삭제 → `eksctl get iamidentitymapping` 으로 username 확인 → 노드는 kubelet 이 재시도하므로 별도 조치 불필요, 안 되면 인스턴스 종료(ASG 재생성) |
+| 노드명이 `ip-10-x-x-x...` 그대로 (4단계) | bootstrap container 미렌더(B64 환경 변수 미설정) 또는 이미지 pull 실패 | `cluster.rendered.yaml` 에 `bootstrap-containers` 블록·base64 값 존재 확인, 2단계 br-bootstrap push 여부 확인 |
 | 인스턴스는 running 인데 join 시도조차 없음 | br-bootstrap 이미지 미존재 → essential bootstrap container 실패로 부팅 중단 (실측) | `aws ecr describe-images --repository-name gj2026/br-bootstrap` 로 **태그** 존재 확인(리포만 있으면 안 됨) → push 후 인스턴스 종료(ASG 재생성) |
-| `kubectl top nodes`/`logs`/`exec` 가 TLS 에러, metrics-server 0/1 | kubelet-serving CSR Pending — EKS 자동 승인기가 커스텀 노드명 미승인 (실측) | `kubectl get csr` 확인 후 5단계 5)의 approve 재실행 |
+| `kubectl top nodes`/`logs`/`exec` 가 TLS 에러, metrics-server 0/1 | kubelet-serving CSR Pending — EKS 자동 승인기가 커스텀 노드명 미승인 (실측) | `kubectl get csr` 확인 후 4단계 5)의 approve 재실행 |
 | NG 생성·scale-up 자체가 실패 (네트워킹 의심) | VPC 엔드포인트/서브넷 문제와 인증 문제 분리 필요 | `canary-nodegroup.yaml`(bootstrap 블록 없는 최소 NG) 생성 — join 성공이면 네트워킹 정상, 원인은 인증/이름 경로 |
-| nginx-test / fluent-bit Pod 가 `ImagePullBackOff` | PTC 캐시 워밍업(4단계) 을 건너뜀 | 4단계의 `docker pull $ECR/ecr-public/...` 두 줄 재실행 |
+| nginx-test / fluent-bit Pod 가 `ImagePullBackOff` | PTC 캐시 워밍업(2단계) 을 건너뜀 | 2단계의 `docker pull $ECR/ecr-public/...` 두 줄 재실행 |
 | book·grafana TargetGroupBinding 이 계속 `unhealthy` | SGP 의 ALB SG→Pod SG 8080 규칙 누락, 또는 `ENABLE_POD_ENI=true` 를 Pod 생성 **이전에** 안 걸었음 | `kubectl set env daemonset aws-node ...` 를 먼저 실행했는지 확인 후 Pod 재생성(rollout restart) |
 | Grafana Service 가 안 보이거나 TGB 가 대상 못 찾음 | helm release 이름이 `grafana` 가 아님 — Service 명이 TGB `serviceRef` 와 어긋남 | release 이름을 정확히 `grafana` 로 고정 |
 | `terraform apply` 가 WAF 리소스에서 리전 오류 | CLOUDFRONT scope Web ACL 은 반드시 `us-east-1` provider | WAF 리소스에 `provider = aws.use1` alias 지정 확인 |
 | CF 경유 `/v1/book`·`/grafana` 만 504 (30초) | VPC Origin 트래픽의 소스 IP 는 CF POP 공인 대역 — ALB SG 의 VPC CIDR 허용으론 REJECT | ALB SG 에 `cloudfront.origin-facing` managed prefix list 인그레스 존재 확인 (`vpc.tf` 반영됨) |
 | 8-2 가 500/504 로 앱에서 실패 | SGP 파드 DNS 차단(노드 SG 53 인그레스 누락) 또는 이미지 CA 부재 | node SG 인그레스에 book pod SG 발 53 규칙 확인 → book 파드 로그의 `x509` / `lookup ... i/o timeout` 구분 |
 | 재배포 후 book 파드가 한 AZ 로 몰림 | 롤링 서지 중 스프레드 제약이 기존 파드를 카운트 | 몰린 쪽 파드 1개 `kubectl delete pod` — 제약이 반대 AZ 로 강제 |
-| curl 결과가 이상하거나 `Invoke-WebRequest` 에러 | PowerShell 의 `curl` 은 `Invoke-WebRequest` 별칭 | 7단계처럼 반드시 `curl.exe` |
-| DynamoDB `delete-item` 이 `AccessDeniedException` | `enable_ddb_write_deny=true` 상태에서 삭제 시도 (8단계 순서를 건너뜀) | `terraform apply -var enable_ddb_write_deny=false` 먼저 |
+| curl 결과가 이상하거나 `Invoke-WebRequest` 에러 | PowerShell 의 `curl` 은 `Invoke-WebRequest` 별칭 | 6단계처럼 반드시 `curl.exe` |
+| DynamoDB `delete-item` 이 `AccessDeniedException` | `enable_ddb_write_deny=true` 상태에서 삭제 시도 (7단계 순서를 건너뜀) | `terraform apply -var enable_ddb_write_deny=false` 먼저 |
 
 각 항목의 근본 원인 분석은 `NOTES.md` 해당 절을 본다.
 
