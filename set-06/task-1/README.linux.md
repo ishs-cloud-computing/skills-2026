@@ -1,7 +1,7 @@
 # 본 PC 가 Linux 일 때의 런북 (set-06 / task-1)
 
-[README.md](README.md) 의 **본 PC 단계(0~8 + 정리 T1~T5)** 를 bash 로 옮긴 것.
-채점 단계(9)는 실제 호스트가 리눅스라 README.md 와 동일하다.
+[README.md](README.md) 의 **본 PC 단계(0·1·3~7 + 정리 T1~T5)** 를 bash 로 옮긴 것.
+CloudShell 단계(2·8)는 실제 호스트가 리눅스라 README.md 와 동일하다.
 리소스·순서·검증·주의는 전부 같고 명령 문법만 다르다 — **왜 이 순서인지는 README.md 를 본다.**
 
 ### 0) [본 PC] 사전 변수 · 신원 확인
@@ -15,31 +15,30 @@ export NUM=<선수등번호>          # bibunho — S3 버킷 이름에 들어�
 aws sts get-caller-identity --query Arn --output text
 ```
 
-### 1) [본 PC] ECR 선행 생성
+### 1) [본 PC] ECR·S3 선행 생성 + 제공 바이너리 릴레이
 
 ```bash
 terraform init
 terraform apply -var "bibunho=$NUM" \
   -target=aws_ecr_repository.book -target=aws_ecr_repository.direct \
-  -target=aws_ecr_pull_through_cache_rule.public
+  -target=aws_ecr_pull_through_cache_rule.public \
+  -target=aws_s3_bucket.static
 
 export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export ECR="$ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com"
+export BUCKET="gj2026-static-$NUM"
+
+# 붙여넣을 수 없는 것만 릴레이로 넘긴다 (8.4MB 바이너리). 6단계에서 지운다.
+aws s3 cp ../../../shared/provided/set-06-task-1/book-linux-amd64_v1.0.1 \
+  "s3://$BUCKET/_transfer/book-linux-amd64_v1.0.1"
+
+echo "ACCOUNT_ID=$ACCOUNT_ID  BUCKET=$BUCKET"   # 2단계에 붙여넣을 값
 ```
 
-### 2) [본 PC] book 이미지 빌드·push (채점 2-2 의 3MB 제한)
+### 2) → README.md 2단계 (일반 CloudShell — 컨테이너 이미지 전부)
 
-```bash
-aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR"
-
-docker buildx build --platform linux/amd64 --provenance=false \
-  --output "type=image,name=$ECR/book:latest,oci-mediatypes=true,compression=zstd,compression-level=19,force-compression=true,push=true" \
-  -f ../app/Dockerfile ../../../shared/provided/set-06-task-1
-
-# 3145728(3MB) 이하여야 한다
-aws ecr describe-images --repository-name book \
-  --query 'imageDetails[?imageTags[0]==`latest`].imageSizeInBytes' --output text
-```
+CloudShell 호스트가 리눅스라 명령이 같다. README.md 2단계를 그대로 쓴다.
+book 이미지 빌드·push, br-bootstrap·grafana·LBC 미러, PTC 워밍업이 전부 거기 있다.
 
 ### 3) [본 PC] 나머지 AWS 리소스 (CloudFront 포함 — 최대 15분)
 
@@ -67,7 +66,7 @@ export CF_DIST_ID=$(jq -r .cloudfront_distribution_id.value outputs.json)
 **`.env` 재작성** — 손으로 나열하지 않고 키 목록에서 통째로 다시 쓴다(작업 규칙 6, `.gitignore` 등록됨).
 
 ```bash
-KEEP="AWS_REGION AWS_DEFAULT_REGION NUM ACCOUNT_ID ECR VPC_ID SUBNET_A_ID SUBNET_B_ID \
+KEEP="AWS_REGION AWS_DEFAULT_REGION NUM ACCOUNT_ID ECR BUCKET VPC_ID SUBNET_A_ID SUBNET_B_ID \
 EKS_KMS_ARN NODE_SHARED_SG_ID BOOK_POD_SG_ID BOOK_TG_ARN GRAFANA_TG_ARN \
 BOOK_APP_POLICY_ARN GRAFANA_POLICY_ARN FLUENTBIT_POLICY_ARN LBC_POLICY_ARN \
 NODE_PTC_POLICY_ARN CF_DOMAIN CF_DIST_ID"
@@ -80,30 +79,9 @@ for v in $KEEP; do echo "export $v='${!v}'" >> ../.env; done
 source ../.env      # 새 셸로 이어서 할 땐 task-1 에서 `source .env` 만 다시 실행
 ```
 
-### 4) [본 PC] 보조 이미지 push + PTC 워밍업
+### 4) [본 PC] EKS 클러스터 + 인증 전환 + scale-up
 
-```bash
-docker pull public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.3.4
-docker tag  public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.3.4 "$ECR/gj2026/br-bootstrap:1.0.0"
-docker push "$ECR/gj2026/br-bootstrap:1.0.0"
-
-docker pull grafana/grafana:13.1.0
-docker tag  grafana/grafana:13.1.0 "$ECR/mirror/grafana:13.1.0"
-docker push "$ECR/mirror/grafana:13.1.0"
-docker pull public.ecr.aws/eks/aws-load-balancer-controller:v2.17.1
-docker tag  public.ecr.aws/eks/aws-load-balancer-controller:v2.17.1 "$ECR/mirror/aws-load-balancer-controller:v2.17.1"
-docker push "$ECR/mirror/aws-load-balancer-controller:v2.17.1"
-
-docker pull "$ECR/ecr-public/nginx/nginx:latest"
-docker pull "$ECR/ecr-public/aws-observability/aws-for-fluent-bit:3.4.8"
-
-# 리포지토리만 있고 태그가 없으면 노드가 조용히 부팅에 실패한다
-aws ecr describe-images --repository-name gj2026/br-bootstrap --query 'imageDetails[].imageTags' --output text
-```
-
-### 5) [본 PC] EKS 클러스터 + 인증 전환 + scale-up
-
-> **노드 0대 생성 → 인증 전환 → scale-up** 순서를 반드시 지킨다. 이유는 README.md 5단계.
+> **노드 0대 생성 → 인증 전환 → scale-up** 순서를 반드시 지킨다. 이유는 README.md 4단계.
 
 ```bash
 cd ../eksctl
@@ -166,7 +144,7 @@ kubectl get csr -o name | xargs -r -n1 kubectl certificate approve
 kubectl top nodes    # 1분 내 4개 노드 메트릭이 나오면 정상
 ```
 
-### 6) [본 PC] Helm 애드온 + Kubernetes 리소스
+### 5) [본 PC] Helm 애드온 + Kubernetes 리소스
 
 ```bash
 cd ../k8s
@@ -212,7 +190,7 @@ kubectl apply -R -f rendered/
 aws elbv2 wait target-in-service --target-group-arn "$BOOK_TG_ARN"
 ```
 
-### 7) [본 PC] 데이터/트래픽 시드
+### 6) [본 PC] 데이터/트래픽 시드
 
 ```bash
 source ../.env
@@ -227,9 +205,9 @@ curl -s -w " %{http_code}\n" "$CF/v1/book"                        # 405
 curl -s -w " %{http_code}\n" "$CF/reservation?client_id=123abc"   # 403
 ```
 
-### 8) [본 PC] 채점 전 정리
+### 7) [본 PC] 채점 전 정리
 
-> `books` 테이블은 채점 시작 시점에 **반드시 0건**이어야 한다. 이유는 README.md 8단계.
+> `books` 테이블은 채점 시작 시점에 **반드시 0건**이어야 한다. 이유는 README.md 7단계.
 
 ```bash
 cd ../terraform
@@ -252,13 +230,17 @@ while :; do
   sleep 10
 done
 
-aws cloudfront create-invalidation --distribution-id "$CF_DIST_ID" --paths '/*'
-echo "$CF_DIST_ID"     # 9단계 CloudShell 에 붙여넣을 값
+# S3 릴레이 제거 — 1단계에서 올린 제공 바이너리
+aws s3 rm "s3://$BUCKET/_transfer/" --recursive
+aws s3api list-objects-v2 --bucket "$BUCKET" --query 'Contents[].Key' --output text   # index.html main.jpeg 만
+
+aws cloudfront create-invalidation --distribution-id "$CF_DIST_ID" --paths '/*' 
+echo "$CF_DIST_ID"     # 8단계 CloudShell 에 붙여넣을 값
 ```
 
-### 9) → README.md 9단계 (채점 CloudShell — 자가 채점)
+### 8) → README.md 8단계 (채점 CloudShell — 자가 채점)
 
-호스트가 리눅스라 명령이 같다. README.md 9단계를 그대로 쓴다.
+호스트가 리눅스라 명령이 같다. README.md 8단계를 그대로 쓴다.
 
 ## 리소스 정리 (teardown)
 
@@ -269,7 +251,7 @@ echo "$CF_DIST_ID"     # 9단계 CloudShell 에 붙여넣을 값
 ```bash
 cd set-06/task-1/terraform && source ../.env
 terraform apply -var "bibunho=$NUM" -var enable_ddb_write_deny=false
-# 8단계의 scan → delete-item 루프를 그대로 다시 돌린다
+# 7단계의 scan → delete-item 루프를 그대로 다시 돌린다
 ```
 
 ### T2) [본 PC] ECR 이미지 삭제
