@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# NOTES.md §3.11 — 대시보드 제목은 ConfigMap 키가 아니라 JSON 루트 title 에서 온다 (채점 10-2)
+# client_id="*" 와일드카드가 차원 값(ALL/C001)마다 시리즈를 분리해 두 줄이 그려진다
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wsi-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  wsi-dashboard.json: |
+    {
+      "title": "WSI Dashboard",
+      "uid": "wsi-dashboard",
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Query Count Panel",
+          "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "cloudwatch" },
+          "targets": [
+            {
+              "namespace": "gj2026/reservation",
+              "metricName": "QueryCount",
+              "dimensions": { "client_id": "*" },
+              "statistic": "Sum",
+              "matchExact": true,
+              "period": "60",
+              "region": "ap-northeast-2",
+              "label": "${PROP('Dim.client_id')}"
+            }
+          ]
+        }
+      ]
+    }

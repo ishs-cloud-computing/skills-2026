@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The ISHS Cloud Computing Authors
+
+# AWS Load Balancer Controller values — TargetGroupBinding 전용 (Ingress 미사용)
+clusterName: gj2026-eks-cluster
+
+image:
+  repository: ${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/mirror/aws-load-balancer-controller
+  tag: "v2.17.1"
+
+serviceAccount:
+  create: false
+  name: aws-load-balancer-controller   # eksctl IRSA -> gj2026-lbc-role
+
+nodeSelector:
+  role: addon
+
+region: ap-northeast-2
+vpcId: ${VPC_ID}
