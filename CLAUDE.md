@@ -1,119 +1,57 @@
 # CLAUDE.md
 
-2026 전국기능경기대회 클라우드컴퓨팅 직종의 과제를 Terraform / eksctl / Kubernetes manifest로 관리하는 저장소. 1·2과제는 대회 전 약 10세트가 공개되며 이 중에서 출제된다. 세트마다 사용 서비스 조합이 다르므로 구조만 통일하고 내용은 세트별로 채운다.
+2026 전국기능경기대회 클라우드컴퓨팅 직종의 과제를 Terraform / eksctl / Kubernetes manifest 로 관리하는 저장소.
+1·2과제는 대회 전 약 10세트가 공개되며 이 중에서 출제된다. **구조만 통일하고 내용은 세트별로 채운다.**
 
-## 대회 구조
+이 파일은 **항상 로드되는 최소 규칙 + 라우팅 표**다. 배경·근거·절차는 아래 표에서 필요할 때 읽는다.
+컨텍스트 레이어 전체 지도는 [`.claude/README.md`](.claude/README.md).
 
-- 대회에서는 AWS 계정이 지급되며 개인 계정을 사용하지 않는다. 각 세트는 별개이므로 세트 간 리소스 간섭(계정 전체를 스캔하는 채점 항목 포함)은 고려하지 않는다.
-- 1·2과제만 사전 공개되며 이 중에서 출제된다. 3과제는 당일 공개다.
-- 1과제: 단일 과제. 보통 단일 리전 종합 인프라.
-- 2과제: 독립 모듈로 구성. 기본 4개이며 당일 최대 6개까지 늘 수 있다. 리전은 세트마다 다르다.
-- 3과제: 세트별이 아니라 루트 `task-3/` 하나로 관리한다. 1·2과제와 성격이 다르다 — 요구사항대로 만들고 존재 여부를 확인받는 게 아니라, 당일 제공 앱을 분석해 구동하고 로그·메트릭으로 운영한다.
-- 3과제 채점 축 둘: EC2 인스턴스 수를 주기적으로 측정해 **적을수록 고득점**, 제시된 구성 외 추가 EC2 는 패널티. 작업용 bastion 을 두지 않는다.
-- 각 세트의 구체적인 서비스 구성은 해당 세트의 README나 과제지를 참고한다.
+## 절대 규칙
 
-## 지급 계정 권한
+깨지면 조용히 점수가 날아가거나 되돌릴 수 없는 것들. 상황과 무관하게 항상 적용된다.
 
-- 지급 계정은 root 가 아니라 **PowerUserAccess 수준의 IAM 사용자**다. root 전용 작업(계정 설정 변경 등)은 설계에 넣지 않는다.
-- 사전 제공 리소스 삭제·대회 운영 방해를 막기 위해 **명시적 Deny 가 붙을 수 있다**. 특정 EC2 종료 권한 등 PowerUser 범위 일부가 빠질 수 있다.
-- IAM Role·Policy 생성 권한은 **지급된 것으로 전제한다**. 과제지가 이름까지 지정해 Role 을 요구하고 채점 스크립트가 그 Role 을 직접 읽으므로, 막혀 있으면 채점 자체가 성립하지 않는다. 사전 프로브로 확인하지 않는다 — 내가 만든 리소스는 애초에 Deny 대상이 아니라 아무것도 검증되지 않는다.
-- Deny 가 실제로 걸리는 지점은 **사전 제공 리소스의 삭제·수정**이다. 이름 충돌이 나도 기존 리소스를 지우려 하지 말고 이름 변수를 리네임해 우회한다. 그래도 AccessDenied 가 나면 코드 문제로 단정하지 말고 Deny 정책 여부를 감독에게 확인한다.
-- IAM Role·Policy 생성은 부수 효과가 아니라 **채점 항목 자체**다. 이름까지 지정된 Role(`unicorn-audit-role`, `wsc2026-book-pod-role`, ECS Execution/Task Role 분리 등)과 최소 권한 정책 내용을 채점 스크립트가 직접 읽는다.
-- EKS 의 앱 권한은 기본적으로 **Pod Identity** 를 쓴다. 단 **채점 스크립트가 ServiceAccount 의 `eks.amazonaws.com/role-arn` annotation 을 직접 읽으면 IRSA(`iam.withOIDC: true` + `iam.serviceAccounts`) 로 간다** — Pod Identity 는 그 annotation 을 만들지 않아 무조건 미충족이다. set-08 task-2 채점 4-2 가 실제로 이 annotation 을 검사하므로 module-4 는 IRSA 다. Pod Identity 로 "정정"하지 말 것.
+1. **작업 전에 `task.md`·`mark.md`·채점 스크립트·`NOTES.md` 를 읽는다.** 결정 로그의 기각안을 먼저 봐 이미 실패한 접근을 반복하지 않는다. 트러블슈팅·마무리 전에도 같다.
+2. **채점 스크립트가 정본이다.** 과제지 문장이 아니라 스크립트가 검사하는 정확한 형태를 기준으로 한다. 중복·불필요해 보여도 **채점 대상 필드는 제거하지 않는다.**
+3. **리소스 이름은 과제지 명시 값과 정확히 일치.** 이름 정확 일치 채점 항목이 많다.
+4. **`provided/`·`errata/`·`task.pdf`·`mark.pdf` 는 수정하지 않는다.** 정정 내용은 세트 `NOTES.md` 정정 로그에 기록한다.
+5. **사전 제공 리소스를 지우거나 고치지 않는다.** 이름이 충돌하면 이쪽 이름 변수를 리네임해 우회한다. 계정에 명시적 Deny 가 붙어 있을 수 있다.
+6. **`*.tfstate`·`.terraform/`·`outputs.json` 은 절대 커밋하지 않는다.** `apply` 는 본 컴퓨터에서만 한다.
+7. **EKS 과제의 완료 조건은 "클러스터가 존재한다" 가 아니다.** 일반 CloudShell 에서 `aws eks update-kubeconfig --name <클러스터> --region <리전>` **한 줄** 뒤 `kubectl get nodes` 가 돼야 한다. 채점 중 그 외 명령은 허용되지 않는다.
+8. **과제지가 요구하지 않는 bastion 은 감점 대상이다.** 3과제는 EC2 개수가 채점 축이라 아예 두지 않는다.
+9. **바뀌기 쉬운 값은 변수로.** 이름·CIDR·리전·인스턴스 타입·개수는 `variables.tf` + `terraform.tfvars`.
+10. **대회장에는 AI 보조가 없다.** 런북(`README.md`)이 유일한 보조 수단이므로 그대로 복붙 가능한 형태를 유지한다.
+11. **런북 동결 — 2026-08-19 이후 런북을 수정하지 않는다.** 오류를 발견하면 조용히 고치지 말고 먼저 보고한다.
 
-## 대회 환경
+## 라우팅 — 상황별로 읽을 것
 
-- OS: Windows 11
-- Shell: PowerShell 7
-- Docker, WSL 사용 불가
-- 재시동 시 파일 초기화
-- AI 코딩 보조 없음. Amazon Q 는 협의 중이고 제공되더라도 웹 검색 기능만이다(Kiro·Q Developer Pro 없음). 런북이 유일한 보조 수단이므로 README 는 그대로 복붙 가능한 형태를 유지한다.
+필요할 때만 연다. 미리 다 읽지 않는다.
 
-## 디렉토리 구조
+| 상황 | 열 것 |
+| --- | --- |
+| 대회 구조·계정 권한·환경 제약을 모른다 | [`.claude/context/contest.md`](.claude/context/contest.md) |
+| 새 세트/과제를 설계한다 | `/make-task <set-NN> <task-N>` → [`design.md`](.claude/context/design.md) · [`layout.md`](.claude/context/layout.md) |
+| **과제지에 문항이 추가됐다 (당일 30% 변동)** | `addon-kit` 스킬 → [`QUICK-REFERENCE.md`](QUICK-REFERENCE.md) → [`KIT-INDEX.md`](KIT-INDEX.md) → `shared/addons/<kit>/README.md` |
+| EKS 클러스터·인증을 건드린다 | [`.claude/context/eks-grading.md`](.claude/context/eks-grading.md) |
+| 채점 항목을 어디까지 커버했는지 본다 | `grading-coverage` 스킬 |
+| 이름이 과제지·채점지·구현에서 어긋나 보인다 | [`NAMING-AUDIT.md`](NAMING-AUDIT.md) — 어느 출처가 정본인지 세트별 판정 |
+| AWS·k8s 인자/스키마를 모른다 | [`DOC-LINKS.md`](DOC-LINKS.md) — 리소스별 문서·로컬 스키마 명령 색인 |
+| errata 를 반영한다 | `/errata <세트> <과제>` |
+| 세트를 실제로 배포한다 (`init`/`plan`/`apply`·`eksctl create`·`kubectl apply`·`mark.sh`) | `set-XX/task-Y/README.md` 런북. 명령은 전부 거기 있다 |
+| 배포가 깨졌다 | [`shared/TROUBLESHOOTING-COMMON.md`](shared/TROUBLESHOOTING-COMMON.md) → 세트 `NOTES.md` |
+| 커밋·푸시한다 | `restore-placeholders` 스킬 (인프라 파일을 건드린 세션에서만) |
+| 대회 당일 실행 절차 | [`DAY-OF.md`](DAY-OF.md) — 도착부터 채점 직전까지. **대회장에서는 이 컨텍스트 레이어가 로드되지 않는다** |
 
-새 세트는 `_template/`을 `set-XX/`로 복사해서 시작한다.
-
-- task-1: 안 쓰는 하위 디렉토리(`terraform`·`eksctl`·`k8s`·`app`)는 지운다.
-- task-2: 모듈 기본 4개. `module-N/`을 `module-N-<name>/`으로 개명하고 안 쓰는 하위만 지운다. 당일 모듈이 추가되면 `module-4/`를 복사해 5·6을 만든다.
-- `eksctl/`은 `terraform/`과 같은 레벨. `k8s/`는 apply 순서를 번호 prefix로 강제.
-- `provided/`는 대회 제공 원본, 수정 금지.
-
-## 파일 배치 규칙
-
-`_template/`이 구조를 보여준다. 코드에서 안 드러나는 규칙만:
-
-- `k8s/`: apply가 알파벳 순이라 순서 의존 파일에 번호 prefix (`00-namespace.yaml`). 도메인이 많으면 `app/`·`monitoring/`·`logging/` 서브디렉토리로 묶고, 번호는 순서 의존 파일에만.
-- `provided/` (task-2): 원본 그대로, 수정 금지. 구현은 `module-N-<name>/`에 따로.
-
-## 설계 규칙
-
-- **설계 순서**: 과제지/채점지로 요구사항↔리소스를 먼저 매핑한 뒤 의존성 순서로 쌓는다 — 네트워크(VPC·서브넷·SG) → IAM → 데이터/스토리지 → 컴퓨트(EKS·EC2) → 앱/k8s → 관측성. 채점 항목 단위로 리소스를 끊어 매핑이 깨지지 않게 한다.
-- **30% 변동 대비**: 대회 당일 채점 점수의 30% 범위에서 과제가 바뀐다. **기존 문제를 갈아엎는 게 아니라 문제를 추가하는 방식**이다(과다 비용·중복 등 구체적 사유가 있을 때만 기존 문제를 고친다). 1과제는 기존 유지 + 추가 문항(예: 모니터링 도구 설치), 2과제는 하위 문제 최대 2개 추가로 총 6개, 3과제는 추가 바이너리 배포·신규 Lambda 개발 같은 형태다. 추가 문항만큼 기존 채점 항목의 배점이 재조정된다.
-- **증설 여지**: 추가 시간은 없다. 모듈 5·6을 붙이거나 관측성 스택을 얹을 때 기존 4개를 건드리지 않도록 리소스 경계를 끊어둔다. 값은 변수로, 반복은 모듈로 분리한다. 이름·CIDR·리전·인스턴스 타입·개수 등 바뀌기 쉬운 축은 반드시 변수화한다(작업 규칙 5번과 연계).
-
-## 문서 규칙
-
-과제 문서는 세 곳으로 나눈다. 무엇을 어디에 쓸지 헷갈리면 이 기준을 따른다.
-
-- **README.md (런북/How-to)**: 실행·배포·teardown 절차만. 명령형 단계. "왜"를 쓰지 않는다.
-- **NOTES.md (개발자용)**: 함정·기각한 대안·삽질·실측 소요시간. 발행하지 않는다.
-- **`docs/` (Explanation)**: 왜 이 아키텍처인가. 설계 이유·트레이드오프. 사이트로 발행된다.
-- 작성 규칙은 `docs/CONTRIBUTING.md`(Diátaxis). 한 문서에 종류를 섞지 않는다.
-
-## Terraform 변수 규칙
-
-- `variables.tf`에 기본값, 세트별 이름·CIDR·리전 값은 `terraform.tfvars`로 주입.
-- 리소스 이름은 과제지에 명시된 값과 정확히 일치시킨다 (이름 정확 일치 채점 항목이 많음).
-
-## 상태·명령
-
-- Terraform state는 로컬(`*.tfstate`)이며 `.gitignore`로 제외된다. tfstate·`.terraform/`(프로바이더 바이너리 수백 MB)·`outputs.json`은 절대 커밋하지 않는다.
-- `apply`는 본 컴퓨터에서만 수행한다. bastion에는 프로바이더 대신 `terraform output -json > outputs.json`만 올려 `jq`로 값을 읽는다.
-- 세트별 상세 명령(init/plan/apply, `eksctl create`, `kubectl apply`, 채점 스크립트 실행)은 각 `set-XX/task-Y/README.md` 런북을 따른다.
-
-## EKS 채점 접근
-
-k8s 채점은 **선수의 일반 CloudShell** 에서 진행한다. 채점자가 클러스터에 못 붙으면 그 항목은 전부 날아간다.
-
-- 채점 중 허용되는 명령은 `aws eks update-kubeconfig --name <클러스터> --region <리전>` **1회뿐**이다. 자격증명 입력이나 그 외 명령은 허용되지 않는다.
-- 따라서 EKS 과제의 완료 조건은 "클러스터가 존재한다"가 아니라 **"일반 CloudShell 에서 위 한 줄 뒤 `kubectl get nodes` 가 된다"** 이다. 채점 신원은 CloudShell 을 실행한 IAM User 또는 Role 이다.
-- 인증 방식은 자유이나(Access Entry / aws-auth), 채점 주체 principal 의 접근 권한이 들어가 있어야 한다. 저장소 기본값은 Access Entry — 채점 주체가 클러스터 생성자와 같으면 `authenticationMode: API`, 다르면 `API_AND_CONFIG_MAP` + accessEntry 다.
-- bastion 은 과제지에 없어도 만들 수 있으나 불이익은 선수 부담이고, **채점 중에는 생성도 시작도 못 한다**. 채점 때 쓸 거면 그 시점에 이미 running 이어야 한다.
-- 작업용 bastion 을 채점 전에 지운다면 **지우기 전에 CloudShell 경로를 먼저 검증**한다. 지운 뒤에 권한이 없다는 걸 알면 손쓸 방법이 없다.
-- 과제지가 요구하지 않는 bastion 은 불필요 리소스 감점 대상이다.
-
-## 작업 규칙
-
-1. 과제 작업 시작·트러블슈팅·마무리 전 항상 task.md, mark.md, 채점 스크립트, 그리고 `NOTES.md`를 확인한다. NOTES.md 결정 로그의 기각안을 먼저 봐 이미 실패한 접근을 반복하지 않는다.
-2. 도구 버전은 `.mise.toml`에 고정한다. 예외(고정 안 함): eksctl·helm·EKS Addon은 최신 안정 버전. AL2023 등 보안 항목과 과제지 명시 버전.
-3. 변경한 manifest/terraform은 관련 툴로 동작 여부와 채점 기준 충족을 검증한다.
-4. 채점은 채점 스크립트가 검사하는 정확한 형태를 기준으로 한다. 중복·불필요해 보여도 채점 대상 필드는 제거하지 않는다.
-5. 대회에서 바뀌기 쉬운 값(이름·CIDR·리전 등)은 변수로 선언해 쉽게 바꿀 수 있게 한다.
-6. bastion 또는 cloudshell 환경변수는 연결이 끊겨도 재접속 시 바로 쓰도록 bastion 및 local에 .env 파일로 준비한다. 
-7. `eksctl`·`helm`은 버전 간 기본값·스키마가 자주 바뀐다(옵션 deprecated, 기본값 변경). 옵션 사용 전 공식 문서로 현재 동작을 확인한다.
-8. manifest의 주석은 관련 근거 또는 설계 의도만 작성한다.
-9. 과제 오류는 마이스터넷 과제 출제 게시판 댓글로 질의한다(72시간 내 답변 원칙). 접수 범위는 오류·정정 한정이며 내용 수정 요청은 받지 않는다. 선수·출제자 참여 마감은 2026-08-13.
-10. 출제자는 게시된 과제 파일을 직접 고치지 않고 댓글이나 텍스트 파일로 변경을 안내한다. `provided/`·`task.pdf`·`mark.pdf` 는 원본 그대로 두고, 정정 내용과 그에 따른 구현 변경은 해당 세트 `NOTES.md` 의 **정정 로그**에 질의일·답변일·출처와 함께 기록한다. 심사장이 취합해 공유하는 자료도 최종본이 아니며 대회 중 다시 바뀔 수 있다.
-11. PDF 과제지·채점지를 전사본(`task.md`·`mark.md`)과 대조할 때 텍스트 추출만 쓰지 않는다. 출제자는 수정을 빨간색(`#ff0000`), 삭제를 취소선으로 표시하는데 `pdftotext` 계열은 두 축을 모두 버린다. 글자 색과 얇은 가로 그래픽(취소선) 좌표를 텍스트 bbox 와 대조해 읽는다.
+파일 종류별 규칙(`*.tf`·`k8s/`·`eksctl/`·`provided/`·`shared/addons/`·`set-*/task-*/`)은 [`.claude/rules/`](.claude/rules/) 가 **해당 파일을 열 때 자동으로 붙는다.** 미리 읽을 필요 없다.
 
 ## 협업
 
-- **(2026-08-25 까지 기간 한정)** Terraform 관련 파일(`*.tf`, `*.tfvars`, `.terraform*` 등)은 커밋 전 무조건 사용자의 명시적 허가를 받는다. 실습 중인 개인 값이 섞여 있을 수 있다.
 - 브랜치명: `set-09/task-1`, `fix-describe` 형식. 병합은 squash merge.
 - 커밋 메시지: 영어 명령형.
-- 새 소스 파일 상단에 SPDX 헤더:
+- 새 소스 파일(`*.tf`·`*.yaml`·`*.py`·`*.sh`·`*.ps1` 등) 상단에 SPDX 헤더. **마크다운에는 붙이지 않는다.**
 
 ```
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The ISHS Cloud Computing Authors
 ```
 
-## 리뷰
-
-작업 도중 간헐적으로 수행하는 점검. 마무리 작업과 달리 미완 상태에서도 돈다.
-
-- `terraform fmt`·`validate`·`plan`으로 의도치 않은 diff가 없는지 확인한다.
-- 현재 구현이 채점 스크립트 항목을 어디까지 커버하는지 대조하고, 빈 항목을 추적한다.
-- 하드코딩 점검: 이름·CIDR·리전·인스턴스 타입 등 바뀌기 쉬운 값이 변수로 빠졌는지 확인한다.
-- 보안 점검: 과도한 IAM 권한, `0.0.0.0/0` SG, 평문 시크릿이 없는지 확인한다.
-- 미사용·중복 리소스를 정리하고, README 런북 순서가 실제 배포 순서와 일치하는지 확인한다.
+- 전체 기여 규약: [`CONTRIBUTING.md`](CONTRIBUTING.md)

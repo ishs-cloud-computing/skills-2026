@@ -113,8 +113,8 @@ skills-2026/
 │   ├── provided/            # 대회 제공 바이너리
 │   └── ARCHITECTURE.md      # 설계 근거
 ├── shared/
-│   ├── modules/             # 재사용 Terraform 모듈 (vpc, eks 등)
-│   └── scripts/
+│   ├── addons/              # 추가 문항 대응 KIT (세트로 복사해서 붙인다)
+│   └── scripts/             # discover / verify-kit / foul-check
 └── .github/                 # 세트 트래킹용 이슈 / PR 템플릿
 ```
 
