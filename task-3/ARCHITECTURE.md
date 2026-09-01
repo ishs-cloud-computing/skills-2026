@@ -124,13 +124,18 @@ env는 공용 ConfigMap/Secret 대신 각 앱 매니페스트에 직접 둔다: 
 | 3 | LBC 차트 기본 `replicaCount: 2` | `helm ... --set replicaCount=1` | `scripts/lbc.sh` |
 | 4 | 앱 zone spread `DoNotSchedule` | `ScheduleAnyway` | `k8s/1X-*.yaml` |
 | 5 | Karpenter 노드가 유휴에도 남음 | `consolidationPolicy: WhenEmptyOrUnderutilized`, `consolidateAfter: 30s` | `k8s/01-nodepool.yaml` |
+| 6 | 회수가 순차라 1대 복귀가 늦음 | `disruption.budgets: nodes "50%"`, HPA `scaleDown` 40s당 100% | `k8s/01-nodepool.yaml`, `k8s/1X-*.yaml` |
 
 **2번은 설치 시점에 1로 박는다.** 기본값 2로 깔았다가 나중에 줄이면, 그 사이 Pending 이던 2번째
 replica 때문에 Karpenter 가 자기 자신을 위한 노드를 띄우고 consolidation 이 회수할 때까지 EC2 가 2대다.
 
 **PodDisruptionBudget을 삭제한 이유**: `minAvailable: 1` + HPA `minReplicas: 1` 조합은 단일 파드의
 축출을 영구히 막아 Karpenter consolidation을 정지시킨다 — 유휴에도 노드가 안 줄어든다.
-블라스트 반경은 NodePool의 `disruption.budgets: nodes "1"`이 이미 제한한다.
+
+**`disruption.budgets`를 `nodes "1"` → `"50%"`로 올린 이유**: 비용 ratio는 실행 중인 EC2를 주기적으로
+세므로 회수 꼬리가 그대로 평균에 실린다. 순차 회수면 빈 노드 6대에 4~6분이 걸린다. Karpenter는 파드가
+다른 노드에 재배치 가능할 때만 노드를 지우므로 병렬화해도 Pending이 생기지 않는다 — 여기서 budget이
+막아주던 블라스트 반경은 실익이 없다.
 
 ### t3.medium 1대 용량 검산 (allocatable ≈ 1930m CPU / 3.4Gi / max 17 pods)
 
@@ -160,6 +165,9 @@ replica 때문에 Karpenter 가 자기 자신을 위한 노드를 띄우고 cons
 약해 스케일아웃이 거의 안 일어나면 하한을 밑돌 수 있으므로, T+60 이후 `kubectl get nodeclaims`로
 노드가 실제로 증가하는지 확인한다. 전혀 안 늘면 HPA 목표치를 60% → 40%로 낮춰 파드·노드를 늘린다.
 (반대로 배점 상한 3.75는 여유가 크므로 과다 회수보다 과소 회수가 안전한 쪽이다.)
+위의 회수 가속(budget 50% + scaleDown 100%)은 바닥을 낮추는 게 아니라 꼬리만 자른다 — 바닥은
+어차피 MNG 1대다. 그래도 시간평균을 하한 쪽으로 미는 방향이므로, 스케일아웃이 거의 없는 날에는
+회수 가속과 HPA 목표치 하향을 같이 되돌리지 말고 목표치부터 60% → 40%로 내린다.
 
 ## 인스턴스 타입별 튜닝 표
 
@@ -194,7 +202,9 @@ $0.05/vCPU·h, 4시간 대회에선 무시 가능). baseline은 t3.medium 20%/vC
 - HPA 60%: 스케일아웃 리드타임(파드 ~10s, 노드 ~2분)을 감안한 여유. 파드를 지나치게 뜨겁게 굴리면
   p99가 무너져 성능 효율성(12점)을 잃는다.
 - scaleUp stabilization 0 + 15s당 최대 4파드/100%: T+60 스텝 트래픽에 즉응.
-  scaleDown 40s + 40s당 50%: 스파이크 종료 후 빠른 회수(비용 ratio).
+  scaleDown stabilization 40s + 40s당 100%: 안정화 창이 지나면 한 스텝에 minReplicas까지 내린다.
+  50%씩 깎으면 10→1에 4스텝(~160초)이고 그동안 Karpenter 노드가 살아 있어 ratio 평균이 올라간다.
+  stabilization 40s는 유지 — 부하가 되돌아올 때 flapping을 막는 유일한 가드다.
 
 ## Karpenter 주의
 

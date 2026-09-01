@@ -27,5 +27,8 @@ spec:
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30s
+    # 비용 ratio 는 실행 중인 EC2 를 주기적으로 세므로 회수 꼬리가 그대로 평균에 실린다.
+    # 순차 회수(nodes "1")면 빈 노드 6대에 4~6분이 걸린다. Karpenter 는 파드가 다른 노드에
+    # 재배치 가능할 때만 노드를 지우므로 병렬화해도 Pending 이 생기지 않는다.
     budgets:
-      - nodes: "1"
+      - nodes: "50%"

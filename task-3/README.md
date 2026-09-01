@@ -314,6 +314,21 @@ kubectl get nodeclaims -w
 kubectl logs -f deploy/user
 ```
 
+### stress 부하 특성 실측 (부하 구간)
+
+부하가 도는 동안 잰다. 유휴에는 아무것도 안 나온다.
+
+```bash
+# ── 리전 CloudShell ──
+kubectl top pods | grep stress                                        # CPU (millicores)
+expr $(kubectl logs deploy/stress --since=60s | grep -c '\[GIN\]') / 60   # rps
+kubectl logs deploy/stress --since=60s | grep '\[GIN\]' | tail -20    # 요청당 서버 처리시간
+```
+
+요청당 millicore = CPU ÷ rps. 재구성 바이너리 기준값은 **1.2 millicore/req, 서버 처리시간
+100~250µs** (`NOTES.md` 2026-08-24). 당일 값이 크게 다르면 HPA 목표치·`maxReplicas` 를
+그 비율만큼 재검토한다 — CPU limit 은 쓰지 않는다(기각 근거는 NOTES.md).
+
 - CloudWatch(us-east-1) → Logs Insights → `aws-waf-logs-skills-waf`
 - WAF 콘솔(us-east-1) → sampled requests
 
