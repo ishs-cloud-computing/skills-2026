@@ -14,21 +14,6 @@
 > 문제지 표현으로 KIT을 찾을 때는 [QUICK-REFERENCE.md](QUICK-REFERENCE.md), 전체 기준은 [KIT-INDEX.md](KIT-INDEX.md)를 사용한다.
 > 리소스 이름이 과제지·채점지·구현에서 어긋나 보일 때는 [NAMING-AUDIT.md](NAMING-AUDIT.md)를 먼저 본다 — 어느 출처가 정본인지와 그 판정을 세트별로 모아뒀다.
 
-
-
-## 공지
-
-### 수정 안내
-
-2026년 8월 19일 이후 런북을 수정하지 않습니다.  
-오류 및 문제사항 발생 시에는 모두가 인지한 상황에서 수정합니다.  
-개인 커스텀 런북을 업로드/수정하는 것은 가능합니다.
-
-### 저장소 정리 안내
-
-2026년 8월 22일 점심/오후 중 배포파일을 git에서 제거할 예정입니다.  
-오후/저녁 중 GitHub 및 GitLab 미러 저장소를 공개할 예정입니다.
-
 ## 시작하기
 
 ### 요구사항
@@ -43,15 +28,6 @@
 git clone https://github.com/ishs-cloud-computing/skills-2026.git
 cd skills-2026
 ```
-
-- GitLab 미러링 저장소 복제 또는 다운로드
-
-```bash
-git clone https://gitlab.com/ishs-cloud/skills-2026.git
-cd skills-2026
-```
-
-> GitLab 미러링은 대회 전날 밤에 공개로 전환됩니다.
 
 ## 학습 가이드
 
